@@ -10,7 +10,8 @@
       "mcp__visualize__show_widget",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\eduar\\\\Desktop\\\\Gestão de tarefas\" -Recurse -Force)",
       "Bash(Select-Object FullName, PSIsContainer)",
-      "Bash(ConvertTo-Json -Depth 100)"
+      "Bash(ConvertTo-Json -Depth 100)",
+      "Bash(grep -n \"function createTask\\\\|function addTask\\\\|function openModal\\\\|function deleteTask\\\\|function removeTask\\\\|function save\\(\\\\|function load\\(\\\\|dragstart\\\\|drop\\\\b\\\\|function renderBoard\\\\|function renderDay\\\\|col-header\\\\|function moveTask\\\\|generateId\\\\|function newTask\\\\|id: \\\\`\\\\|id: crypto\" /Users/eduardocabral/gestao-de-tarefas/public/app.js)"
     ]
   }
 }
