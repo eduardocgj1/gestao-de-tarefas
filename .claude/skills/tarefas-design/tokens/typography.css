@@ -1,0 +1,40 @@
+/* Brand typeface: Sora (Google Fonts). No local TTF/OTF files were provided in the
+   attached source — this imports the same weights the reference prototype used
+   (400/500/600/700/800). If exact static font files become available, replace
+   this @import with local @font-face src: url(...) rules. */
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --font-sans: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  /* sizes */
+  --text-2xl: 19px;   /* modal titles (expanded) */
+  --text-xl: 17px;    /* page/section titles, task-modal name input */
+  --text-lg: 14.5px;  /* sidebar brand name */
+  --text-md: 13.5px;  /* column/day titles */
+  --text-base: 13px;  /* task card names, body */
+  --text-sm: 12.5px;  /* labels, buttons, inputs */
+  --text-xs: 12px;    /* secondary buttons, meta */
+  --text-2xs: 11px;   /* board pills, small labels */
+  --text-3xs: 10.5px; /* meta/captions */
+  --text-4xs: 9.5px;  /* tiny captions (event span) */
+  --text-badge: 9px;  /* URGENTE badge */
+
+  --tracking-label: .04em;
+  --tracking-label-wide: .06em;
+
+  /* semantic type roles */
+  --font-page-title: var(--weight-bold) var(--text-xl) var(--font-sans);
+  --font-modal-title: var(--weight-extrabold) var(--text-2xl) var(--font-sans);
+  --font-section-label: var(--weight-bold) 11px var(--font-sans);
+  --font-body: var(--weight-semibold) var(--text-base) var(--font-sans);
+  --font-meta: var(--weight-semibold) var(--text-3xs) var(--font-sans);
+  --font-button: var(--weight-bold) var(--text-xs) var(--font-sans);
+}

@@ -1,0 +1,81 @@
+:root {
+  /* ---- base palette ---- */
+  --sand-50:  #FAF7F2; /* page background */
+  --white:    #FFFFFF; /* surfaces: cards, sidebar, header */
+  --sand-100: #FBF9F4; /* subtle surface (inputs, hover rows) */
+  --sand-200: #F5F1E8; /* neutral button bg */
+  --sand-300: #F1ECE0; /* border, hover */
+  --sand-400: #ECE6D8; /* default border */
+  --sand-500: #E3DDCF; /* scrollbar thumb, dashed borders */
+  --sand-600: #DCD6C6; /* dashed add-value border */
+  --sand-700: #D8D2C2; /* completed task border */
+
+  --ink-900: #262420; /* primary text, dark button */
+  --ink-800: #3A3630; /* dark button hover, normal-task border */
+  --ink-600: #7A766C; /* secondary text */
+  --ink-400: #9A9488; /* tertiary text, inactive tab */
+  --ink-300: #8B8778; /* meta text (duration, tags) */
+  --ink-200: #B3AE9F; /* placeholder, disabled label */
+
+  --green-600: #3A6604; /* brand primary — active states, "Adicionar" button, Trabalho board */
+  --green-700: #2F5303; /* brand primary hover */
+  --green-100: #EAF0DE; /* brand soft background */
+  --green-200: #DCE7C9; /* brand soft background hover */
+
+  --terracotta-600: #C1622D; /* urgent, Pessoal board, destructive text */
+  --terracotta-100: #F7E9DF; /* terracotta soft background */
+  --terracotta-050: #FBEEE6; /* urgent task card background */
+  --terracotta-danger-bg: #FBEAE0; /* destructive button background */
+
+  --blue-600: #3E6FBD; /* multi-board event accent (sparse use) */
+
+  --gold-100: #FBF6E9; /* priority / MIT card background */
+  --gold-300: #F0E4C0; /* priority / MIT card border */
+  --gold-600: #C99A2E; /* "Reunião" custom-field tag (sample data) */
+
+  /* ---- semantic aliases ---- */
+  --bg-page: var(--sand-50);
+  --surface: var(--white);
+  --surface-sunken: var(--sand-100);
+  --surface-neutral-button: var(--sand-200);
+  --surface-neutral-button-hover: var(--sand-400);
+
+  --border-default: var(--sand-400);
+  --border-subtle: var(--sand-300);
+  --border-dashed: var(--sand-500);
+
+  --text-primary: var(--ink-900);
+  --text-secondary: var(--ink-600);
+  --text-tertiary: var(--ink-200);
+  --text-meta: var(--ink-300);
+  --text-on-dark: var(--white);
+  --text-on-brand: var(--white);
+
+  --brand: var(--green-600);
+  --brand-hover: var(--green-700);
+  --brand-soft: var(--green-100);
+  --brand-soft-hover: var(--green-200);
+
+  --danger: var(--terracotta-600);
+  --danger-soft: var(--terracotta-100);
+  --danger-soft-strong: var(--terracotta-050);
+  --danger-button-bg: var(--terracotta-danger-bg);
+
+  --accent-blue: var(--blue-600);
+
+  --priority-bg: var(--gold-100);
+  --priority-border: var(--gold-300);
+
+  --dark-action: var(--ink-900);
+  --dark-action-hover: var(--ink-800);
+
+  --task-normal-border: var(--ink-800);
+  --task-normal-bg: #FBFAF7;
+  --task-urgent-border: var(--terracotta-600);
+  --task-urgent-bg: var(--terracotta-050);
+  --task-done-border: var(--sand-700);
+  --task-done-bg: var(--sand-100);
+
+  --overlay-scrim: rgba(38, 36, 32, .3);
+  --overlay-scrim-strong: rgba(38, 36, 32, .32);
+}

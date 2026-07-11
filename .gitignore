@@ -11,5 +11,6 @@ data.json.bak
 # Sistema
 .DS_Store
 
-# Claude Code
-.claude/
+# Claude Code (ignorar só configs locais, não a pasta de skills)
+.claude/settings.local.json
+.claude/launch.json
