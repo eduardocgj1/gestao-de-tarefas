@@ -254,7 +254,9 @@ const server = http.createServer(async (req, res) => {
   const filePath = path.join(PUBLIC_DIR, req.url === '/' ? '/index.html' : req.url);
   fs.readFile(filePath, (err, data) => {
     if (err) return send(res, 404, 'Not found', 'text/plain');
-    send(res, 200, data, MIME[path.extname(filePath)] || 'application/octet-stream');
+    const contentType = MIME[path.extname(filePath)] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(data);
   });
 });
 
