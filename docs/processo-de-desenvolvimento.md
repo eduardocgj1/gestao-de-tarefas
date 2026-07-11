@@ -1,230 +1,309 @@
 # Processo de Desenvolvimento — Tarefas
 
-Este documento descreve como features são criadas neste produto, do início ao fim. O processo é orientado por specs e assistido por IA em todas as etapas.
+Este documento descreve exatamente o que fazer, onde fazer e o que acontece em cada etapa do desenvolvimento de uma feature neste produto.
 
 ---
 
-## Ferramentas necessárias
+## Ferramentas e onde cada uma opera
 
-| Ferramenta | Para quê | Onde obter |
+| Ferramenta | Onde opera | Para quê |
 |---|---|---|
-| Claude Cowork | Discovery, design e documentação | claude.ai |
-| VS Code | Editor de código | code.visualstudio.com |
-| Claude Code | Implementação assistida por IA | Extensão do VS Code ou CLI |
-| Git + GitHub | Versionamento e deploy | git-scm.com |
-| Node.js 18+ | Rodar o app localmente | nodejs.org |
+| **Claude Cowork** | Na pasta local do seu computador | Discovery, design e documentação |
+| **VS Code** | Na pasta local do seu computador | Editar código |
+| **Claude Code** | Dentro do VS Code (terminal ou extensão) | Implementação assistida por IA |
+| **Git** | Na pasta local do seu computador | Versionar e enviar código para o GitHub |
+| **GitHub** | Na nuvem | Guardar o código e disparar o deploy |
+| **Render** | Na nuvem | Rodar o servidor em produção |
+| **Supabase** | Na nuvem | Banco de dados em produção |
+
+> **Importante:** o Cowork e o Claude Code leem arquivos da **pasta local** — eles não acessam o GitHub diretamente. O GitHub é só o destino final depois do `git push`.
 
 ---
 
-## Configuração inicial do repositório
+## Configuração inicial (primeira vez)
 
+### 1. Clone o repositório
+No terminal do seu computador:
 ```bash
 git clone https://github.com/eduardocgj1/gestao-de-tarefas.git
 cd gestao-de-tarefas
+```
+**O que acontece:** o Git baixa todos os arquivos do GitHub para uma pasta no seu computador.
+
+### 2. Instale as dependências
+```bash
 npm install
+```
+**O que acontece:** o npm lê o `package.json` e baixa os pacotes necessários para a pasta `node_modules/`.
+
+### 3. Configure as variáveis de ambiente
+```bash
 cp .env.example .env
-# Preencha o .env com as credenciais do Supabase
+```
+Abra o arquivo `.env` no VS Code e preencha com as credenciais reais do Supabase.
+**O que acontece:** o app passa a ter acesso ao banco de dados. Sem isso, o servidor não consegue conectar ao Supabase.
+
+### 4. Rode o app localmente
+```bash
 node server.js
-# App rodando em http://localhost:3131
 ```
-
-Leia o `CLAUDE.md` na raiz — ele é o contexto principal do produto e é lido automaticamente pela IA em toda sessão de trabalho.
+**O que acontece:** o servidor Node.js sobe na sua máquina. Acesse `http://localhost:3131` no browser para usar o app localmente.
 
 ---
 
-## Visão geral do processo
+## Criando uma feature nova
 
-O desenvolvimento segue o modelo **Spec-Driven Development**: cada feature vira um documento vivo (`spec.md`) que evolui em três versões antes de uma linha de código ser escrita.
-
-```
-COWORK (produto + design)           CLAUDE CODE (implementação)
-──────────────────────────          ────────────────────────────
-1. Discovery      → spec v1
-2. Protótipo      → spec v2
-3. Plano técnico  → spec v3
-                                    4. Implementação (task a task)
-                                    5. Verificação de conformidade
-                                    6. Revisão de código
-                                    7. Pull Request → merge → deploy
-```
-
-**Regra principal:** nenhuma feature entra em desenvolvimento sem spec v3 aprovada.
+O processo tem duas grandes fases: **produto** (no Cowork) e **desenvolvimento** (no VS Code com Claude Code). Nenhuma feature entra em desenvolvimento sem ter a spec completa.
 
 ---
 
-## Etapa 1 — Discovery
-**Ferramenta:** Claude Cowork
-**Skill:** `orquestrador` (ponto de entrada único)
+### FASE 1 — Produto (Claude Cowork)
 
-Abra o Cowork, conecte a pasta do projeto e diga:
+#### Passo 1 — Preparar a branch
 
+No terminal:
+```bash
+cd gestao-de-tarefas
+git checkout -b feature/nome-da-feature
+```
+**O que acontece:** o Git cria uma cópia paralela do código chamada `feature/nome-da-feature`. Tudo que for criado ou modificado a partir de agora fica isolado nessa branch, sem afetar a versão em produção (`main`).
+
+#### Passo 2 — Conectar o Cowork à pasta local
+
+Abra o Claude Cowork e conecte a pasta `gestao-de-tarefas` do seu computador.
+
+**O que acontece:** o Cowork passa a enxergar todos os arquivos da pasta — incluindo `CLAUDE.md`, `docs/`, `.claude/skills/` e a branch que está ativa no momento. Ele não acessa o GitHub, só a pasta local.
+
+#### Passo 3 — Iniciar o orquestrador
+
+No Cowork, diga:
 > *"use a skill orquestrador — quero criar a feature [nome]"*
 
-O orquestrador vai conduzir todo o processo de produto automaticamente, passando pelas skills na ordem correta:
+**O que acontece:** o orquestrador lê o `CLAUDE.md` e as features existentes em `docs/features/` para entender o contexto do produto, e começa a conduzir o processo etapa por etapa.
 
-1. **`discovery`** — conduz perguntas de produto e preenche spec v1 (objetivo, problema, solução, escopo, jornada)
-2. **`spec-reviewer`** — revisa a spec v1 e aponta o que está vago ou incompleto
-3. **`prototype-generator`** — gera `prototype.html` fiel ao design system do app
-4. **`design-critic`** — revisa o protótipo contra o design system e a spec v1
-5. **`spec-reviewer`** — revisa a spec v2 antes de ir para o técnico
-6. **`task-planner`** — decompõe o plano em tasks atômicas e gera spec v3
-7. **`spec-reviewer`** — revisão final da spec v3
+---
 
-Ao final, faça o commit:
+#### Etapa 1.1 — Discovery (skill: `discovery`)
+
+**O que você faz:** responde as perguntas do orquestrador sobre a feature — qual problema resolve, qual a jornada do usuário, o que está dentro e fora do escopo.
+
+**O que a IA faz:** conduz as perguntas certas para garantir que o problema está bem definido antes de pensar em solução. Ao final, cria o arquivo `docs/features/nome-da-feature/spec.md` com a **spec v1** preenchida.
+
+**O que é gerado:** `docs/features/nome-da-feature/spec.md` com objetivo, problema, solução, escopo e jornada.
+
+---
+
+#### Etapa 1.2 — Revisão da spec v1 (skill: `spec-reviewer`)
+
+**O que você faz:** aguarda o relatório e decide se aprova ou pede ajustes.
+
+**O que a IA faz:** lê a spec v1 e aponta o que está vago, incompleto ou contraditório. Gera um relatório com bloqueantes e sugestões.
+
+**O que acontece se reprovar:** volta para o discovery, corrige e passa pela revisão novamente antes de avançar.
+
+**Commit ao aprovar:**
 ```bash
-git checkout -b feature/nome-da-feature
 git add -A
-git commit -m "docs: spec completa - nome da feature"
-git push
+git commit -m "docs: spec v1 - nome da feature"
+```
+**O que acontece:** o Git salva uma versão local com a spec v1. Ainda não foi para o GitHub.
+
+---
+
+#### Etapa 1.3 — Protótipo (skill: `prototype-generator`)
+
+**O que você faz:** confirma que quer gerar o protótipo.
+
+**O que a IA faz:** lê a spec v1 + todo o design system em `.claude/skills/tarefas-design/` (tokens de cor, tipografia, componentes, UI kit) e gera um arquivo HTML interativo com a cara exata do app.
+
+**O que é gerado:** `docs/features/nome-da-feature/prototype.html` — abra no browser para ver e interagir.
+
+---
+
+#### Etapa 1.4 — Crítica do design (skill: `design-critic`)
+
+**O que você faz:** abre o `prototype.html` no browser, interage com ele e diz o que aprovou ou quer mudar.
+
+**O que a IA faz:** revisa o protótipo contra o design system — verifica cores, tipografia, componentes, estados da interface, textos em português e consistência com o resto do app. Gera relatório com problemas e aprovações.
+
+**O que acontece se reprovar:** o protótipo é ajustado e revisado novamente antes de avançar.
+
+**O que é gerado:** spec v2 atualizada com as decisões de design e UX tomadas.
+
+**Commit ao aprovar:**
+```bash
+git add -A
+git commit -m "docs: spec v2 + protótipo - nome da feature"
 ```
 
 ---
 
-## Etapa 2 — Implementação
-**Ferramenta:** VS Code + Claude Code
-**Agente:** `orquestrador`
+#### Etapa 1.5 — Revisão da spec v2 (skill: `spec-reviewer`)
 
-Abra o VS Code na pasta do projeto e no terminal do Claude Code diga:
+**O que você faz:** aguarda o relatório e aprova ou pede ajustes.
 
-> *"use the orquestrador agent — implementar feature [nome]"*
-
-O orquestrador vai conduzir a implementação automaticamente, passando pelos agentes na ordem correta:
-
-1. **`tech-discovery`** — valida a spec v3 lendo o código real e completa lacunas técnicas
-2. **`implementor`** — executa as tasks uma a uma, fazendo um commit por task
-3. **`spec-checker`** — verifica se a implementação atende todos os critérios da spec
-4. **`code-reviewer`** — revisa qualidade, segurança e aderência às convenções
-
-Ao final, o orquestrador orienta a abertura do Pull Request.
+**O que a IA faz:** verifica se todos os passos da jornada v1 têm representação visual no design v2, se os estados da interface estão todos cobertos e se as decisões de UX estão justificadas.
 
 ---
 
-## Estrutura de uma feature
+#### Etapa 1.6 — Planejamento de tasks (skill: `task-planner`)
 
-Cada feature vive em `docs/features/[nome]/`:
+**O que você faz:** confirma que quer gerar as tasks.
+
+**O que a IA faz:** lê a spec v2 e decompõe a implementação em tasks atômicas ordenadas por dependência — banco de dados primeiro, depois backend, depois frontend. Cada task é pequena o suficiente para um único commit.
+
+**O que é gerado:** seção "Tasks de implementação" na spec com tasks prefixadas (`db-01`, `be-01`, `fe-01`...) e critérios de conclusão objetivos.
+
+---
+
+#### Etapa 1.7 — Revisão final da spec v3 (skill: `spec-reviewer`)
+
+**O que você faz:** aguarda o relatório final e aprova.
+
+**O que a IA faz:** verifica se as tasks são atômicas, se a ordem respeita dependências, se os critérios de conclusão são objetivos e verificáveis.
+
+**Commit ao aprovar:**
+```bash
+git add -A
+git commit -m "docs: spec v3 plano técnico - nome da feature"
+git push
+```
+**O que acontece:** o `git push` envia todos os commits desta fase para o GitHub. A branch `feature/nome-da-feature` agora existe no GitHub mas ainda não afeta a produção.
+
+---
+
+### FASE 2 — Desenvolvimento (VS Code + Claude Code)
+
+#### Passo 1 — Abrir o projeto no VS Code
+
+Abra o VS Code na pasta `gestao-de-tarefas`. Confirme que está na branch correta:
+```bash
+git branch
+# deve mostrar * feature/nome-da-feature
+```
+**O que acontece:** o VS Code e o Claude Code passam a enxergar os arquivos da branch da feature, incluindo a spec v3 recém-criada.
+
+#### Passo 2 — Iniciar o orquestrador
+
+No terminal do Claude Code dentro do VS Code, diga:
+> *"use the orquestrador agent — implementar feature nome-da-feature"*
+
+**O que acontece:** o orquestrador lê o `CLAUDE.md`, `docs/architecture.md` e a spec completa da feature, e começa a conduzir a implementação etapa por etapa.
+
+---
+
+#### Etapa 2.1 — Verificação técnica (agente: `tech-discovery`)
+
+**O que você faz:** aguarda a análise.
+
+**O que a IA faz:** lê a spec v3 e o código real dos arquivos que serão modificados (`app.js`, `styles.css`, `index.html`, `server.js`). Confirma que o plano é implementável, identifica funções existentes para reutilizar e sinaliza se há lacunas na spec.
+
+**O que acontece se houver lacunas:** o orquestrador lista as dúvidas e você decide como resolver antes de começar a implementar.
+
+---
+
+#### Etapa 2.2 — Implementação (agente: `implementor`)
+
+**O que você faz:** acompanha a implementação e responde dúvidas pontuais.
+
+**O que a IA faz:** executa as tasks da spec uma por uma, na ordem definida. A cada task concluída, marca como `[x]` na spec e faz um commit.
+
+```bash
+# A IA faz isso automaticamente a cada task:
+git add -A
+git commit -m "feat: nome-feature - descrição da task"
+```
+
+**O que acontece:** o código vai sendo construído de forma incremental, rastreável. Cada commit representa uma task concluída. O app pode ser testado localmente a qualquer momento com `node server.js`.
+
+---
+
+#### Etapa 2.3 — Verificação de conformidade (agente: `spec-checker`)
+
+**O que você faz:** aguarda o relatório e testa o app localmente.
+
+**O que a IA faz:** percorre cada critério de conclusão da spec e verifica objetivamente se está implementado. Verifica também se funcionalidades existentes não foram quebradas (criação de tarefas, calendário, pomodoro, persistência).
+
+**O que acontece se reprovar:** volta para a implementação, corrige os itens reprovados e passa pela verificação novamente.
+
+---
+
+#### Etapa 2.4 — Revisão de código (agente: `code-reviewer`)
+
+**O que você faz:** aguarda o relatório.
+
+**O que a IA faz:** revisa o diff completo — verifica convenções (sem frameworks, persistência via `save()`, campos no banco), qualidade do código (legibilidade, duplicação, console.logs esquecidos) e segurança (inputs sanitizados, dados sensíveis).
+
+**O que acontece se houver bloqueantes:** corrige e repassa pela revisão antes do PR.
+
+---
+
+#### Etapa 2.5 — Pull Request e deploy
+
+```bash
+git push origin feature/nome-da-feature
+```
+**O que acontece:** a branch com todos os commits vai para o GitHub.
+
+Abra o GitHub em `github.com/eduardocgj1/gestao-de-tarefas`, clique em "Compare & pull request", revise e faça o merge na `main`.
+
+**O que acontece após o merge:** o Render detecta a mudança na `main` em segundos e inicia um novo deploy automaticamente. Em 1–2 minutos o app em produção está atualizado.
+
+```bash
+# Volte para a main localmente
+git checkout main
+git pull
+```
+
+---
+
+## O que fica registrado após uma feature
 
 ```
 docs/features/nome-da-feature/
-├── spec.md          ← documento vivo com v1, v2, v3 e tasks
-└── prototype.html   ← protótipo gerado pelo design system
+├── spec.md          ← histórico completo: v1, v2, v3, tasks e registro de desenvolvimento
+└── prototype.html   ← protótipo de referência visual
+
+GitHub
+└── commits rastreáveis por task + PR com descrição da feature
+
+Render
+└── novo deploy registrado com o hash do commit
 ```
 
-Use o template em `docs/features/template.md` como ponto de partida.
-
-### Versões da spec
-
-| Versão | Conteúdo | Quem preenche |
-|---|---|---|
-| v1 | Objetivo, problema, solução, escopo, jornada | skill `discovery` |
-| v2 | Design, protótipo, estados da UI, decisões de UX | skill `prototype-generator` + `design-critic` |
-| v3 | Plano técnico, arquivos, tasks, critérios de conclusão | skill `task-planner` + agente `tech-discovery` |
-
 ---
 
-## Branches e Git
-
-Cada feature tem sua própria branch:
-
-```bash
-# Criar branch da feature
-git checkout -b feature/nome-da-feature
-
-# Commit por task durante o desenvolvimento
-git add -A
-git commit -m "feat: nome-feature - descrição da task"
-
-# Abrir PR no GitHub após aprovação do code-reviewer
-git push origin feature/nome-da-feature
-```
-
-A branch `main` é a versão em produção. O Render faz o deploy automaticamente a cada merge na `main`.
-
-**Nunca commitar diretamente na `main` durante o desenvolvimento de uma feature.**
-
----
-
-## Skills disponíveis (Claude Cowork)
-
-Skills ficam em `.claude/skills/` e são lidas pelo Cowork.
-
-| Skill | Função |
-|---|---|
-| `orquestrador` | Ponto de entrada — conduz todo o processo de produto |
-| `discovery` | Conduz o discovery e preenche spec v1 |
-| `spec-reviewer` | Revisa qualquer versão da spec antes de avançar |
-| `prototype-generator` | Gera protótipo HTML fiel ao design system |
-| `design-critic` | Revisa protótipo contra design system e spec |
-| `task-planner` | Decompõe spec v3 em tasks atômicas |
-| `tarefas-design` | Design system completo — tokens, componentes, UI kit |
-
----
-
-## Agentes disponíveis (Claude Code)
-
-Agentes ficam em `.claude/agents/` e são lidos pelo Claude Code.
-
-| Agente | Função |
-|---|---|
-| `orquestrador` | Ponto de entrada — conduz toda a implementação |
-| `tech-discovery` | Valida e completa spec v3 lendo o código real |
-| `implementor` | Executa as tasks da spec uma a uma |
-| `spec-checker` | Verifica conformidade da implementação com a spec |
-| `code-reviewer` | Revisa qualidade e aderência às convenções |
-| `task-planner` | Versão técnica do planejamento de tasks |
-
----
-
-## Design system
-
-O design system completo fica em `.claude/skills/tarefas-design/` e contém:
-
-- **Tokens** — cores, tipografia, espaçamento, efeitos (`tokens/`)
-- **Componentes** — Button, TaskCard, Modal, Badge e mais 7 (`components/`)
-- **UI Kit** — telas completas do app como referência (`ui_kits/tarefas/`)
-- **Guidelines** — guias visuais de cada fundamento (`guidelines/`)
-
-Toda interface nova deve seguir os tokens deste design system. Nenhuma cor, fonte ou espaçamento deve ser inventado fora dele.
-
----
-
-## Documentação de referência
-
-| Documento | Conteúdo |
-|---|---|
-| `CLAUDE.md` | Contexto geral do produto, stack e convenções |
-| `docs/architecture.md` | Decisões arquiteturais e os motivos de cada uma |
-| `docs/features/template.md` | Template para documentar novas features |
-| `docs/decisions/` | ADRs — registro de decisões técnicas importantes |
-| `schema.sql` | Estrutura completa do banco de dados |
-| `README.md` | Setup, instalação e deploy |
-
----
-
-## Convenções importantes
-
-- **Frontend:** vanilla JS, DOM manipulation direta — sem React, Vue ou qualquer framework
-- **Persistência:** toda alteração passa por `save()` — nunca criar outro mecanismo
-- **Banco:** novos campos sempre em `schema.sql` E no mapeamento de `server.js`
-- **`urgent_rank`:** é `BIGINT` (armazena timestamps) — nunca alterar para INTEGER
-- **Textos:** português BR, voz imperativa, sentence case
-- **Ícones:** apenas Unicode ou CSS puro — nunca emoji de navegação
-
----
-
-## Fluxo resumido
+## Resumo do fluxo completo
 
 ```
-1. Cowork: "use a skill orquestrador"
-      ↓
-2. Spec v1, v2 e v3 criadas e aprovadas
-      ↓
-3. git checkout -b feature/nome && git push
-      ↓
-4. Claude Code: "use the orquestrador agent"
-      ↓
-5. Implementação task a task com commits
-      ↓
-6. spec-checker + code-reviewer aprovam
-      ↓
-7. PR no GitHub → merge → Render deploya automaticamente
+COMPUTADOR LOCAL                    NUVEM
+────────────────                    ──────
+git clone ←──────────────────────── GitHub
+
+git checkout -b feature/X
+
+[COWORK]
+  orquestrador →
+    discovery → spec v1
+    spec-reviewer → aprovação
+    prototype-generator → prototype.html
+    design-critic → aprovação
+    spec-reviewer → aprovação
+    task-planner → spec v3 com tasks
+    spec-reviewer → aprovação final
+
+git push ───────────────────────→ GitHub (branch feature/X)
+
+[VS CODE + CLAUDE CODE]
+  orquestrador →
+    tech-discovery → valida spec v3
+    implementor → task a task (1 commit por task)
+    spec-checker → verifica conformidade
+    code-reviewer → revisa qualidade
+
+git push ───────────────────────→ GitHub (feature/X atualizada)
+PR + merge na main ─────────────→ GitHub (main atualizada)
+                                        │
+                                        ↓ detecta automaticamente
+                                   Render → deploy em produção
 ```
