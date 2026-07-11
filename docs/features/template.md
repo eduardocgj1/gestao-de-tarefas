@@ -1,24 +1,29 @@
 # [Nome da Feature]
 
 > **Como usar este template:**
-> Copie para `docs/features/nome-da-feature/spec.md` e vá preenchendo etapa por etapa.
-> Cada seção é preenchida em uma fase diferente do processo — não tente preencher tudo de uma vez.
-> Delete as instruções em itálico antes de commitar cada versão.
+> Copie para `docs/features/nome-da-feature/spec.md` e preencha etapa por etapa.
+> Cada seção pertence a uma fase do processo — não tente preencher tudo de uma vez.
+> O status e as tasks são a fonte da verdade do andamento da feature.
 
-**Status:** `[ ] Discovery` → `[ ] Design` → `[ ] Discovery Técnico` → `[ ] Desenvolvimento` → `[ ] Concluído`
+---
+
+**Status:** `[ ] Discovery` → `[ ] Design` → `[ ] Discovery Técnico` → `[ ] Em desenvolvimento` → `[ ] Em revisão` → `[ ] Concluído`
 
 **Branch:** `feature/nome-da-feature`
+**Criado em:** YYYY-MM-DD
+**Última atualização:** YYYY-MM-DD
 
 ---
 
 ## v1 — Discovery
-> *Preencher no Claude Cowork. Objetivo: entender O QUÊ e POR QUÊ antes de pensar em solução.*
+> *Preencher no Claude Cowork com a skill `discovery`.*
+> *Objetivo: entender O QUÊ e POR QUÊ antes de pensar em solução.*
 
 ### Objetivo
 O que o usuário consegue fazer com essa feature que não conseguia antes? (1–2 frases)
 
 ### Problema
-Qual dor concreta essa feature resolve? Descreva a situação que o usuário enfrenta hoje, sem mencionar solução ainda.
+Qual dor concreta essa feature resolve? Descreva a situação que o usuário enfrenta hoje, sem mencionar solução.
 
 ### Solução
 Como a feature resolve o problema? Descreva o comportamento principal em linguagem de produto, sem entrar em detalhes técnicos ou visuais.
@@ -29,103 +34,124 @@ Como a feature resolve o problema? Descreva o comportamento principal em linguag
 - O que essa feature FAZ
 
 **Fora do escopo**
-- O que essa feature NÃO faz (tão importante quanto o escopo — evita crescimento descontrolado)
+- O que essa feature NÃO faz (tão importante quanto o escopo)
 
 ### Jornada do usuário
-Passo a passo de como o usuário interage com a feature, do gatilho até o resultado final.
+Passo a passo da interação, do gatilho até o resultado final.
 
 1. Usuário faz X
 2. App responde com Y
 3. ...
 
 ### Perguntas em aberto
-*Liste aqui o que ainda não está decidido ao final do discovery. O design vai responder.*
+*O que ainda não está decidido. O design vai responder.*
 
-- ?
 - ?
 
 ---
 
 ## v2 — Design
-> *Preencher após o protótipo no Claude Design. Objetivo: definir COMO PARECE e COMO FUNCIONA.*
-> *Anexar o arquivo de protótipo em `docs/features/nome-da-feature/prototype.html`*
+> *Preencher após protótipo gerado com a skill `tarefas-design` e revisado com a skill `design-critic`.*
+> *Objetivo: definir COMO PARECE e COMO FUNCIONA.*
 
 ### Experiência e visual
+Descreva o comportamento e aparência da feature. Referencie o protótipo para detalhes visuais.
 
-Descreva o comportamento e aparência da feature como saiu do design. Referencie o protótipo para detalhes visuais.
-
-**Protótipo:** `prototype.html` (abrir no browser para ver interativo)
+**Protótipo:** `prototype.html` (abrir no browser)
 
 ### Decisões de UX tomadas
-*Liste as decisões de design que não eram óbvias — o "porquê" de cada escolha visual/interativa.*
-
 - Decisão X → motivo
 - Decisão Y → motivo
 
-### Estados e variações
-*Quais são os diferentes estados que a interface pode ter?*
-
-- Estado vazio (sem dados)
-- Estado com dados
-- Estado de erro
-- Estado de carregamento (se aplicável)
+### Estados da interface
+- **Vazio** — o que aparece quando não há dados
+- **Com dados** — estado principal
+- **Carregando** — se aplicável
+- **Erro** — o que aparece se algo falhar
 
 ### Perguntas respondidas pelo design
-*Responda aqui as perguntas em aberto que ficaram do v1.*
-
-- Pergunta do v1 → resposta do design
+*Responda aqui as perguntas em aberto do v1.*
+- Pergunta → resposta
 
 ---
 
 ## v3 — Discovery Técnico
-> *Preencher no Claude Cowork, lendo spec v2 + CLAUDE.md + código atual.*
+> *Preencher no Claude Cowork com o agente `tech-discovery`.*
 > *Objetivo: definir EXATAMENTE O QUE CONSTRUIR antes de abrir o Claude Code.*
 
-### Plano de implementação
-*Lista ordenada do que precisa ser feito, do mais simples ao mais complexo.*
-
-1. ...
-2. ...
-3. ...
+### Visão geral técnica
+Resumo em 2–3 frases do que será construído tecnicamente.
 
 ### Arquivos a modificar
 
-| Arquivo | O que muda |
-|---|---|
-| `public/app.js` | ... |
-| `public/styles.css` | ... |
-| `public/index.html` | ... |
-| `server.js` | ... (se precisar) |
+| Arquivo | O que muda | Impacto |
+|---|---|---|
+| `public/app.js` | ... | Baixo / Médio / Alto |
+| `public/styles.css` | ... | Baixo / Médio / Alto |
+| `public/index.html` | ... | Baixo / Médio / Alto |
+| `server.js` | ... (se precisar) | Baixo / Médio / Alto |
 
 ### Novos campos no banco
-*Se precisar de novas colunas, listar aqui. Lembrar de atualizar `schema.sql` E o mapeamento em `server.js`.*
+*Se precisar de novas colunas. Lembrar de atualizar `schema.sql` E o mapeamento em `server.js`.*
 
-- Tabela `tasks`: novo campo `xxx` tipo `TEXT` (ou nenhum)
+- Tabela `tasks`: novo campo `xxx` tipo `TEXT DEFAULT NULL`
+- Ou: nenhuma mudança necessária
 
-### O que reutilizar do código existente
-*Funções, variáveis e padrões que já existem e devem ser aproveitados.*
+### O que reutilizar
+*Funções e padrões existentes que devem ser aproveitados — não reinventar.*
 
-- `save()` — para persistir alterações
-- `load()` — para buscar estado
+- `save()` → persistir alterações
+- `load()` → buscar estado
+- `openModal(id)` → abrir modal de tarefa existente
 - ...
 
 ### Riscos e pontos de atenção
-*O que pode dar errado ou exige cuidado especial na implementação.*
-
 - Risco X → como mitigar
 - Atenção Y → o que verificar
 
-### Critérios de conclusão
-*Como saber que a feature está pronta? Lista de comportamentos que devem funcionar.*
+---
 
-- [ ] Comportamento A funciona
-- [ ] Comportamento B funciona
-- [ ] Não quebrou nenhuma funcionalidade existente
+## Tasks de implementação
+> *Criadas pelo agente `task-planner` com base no v3. Atualizadas durante o desenvolvimento.*
+> *Cada task = um commit. Ordem importa — respeite as dependências.*
+
+### 🗄️ Banco de dados
+- [ ] `db-01` Adicionar coluna `xxx` na tabela `tasks` no `schema.sql`
+- [ ] `db-02` Atualizar mapeamento `appTaskToDb()` / `dbTaskToApp()` em `server.js`
+
+### ⚙️ Backend
+- [ ] `be-01` ...
+- [ ] `be-02` ...
+
+### 🎨 Frontend — estrutura
+- [ ] `fe-01` Adicionar HTML da nova UI em `index.html`
+- [ ] `fe-02` Estilizar componente em `styles.css`
+
+### ⚡ Frontend — lógica
+- [ ] `fe-03` Implementar lógica principal em `app.js`
+- [ ] `fe-04` Conectar gatilhos de evento (click, input, etc.)
+- [ ] `fe-05` Chamar `save()` nos pontos corretos
+
+### ✅ Critérios de conclusão
+*Checklist final antes de abrir o PR. Verificado pelo agente `spec-checker`.*
+
+- [ ] Comportamento A funciona conforme a jornada do v1
+- [ ] Comportamento B funciona conforme o design do v2
+- [ ] Nenhuma funcionalidade existente foi quebrada
+- [ ] Testado nos dois boards (Trabalho e Pessoal)
+- [ ] Dados persistem após recarregar a página
 
 ---
 
-## Notas e decisões durante o desenvolvimento
-> *Preencher pelo Claude Code ou por você durante a implementação.*
-> *Registre aqui desvios do plano, problemas encontrados e como foram resolvidos.*
+## Registro de desenvolvimento
+> *Preenchido durante e após o desenvolvimento.*
+> *Registre desvios do plano, problemas encontrados e como foram resolvidos.*
 
-- ...
+### Desvios da spec
+- Task `fe-03`: precisou ser dividida em duas porque...
+
+### Problemas encontrados
+- Problema X → solução aplicada
+
+### O que ficou fora (e por quê)
+- Item Y foi deixado para uma próxima iteração porque...
