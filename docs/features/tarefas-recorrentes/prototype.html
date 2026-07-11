@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protótipo · Tarefas Recorrentes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Sora', -apple-system, sans-serif;
+  background: #FAF7F2;
+  color: #262420;
+  min-height: 100vh;
+}
+
+/* ── Tokens ── */
+:root {
+  --bg: #FAF7F2;
+  --surface: #FFFFFF;
+  --border: #ECE6D8;
+  --border-subtle: #F1ECE0;
+  --text: #262420;
+  --text-secondary: #7A766C;
+  --text-muted: #B3AE9F;
+  --green: #3A6604;
+  --green-hover: #2F5303;
+  --green-soft: #EAF0DE;
+  --terracotta: #C1622D;
+  --terracotta-soft: #FBEEE6;
+  --neutral-btn: #F5F1E8;
+  --neutral-btn-hover: #ECE6D8;
+  --radius: 16px;
+  --shadow-modal: 0 20px 50px rgba(38,36,32,.22);
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: #E3DDCF; border-radius: 8px; }
+
+/* ── Layout ── */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0;
+}
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.logo {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  background: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 14px;
+  flex-shrink: 0;
+}
+.sidebar-nav { flex: 1; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.nav-label { font: 700 10px 'Sora'; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; padding: 8px 8px 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  border: none; cursor: pointer;
+  padding: 9px 8px; border-radius: 10px;
+  text-align: left; background: transparent;
+  color: var(--text-secondary); font: 600 13px 'Sora';
+  width: 100%;
+}
+.nav-item:hover { background: var(--neutral-btn); }
+.nav-item.active { background: var(--green-soft); color: var(--green); }
+.nav-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Main ── */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.header h1 { font: 700 17px 'Sora'; }
+.header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+.week-nav { display: flex; align-items: center; gap: 6px; }
+.week-label {
+  font: 700 12.5px 'Sora';
+  min-width: 130px; text-align: center;
+  background: var(--neutral-btn); border-radius: 9px; padding: 6px 10px;
+}
+
+.btn-icon {
+  width: 30px; height: 30px; border-radius: 9px;
+  border: none; background: var(--neutral-btn);
+  cursor: pointer; font-size: 14px; color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-icon:hover { background: var(--neutral-btn-hover); }
+
+/* ── Board ── */
+.board {
+  flex: 1; display: flex; gap: 14px;
+  padding: 20px 26px; overflow-x: auto; align-items: flex-start;
+}
+.day-col {
+  width: 220px; min-width: 220px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(38,36,32,.05);
+  display: flex; flex-direction: column;
+}
+.day-header {
+  padding: 13px 14px 11px;
+  border-bottom: 1px solid var(--border-subtle);
+  font: 700 13px 'Sora';
+}
+.day-tasks { flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 7px; min-height: 60px; }
+.day-add {
+  padding: 0 10px 10px;
+}
+.btn-add-task {
+  width: 100%; border: 1.5px dashed var(--border);
+  background: transparent; border-radius: 10px;
+  padding: 7px; cursor: pointer;
+  font: 600 11.5px 'Sora'; color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px; justify-content: center;
+}
+.btn-add-task:hover { border-color: var(--green); color: var(--green); }
+
+/* ── Task Card ── */
+.task-card {
+  border-radius: 10px;
+  border: 1px solid #3A3630;
+  background: #FBFAF7;
+  padding: 9px 10px;
+  cursor: pointer;
+  position: relative;
+}
+.task-card:hover { background: #F5F3EE; }
+.task-card.urgent { border-color: var(--terracotta); background: var(--terracotta-soft); }
+.task-card.done { border-color: #D8D2C2; background: #F3F1EA; }
+.task-card .task-name {
+  font: 600 12.5px 'Sora'; color: var(--text);
+  margin-bottom: 4px;
+  padding-right: 18px;
+}
+.task-card.done .task-name { text-decoration: line-through; color: var(--text-muted); }
+.task-card .task-tag {
+  font: 600 10px 'Sora'; color: var(--text-secondary);
+}
+.recurring-icon {
+  position: absolute; top: 7px; right: 8px;
+  font-size: 11px; opacity: .55;
+}
+
+/* ── Modal overlay ── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(38,36,32,.45);
+  z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .15s ease;
+}
+.overlay.hidden { display: none; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn { from { transform: translateY(10px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ── Task Modal ── */
+.task-modal {
+  width: 420px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-modal);
+  animation: modalIn .18s ease;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+.modal-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 20px 20px 0;
+}
+.modal-title { font: 700 15px 'Sora'; flex: 1; }
+.btn-close {
+  width: 28px; height: 28px; border-radius: 8px;
+  border: none; background: var(--neutral-btn);
+  cursor: pointer; font-size: 15px; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-close:hover { background: var(--neutral-btn-hover); }
+
+.modal-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font: 700 10.5px 'Sora'; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.field input[type=text],
+.field input[type=date],
+.field input[type=number] {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 10px;
+  font: 500 13px 'Sora';
+  background: #FBFAF7;
+  outline: none;
+  width: 100%;
+  color: var(--text);
+}
+.field input:focus { border-color: var(--green); }
+
+/* ── Toggle row ── */
+.toggle-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #FBFAF7;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-row:hover { background: var(--neutral-btn); }
+.toggle-row .tr-icon { font-size: 14px; }
+.toggle-row .tr-label { font: 600 13px 'Sora'; flex: 1; }
+.toggle-row .tr-hint { font: 500 11px 'Sora'; color: var(--text-muted); }
+
+.toggle-switch {
+  width: 34px; height: 20px; border-radius: 10px;
+  background: var(--border);
+  position: relative; flex-shrink: 0;
+  transition: background .15s;
+}
+.toggle-switch.on { background: var(--green); }
+.toggle-switch::after {
+  content: '';
+  position: absolute; top: 3px; left: 3px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff;
+  transition: left .15s;
+}
+.toggle-switch.on::after { left: 17px; }
+
+/* ── Recurrence Panel ── */
+.recurrence-panel {
+  border: 1px solid var(--green);
+  border-radius: 12px;
+  overflow: hidden;
+  animation: modalIn .15s ease;
+}
+.recurrence-panel.hidden { display: none; }
+
+.recurrence-type-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--green-soft);
+}
+.rec-tab {
+  flex: 1; border: none; background: transparent;
+  padding: 9px 4px; cursor: pointer;
+  font: 600 11px 'Sora'; color: var(--green);
+  border-bottom: 2px solid transparent;
+  transition: border-color .12s, background .12s;
+}
+.rec-tab:hover { background: rgba(58,102,4,.08); }
+.rec-tab.active { border-bottom-color: var(--green); background: rgba(58,102,4,.1); }
+
+.recurrence-options { padding: 14px 14px 0; }
+
+.rec-section { display: none; }
+.rec-section.active { display: block; }
+
+.rec-options-list { display: flex; flex-direction: column; gap: 7px; }
+.rec-option-row {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+}
+.rec-option-row input[type=radio],
+.rec-option-row input[type=checkbox] {
+  accent-color: var(--green); cursor: pointer;
+  width: 14px; height: 14px; flex-shrink: 0;
+}
+.rec-option-row span { font: 500 12.5px 'Sora'; }
+
+.weekday-pills { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+.weekday-pill {
+  padding: 5px 9px; border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: #FBFAF7;
+  font: 600 11px 'Sora'; cursor: pointer;
+  color: var(--text-secondary);
+  user-select: none;
+  transition: all .1s;
+}
+.weekday-pill.selected { background: var(--green); color: #fff; border-color: var(--green); }
+
+.custom-interval-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.custom-interval-row input {
+  width: 60px; padding: 7px 8px;
+  border: 1px solid var(--border); border-radius: 8px;
+  font: 600 13px 'Sora'; text-align: center;
+  outline: none;
+}
+.custom-interval-row input:focus { border-color: var(--green); }
+.custom-interval-row span { font: 500 12.5px 'Sora'; }
+
+.end-date-row {
+  padding: 12px 14px 14px;
+  display: flex; flex-direction: column; gap: 5px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 14px;
+}
+.end-date-row label { font: 700 10.5px 'Sora'; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.end-date-row input {
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 8px 10px; font: 500 12.5px 'Sora'; outline: none;
+  width: 100%; color: var(--text); background: #FBFAF7;
+}
+.end-date-row input:focus { border-color: var(--green); }
+
+.recurrence-summary {
+  padding: 8px 14px 12px;
+  font: 500 11.5px 'Sora'; color: var(--green);
+  background: rgba(58,102,4,.05);
+  border-top: 1px solid rgba(58,102,4,.12);
+}
+
+/* ── Modal footer ── */
+.modal-footer {
+  padding: 0 20px 20px;
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.btn-primary {
+  padding: 9px 18px; border-radius: 10px;
+  border: none; background: var(--green); color: #fff;
+  font: 700 13px 'Sora'; cursor: pointer;
+}
+.btn-primary:hover { background: var(--green-hover); }
+.btn-neutral {
+  padding: 9px 18px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--neutral-btn);
+  font: 700 13px 'Sora'; cursor: pointer; color: var(--text);
+}
+.btn-neutral:hover { background: var(--neutral-btn-hover); }
+
+/* ── Confirm Modal ── */
+.confirm-modal {
+  width: 360px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-modal);
+  animation: modalIn .18s ease;
+  padding: 24px;
+}
+.confirm-icon { font-size: 28px; margin-bottom: 10px; }
+.confirm-title { font: 700 16px 'Sora'; margin-bottom: 6px; }
+.confirm-desc { font: 500 12.5px 'Sora'; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; }
+.confirm-options { display: flex; flex-direction: column; gap: 8px; }
+.confirm-option {
+  padding: 12px 14px; border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: #FBFAF7; cursor: pointer;
+  text-align: left; width: 100%;
+}
+.confirm-option:hover { border-color: var(--green); background: var(--green-soft); }
+.confirm-option.danger:hover { border-color: var(--terracotta); background: var(--terracotta-soft); }
+.confirm-option-title { font: 700 13px 'Sora'; margin-bottom: 2px; }
+.confirm-option-desc { font: 500 11.5px 'Sora'; color: var(--text-secondary); }
+
+/* ── Scenario nav ── */
+.scenario-nav {
+  position: fixed; bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  background: #262420; color: #fff;
+  border-radius: 12px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px;
+  font: 600 12px 'Sora'; z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+.scenario-nav button {
+  border: none; background: rgba(255,255,255,.12);
+  color: #fff; padding: 5px 11px; border-radius: 8px;
+  cursor: pointer; font: 600 11.5px 'Sora';
+}
+.scenario-nav button:hover { background: rgba(255,255,255,.2); }
+.scenario-nav button.active { background: var(--green); }
+.scenario-label { color: rgba(255,255,255,.65); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo">T</div>
+      <span style="font:700 14.5px 'Sora'">Tarefas</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-label">Boards</div>
+      <button class="nav-item active">
+        <span class="nav-dot" style="background:#3A6604"></span>
+        Trabalho
+      </button>
+      <button class="nav-item">
+        <span class="nav-dot" style="background:#C1622D"></span>
+        Pessoal
+      </button>
+      <button class="nav-item" style="color:var(--text-muted)">
+        <span style="font-size:13px">+</span>
+        Novo board
+      </button>
+      <div style="height:1px;background:var(--border-subtle);margin:10px 4px"></div>
+      <button class="nav-item">
+        <span style="font-size:13px">📅</span>
+        Calendário
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <header class="header">
+      <h1>Board · Trabalho</h1>
+      <div class="header-actions">
+        <div class="week-nav">
+          <button class="btn-icon">‹‹</button>
+          <button class="btn-icon">‹</button>
+          <span class="week-label">14–18 jul 2025</span>
+          <button class="btn-icon">›</button>
+          <button class="btn-icon">››</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="board">
+      <!-- Segunda -->
+      <div class="day-col">
+        <div class="day-header">Segunda, 14 jul</div>
+        <div class="day-tasks">
+          <div class="task-card" onclick="showEditModal()">
+            <div class="task-name">Daily de produto</div>
+            <div class="task-tag">Reunião</div>
+            <span class="recurring-icon">🔁</span>
+          </div>
+          <div class="task-card urgent" onclick="showDeleteModal()">
+            <div class="task-name">Revisar OKRs do trimestre</div>
+            <div class="task-tag">Estratégia</div>
+          </div>
+        </div>
+        <div class="day-add">
+          <button class="btn-add-task" onclick="showCreateModal()">+ Nova tarefa</button>
+        </div>
+      </div>
+
+      <!-- Terça -->
+      <div class="day-col">
+        <div class="day-header">Terça, 15 jul</div>
+        <div class="day-tasks">
+          <div class="task-card done">
+            <div class="task-name">Sync com design</div>
+            <div class="task-tag">Reunião</div>
+            <span class="recurring-icon">🔁</span>
+          </div>
+          <div class="task-card" onclick="showEditModal()">
+            <div class="task-name">Daily de produto</div>
+            <div class="task-tag">Reunião</div>
+            <span class="recurring-icon">🔁</span>
+          </div>
+        </div>
+        <div class="day-add">
+          <button class="btn-add-task" onclick="showCreateModal()">+ Nova tarefa</button>
+        </div>
+      </div>
+
+      <!-- Quarta -->
+      <div class="day-col">
+        <div class="day-header">Quarta, 16 jul</div>
+        <div class="day-tasks">
+          <div class="task-card" onclick="showEditModal()">
+            <div class="task-name">Daily de produto</div>
+            <div class="task-tag">Reunião</div>
+            <span class="recurring-icon">🔁</span>
+          </div>
+        </div>
+        <div class="day-add">
+          <button class="btn-add-task" onclick="showCreateModal()">+ Nova tarefa</button>
+        </div>
+      </div>
+
+      <!-- Quinta -->
+      <div class="day-col">
+        <div class="day-header">Quinta, 17 jul</div>
+        <div class="day-tasks">
+          <div class="task-card" onclick="showEditModal()">
+            <div class="task-name">Daily de produto</div>
+            <div class="task-tag">Reunião</div>
+            <span class="recurring-icon">🔁</span>
+          </div>
+          <div class="task-card">
+            <div class="task-name">Preparar release notes</div>
+            <div class="task-tag">Documentação</div>
+          </div>
+        </div>
+        <div class="day-add">
+          <button class="btn-add-task" onclick="showCreateModal()">+ Nova tarefa</button>
+        </div>
+      </div>
+
+      <!-- Sexta -->
+      <div class="day-col">
+        <div class="day-header">Sexta, 18 jul</div>
+        <div class="day-tasks">
+          <div class="task-card" onclick="showEditModal()">
+            <div class="task-name">Daily de produto</div>
+            <div class="task-tag">Reunião</div>
+            <span class="recurring-icon">🔁</span>
+          </div>
+        </div>
+        <div class="day-add">
+          <button class="btn-add-task" onclick="showCreateModal()">+ Nova tarefa</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CRIAR TAREFA ===================== -->
+<div id="createOverlay" class="overlay hidden" onclick="handleOverlayClick(event, 'createOverlay')">
+  <div class="task-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Nova tarefa</div>
+      <button class="btn-close" onclick="hide('createOverlay')">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label>Nome da atividade</label>
+        <input type="text" placeholder="Ex: Daily de produto" value="">
+      </div>
+
+      <div class="field">
+        <label>Data</label>
+        <input type="date" value="2025-07-14">
+      </div>
+
+      <!-- Toggle recorrente -->
+      <div class="toggle-row" onclick="toggleRecurrence()">
+        <span class="tr-icon">🔁</span>
+        <span class="tr-label">Recorrente</span>
+        <span class="tr-hint" id="rec-hint">Não</span>
+        <div class="toggle-switch" id="rec-toggle"></div>
+      </div>
+
+      <!-- Painel de recorrência -->
+      <div class="recurrence-panel hidden" id="rec-panel">
+
+        <div class="recurrence-type-tabs">
+          <button class="rec-tab active" onclick="selectTab('diario')">Diário</button>
+          <button class="rec-tab" onclick="selectTab('semanal')">Semanal</button>
+          <button class="rec-tab" onclick="selectTab('mensal')">Mensal</button>
+          <button class="rec-tab" onclick="selectTab('custom')">Personalizado</button>
+        </div>
+
+        <div class="recurrence-options">
+
+          <!-- DIÁRIO -->
+          <div class="rec-section active" id="sec-diario">
+            <div class="rec-options-list">
+              <label class="rec-option-row">
+                <input type="radio" name="daily" checked>
+                <span>Todos os dias</span>
+              </label>
+              <label class="rec-option-row">
+                <input type="radio" name="daily">
+                <span>Apenas dias úteis (seg–sex)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- SEMANAL -->
+          <div class="rec-section" id="sec-semanal">
+            <div style="font:500 12px 'Sora';color:var(--text-secondary);margin-bottom:8px">Selecione os dias da semana:</div>
+            <div class="weekday-pills">
+              <span class="weekday-pill selected" onclick="this.classList.toggle('selected')">Seg</span>
+              <span class="weekday-pill" onclick="this.classList.toggle('selected')">Ter</span>
+              <span class="weekday-pill selected" onclick="this.classList.toggle('selected')">Qua</span>
+              <span class="weekday-pill" onclick="this.classList.toggle('selected')">Qui</span>
+              <span class="weekday-pill selected" onclick="this.classList.toggle('selected')">Sex</span>
+              <span class="weekday-pill" onclick="this.classList.toggle('selected')">Sáb</span>
+              <span class="weekday-pill" onclick="this.classList.toggle('selected')">Dom</span>
+            </div>
+          </div>
+
+          <!-- MENSAL -->
+          <div class="rec-section" id="sec-mensal">
+            <div class="rec-options-list">
+              <label class="rec-option-row">
+                <input type="radio" name="monthly" checked>
+                <span>Todo dia <strong>14</strong> do mês</span>
+              </label>
+            </div>
+            <div style="font:500 11.5px 'Sora';color:var(--text-muted);margin-top:8px">O dia é definido automaticamente pela data de início.</div>
+          </div>
+
+          <!-- PERSONALIZADO -->
+          <div class="rec-section" id="sec-custom">
+            <div class="custom-interval-row">
+              <span style="font:500 12.5px 'Sora'">A cada</span>
+              <input type="number" value="14" min="2" max="60">
+              <span>dias</span>
+            </div>
+            <div style="font:500 11.5px 'Sora';color:var(--text-muted);margin-top:8px">Intervalo entre 2 e 60 dias.</div>
+          </div>
+
+        </div>
+
+        <!-- Data de término -->
+        <div class="end-date-row">
+          <label>Repetir até</label>
+          <input type="date" value="2025-12-31" max="2026-12-31">
+        </div>
+
+        <div class="recurrence-summary" id="rec-summary">
+          🔁 Todo dia útil · até 31/12/2025
+        </div>
+
+      </div>
+
+      <div class="field">
+        <label>Link</label>
+        <input type="text" placeholder="https://">
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-neutral" onclick="hide('createOverlay')">Cancelar</button>
+      <button class="btn-primary" onclick="hide('createOverlay')">Salvar tarefa</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: EDITAR TAREFA (já recorrente) ===================== -->
+<div id="editOverlay" class="overlay hidden" onclick="handleOverlayClick(event, 'editOverlay')">
+  <div class="task-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Editar tarefa</div>
+      <button class="btn-close" onclick="hide('editOverlay')">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--green-soft);border-radius:9px;border:1px solid rgba(58,102,4,.2)">
+        <span style="font-size:13px">🔁</span>
+        <span style="font:600 12px 'Sora';color:var(--green)">Série: Daily de produto · dias úteis até 31/12/2025</span>
+      </div>
+
+      <div class="field">
+        <label>Nome da atividade</label>
+        <input type="text" value="Daily de produto">
+      </div>
+
+      <div class="field">
+        <label>Data</label>
+        <input type="date" value="2025-07-14">
+      </div>
+
+      <div class="field">
+        <label>Link</label>
+        <input type="text" placeholder="https://">
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-neutral" onclick="hide('editOverlay')">Cancelar</button>
+      <button class="btn-primary" onclick="hide('editOverlay');showConfirm('edit')">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CONFIRMAR EDIÇÃO ===================== -->
+<div id="confirmEditOverlay" class="overlay hidden" onclick="handleOverlayClick(event, 'confirmEditOverlay')">
+  <div class="confirm-modal" onclick="event.stopPropagation()">
+    <div class="confirm-icon">✏️</div>
+    <div class="confirm-title">Editar tarefa recorrente</div>
+    <div class="confirm-desc">Esta tarefa faz parte de uma série recorrente. Como você quer aplicar a edição?</div>
+    <div class="confirm-options">
+      <button class="confirm-option" onclick="hide('confirmEditOverlay')">
+        <div class="confirm-option-title">Apenas esta ocorrência</div>
+        <div class="confirm-option-desc">Somente 14 jul será alterada. O restante da série permanece igual.</div>
+      </button>
+      <button class="confirm-option" onclick="hide('confirmEditOverlay')">
+        <div class="confirm-option-title">Esta e todas as futuras</div>
+        <div class="confirm-option-desc">14 jul e todas as ocorrências seguintes serão atualizadas.</div>
+      </button>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn-neutral" style="width:100%" onclick="hide('confirmEditOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CONFIRMAR EXCLUSÃO ===================== -->
+<div id="confirmDeleteOverlay" class="overlay hidden" onclick="handleOverlayClick(event, 'confirmDeleteOverlay')">
+  <div class="confirm-modal" onclick="event.stopPropagation()">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title">Excluir tarefa recorrente</div>
+    <div class="confirm-desc">Esta tarefa faz parte de uma série recorrente. O que você quer excluir?</div>
+    <div class="confirm-options">
+      <button class="confirm-option" onclick="hide('confirmDeleteOverlay')">
+        <div class="confirm-option-title">Apenas esta ocorrência</div>
+        <div class="confirm-option-desc">Somente 14 jul será removida. O restante da série permanece.</div>
+      </button>
+      <button class="confirm-option danger" onclick="hide('confirmDeleteOverlay')">
+        <div class="confirm-option-title" style="color:var(--terracotta)">Esta e todas as futuras</div>
+        <div class="confirm-option-desc">14 jul e todas as ocorrências posteriores serão excluídas. Ocorrências anteriores permanecem.</div>
+      </button>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn-neutral" style="width:100%" onclick="hide('confirmDeleteOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SCENARIO NAV ===================== -->
+<div class="scenario-nav">
+  <span class="scenario-label">Cenário</span>
+  <button class="active" onclick="setScenario(0, this)">1 · Board</button>
+  <button onclick="setScenario(1, this)">2 · Criar</button>
+  <button onclick="setScenario(2, this)">3 · Editar</button>
+  <button onclick="setScenario(3, this)">4 · Excluir</button>
+</div>
+
+<script>
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+
+function handleOverlayClick(e, id) {
+  if (e.target.id === id) hide(id);
+}
+
+// Scenario shortcuts
+function setScenario(idx, btn) {
+  document.querySelectorAll('.scenario-nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  hide('createOverlay'); hide('editOverlay'); hide('confirmEditOverlay'); hide('confirmDeleteOverlay');
+  if (idx === 1) showCreateModal();
+  if (idx === 2) showEditModal();
+  if (idx === 3) showDeleteModal();
+}
+
+function showCreateModal() { show('createOverlay'); }
+function showEditModal() { hide('confirmEditOverlay'); show('editOverlay'); }
+function showDeleteModal() { showConfirm('delete'); }
+function showConfirm(type) {
+  if (type === 'edit') show('confirmEditOverlay');
+  else show('confirmDeleteOverlay');
+}
+
+// Recurrence toggle
+let recOn = false;
+function toggleRecurrence() {
+  recOn = !recOn;
+  document.getElementById('rec-toggle').classList.toggle('on', recOn);
+  document.getElementById('rec-hint').textContent = recOn ? 'Sim' : 'Não';
+  document.getElementById('rec-panel').classList.toggle('hidden', !recOn);
+}
+
+// Tab switching
+function selectTab(type) {
+  document.querySelectorAll('.rec-tab').forEach((t, i) => {
+    t.classList.toggle('active', ['diario','semanal','mensal','custom'][i] === type);
+  });
+  ['diario','semanal','mensal','custom'].forEach(s => {
+    document.getElementById('sec-' + s).classList.toggle('active', s === type);
+  });
+  updateSummary(type);
+}
+
+function updateSummary(type) {
+  const map = {
+    diario: '🔁 Todo dia útil · até 31/12/2025',
+    semanal: '🔁 Toda seg, qua e sex · até 31/12/2025',
+    mensal: '🔁 Todo dia 14 do mês · até 31/12/2025',
+    custom: '🔁 A cada 14 dias · até 31/12/2025',
+  };
+  document.getElementById('rec-summary').textContent = map[type] || '';
+}
+</script>
+</body>
+</html>
