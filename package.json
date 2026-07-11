@@ -1,0 +1,17 @@
+{
+  "name": "gestao-de-tarefas",
+  "version": "1.0.0",
+  "description": "App de gestão de tarefas pessoal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "dotenv": "^17.4.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

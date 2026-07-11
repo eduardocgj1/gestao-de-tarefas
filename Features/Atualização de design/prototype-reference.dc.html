@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Sora',-apple-system,sans-serif; background:#FAF7F2; color:#262420; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#E3DDCF; border-radius:8px; }
+  @keyframes drawerIn { from { transform:translateX(24px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+  @keyframes modalIn { from { transform:translateY(10px) scale(0.98); opacity:0; } to { transform:translateY(0) scale(1); opacity:1; } }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+</style>
+</helmet>
+
+<div style="display:flex;height:100vh;width:100%;overflow:hidden;background:#FAF7F2">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside style="width:{{ sidebarWidth }};flex-shrink:0;background:#FFFFFF;border-right:1px solid #ECE6D8;display:flex;flex-direction:column;padding:16px 0;transition:width .18s ease;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 16px 16px;margin-bottom:8px;border-bottom:1px solid #F1ECE0">
+      <div style="width:30px;height:30px;border-radius:9px;background:#3A6604;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px">T</div>
+      <sc-if value="{{ sidebarOpen }}"><span style="font-weight:700;font-size:14.5px;white-space:nowrap">Tarefas</span></sc-if>
+      <div style="flex:1"></div>
+      <sc-if value="{{ sidebarOpen }}">
+        <button type="button" onClick="{{ toggleSidebar }}" style="border:none;background:transparent;color:#9A9488;cursor:pointer;font-size:15px;padding:4px;border-radius:6px" style-hover="background:#F1ECE0">‹</button>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ !sidebarOpen }}">
+      <div style="display:flex;justify-content:center;padding:6px 0 12px">
+        <button type="button" onClick="{{ toggleSidebar }}" style="border:none;background:#F5F1E8;color:#7A766C;cursor:pointer;font-size:14px;padding:6px 8px;border-radius:8px;width:32px" style-hover="background:#ECE6D8">›</button>
+      </div>
+    </sc-if>
+
+    <div style="flex:1;display:flex;flex-direction:column;gap:2px;padding:0 10px;overflow-y:auto">
+      <sc-if value="{{ sidebarOpen }}" hint-placeholder-val="{{ true }}"><div style="font:700 10px/1 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.06em;padding:8px 8px 6px">Boards</div></sc-if>
+
+      <sc-for list="{{ boards }}" as="b" hint-placeholder-count="2">
+        <button type="button" onClick="{{ b.select }}" title="{{ b.name }}" style="display:flex;align-items:center;gap:10px;border:none;cursor:pointer;padding:9px 8px;border-radius:10px;text-align:left;background:{{ b.bg }};color:{{ b.fg }};font:600 13px 'Sora'" style-hover="background:#F5F1E8">
+          <span style="width:9px;height:9px;border-radius:50%;background:{{ b.color }};flex-shrink:0"></span>
+          <sc-if value="{{ sidebarOpen }}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.name }}</span></sc-if>
+        </button>
+      </sc-for>
+
+      <sc-if value="{{ !addingBoard }}" hint-placeholder-val="{{ true }}">
+        <button type="button" onClick="{{ startAddBoard }}" style="display:flex;align-items:center;gap:10px;border:none;background:transparent;cursor:pointer;padding:9px 8px;border-radius:10px;text-align:left;color:#B3AE9F;font:600 13px 'Sora'" style-hover="background:#F5F1E8">
+          <span style="width:9px;height:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px">+</span>
+          <sc-if value="{{ sidebarOpen }}"><span>Novo board</span></sc-if>
+        </button>
+      </sc-if>
+      <sc-if value="{{ addingBoard }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:6px;padding:2px 4px">
+          <input autoFocus placeholder="Nome do board" style="flex:1;min-width:0;border:1px solid #3A6604;border-radius:8px;padding:6px 8px;font:600 12.5px 'Sora';background:#fff;outline:none" />
+          <button type="button" onClick="{{ cancelAddBoard }}" style="border:none;background:none;color:#B3AE9F;cursor:pointer;font-size:13px;flex-shrink:0">✕</button>
+        </div>
+      </sc-if>
+
+      <div style="height:1px;background:#F1ECE0;margin:10px 4px"></div>
+
+      <button type="button" onClick="{{ selectCalendarView }}" style="display:flex;align-items:center;gap:10px;border:none;cursor:pointer;padding:9px 8px;border-radius:10px;text-align:left;background:{{ calendarNavBg }};color:{{ calendarNavFg }};font:600 13px 'Sora'" style-hover="background:#F5F1E8">
+        <span style="width:16px;height:16px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center">
+          <span style="width:13px;height:12px;border:1.5px solid currentColor;border-radius:3px;position:relative;display:block">
+            <span style="position:absolute;top:3px;left:0;right:0;height:1.5px;background:currentColor"></span>
+          </span>
+        </span>
+        <sc-if value="{{ sidebarOpen }}"><span>Calendário</span></sc-if>
+      </button>
+    </div>
+
+    <div style="padding:10px;margin-top:auto">
+      <div style="border:1px solid #ECE6D8;border-radius:14px;padding:{{ pomoPad }};background:#FBF9F4;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onClick="{{ togglePomodoro }}">
+          <span style="width:8px;height:8px;border-radius:50%;background:{{ pomoColor }};flex-shrink:0"></span>
+          <sc-if value="{{ sidebarOpen }}"><span style="font:600 11.5px 'Sora';color:#7A766C;white-space:nowrap;overflow:hidden">Foco</span></sc-if>
+          <div style="flex:1"></div>
+          <sc-if value="{{ sidebarOpen }}"><span style="font:700 15px 'Sora';color:#262420;font-variant-numeric:tabular-nums">24:12</span></sc-if>
+        </div>
+        <sc-if value="{{ sidebarOpen }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ pomodoroExpanded }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;gap:4px">
+              <span style="flex:1;text-align:center;padding:5px 0;border-radius:7px;background:#3A6604;color:#fff;font:600 10.5px 'Sora'">Foco</span>
+              <span style="flex:1;text-align:center;padding:5px 0;border-radius:7px;color:#9A9488;font:600 10.5px 'Sora'">Curta</span>
+              <span style="flex:1;text-align:center;padding:5px 0;border-radius:7px;color:#9A9488;font:600 10.5px 'Sora'">Longa</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button type="button" style="width:28px;height:28px;border-radius:50%;border:none;background:#262420;color:#fff;font-size:11px;cursor:pointer">▶</button>
+              <button type="button" style="width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:#9A9488;font-size:13px;cursor:pointer">↺</button>
+              <div style="display:flex;gap:3px;margin-left:auto">
+                <span style="width:6px;height:6px;border-radius:50%;background:#3A6604"></span>
+                <span style="width:6px;height:6px;border-radius:50%;border:1px solid #E3DDCF"></span>
+                <span style="width:6px;height:6px;border-radius:50%;border:1px solid #E3DDCF"></span>
+                <span style="width:6px;height:6px;border-radius:50%;border:1px solid #E3DDCF"></span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+        </sc-if>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+    <header style="display:flex;align-items:center;gap:16px;padding:16px 26px;border-bottom:1px solid #ECE6D8;background:#FFFFFF">
+      <h1 style="font:700 17px 'Sora';margin:0">{{ pageTitle }}</h1>
+      <div style="flex:1"></div>
+      <sc-if value="{{ isBoardView }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:center;gap:6px">
+          <button type="button" style="border:none;width:30px;height:30px;border-radius:9px;background:#F5F1E8;color:#262420;font-size:13px;cursor:pointer" style-hover="background:#ECE6D8">‹‹</button>
+          <button type="button" style="border:none;width:30px;height:30px;border-radius:9px;background:#F5F1E8;color:#262420;font-size:15px;cursor:pointer" style-hover="background:#ECE6D8">‹</button>
+          <span style="font:600 12.5px 'Sora';color:#7A766C;min-width:130px;text-align:center">06 jul – 10 jul</span>
+          <button type="button" style="border:none;padding:0 14px;height:30px;border-radius:9px;background:#EAF0DE;color:#3A6604;font:700 12px 'Sora';cursor:pointer" style-hover="background:#DCE7C9">Hoje</button>
+          <button type="button" style="border:none;width:30px;height:30px;border-radius:9px;background:#F5F1E8;color:#262420;font-size:15px;cursor:pointer" style-hover="background:#ECE6D8">›</button>
+          <button type="button" style="border:none;width:30px;height:30px;border-radius:9px;background:#F5F1E8;color:#262420;font-size:13px;cursor:pointer" style-hover="background:#ECE6D8">››</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ !isBoardView }}">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;font:600 12px 'Sora';color:#7A766C">
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#3A6604"></span>Trabalho</span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:#C1622D"></span>Pessoal</span>
+          </div>
+          <span style="font:600 12.5px 'Sora';color:#7A766C">Julho 2026</span>
+          <button type="button" style="border:none;padding:0 14px;height:30px;border-radius:9px;background:#EAF0DE;color:#3A6604;font:700 12px 'Sora';cursor:pointer" style-hover="background:#DCE7C9">Hoje</button>
+        </div>
+      </sc-if>
+      <button type="button" onClick="{{ openSettings }}" style="border:none;width:32px;height:32px;border-radius:9px;background:#F5F1E8;color:#7A766C;font-size:14px;cursor:pointer" style-hover="background:#ECE6D8" title="Configurações">⚙</button>
+    </header>
+
+    <!-- ===================== BOARD VIEW ===================== -->
+    <sc-if value="{{ isBoardView }}" hint-placeholder-val="{{ true }}">
+    <main style="flex:1;display:flex;gap:14px;padding:20px 26px;overflow-x:auto;align-items:flex-start">
+      <sc-for list="{{ days }}" as="day" hint-placeholder-count="5">
+        <div style="width:236px;min-width:236px;background:#FFFFFF;border-radius:16px;box-shadow:0 1px 2px rgba(38,36,32,.05);display:flex;flex-direction:column;max-height:100%">
+          <div style="padding:14px 15px 12px;border-bottom:1px solid #F1ECE0;cursor:pointer" onClick="{{ day.open }}" style-hover="background:#FBF9F4">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font:700 13.5px 'Sora';color:{{ day.titleColor }}">{{ day.label }}</span>
+              <span style="width:24px;height:24px;border-radius:50%;border:3px solid #F1ECE0;border-top-color:#3A6604;display:inline-block"></span>
+            </div>
+            <div style="font:600 10.5px 'Sora';color:#B3AE9F">{{ day.summary }}</div>
+            <div style="font:600 10.5px 'Sora';color:#B3AE9F;margin-top:2px">{{ day.timeSummary }}</div>
+          </div>
+
+          <sc-if value="{{ day.hasEvents }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:10px 12px 4px;display:flex;flex-direction:column;gap:6px;border-bottom:1px dashed #F1ECE0">
+              <sc-for list="{{ day.events }}" as="ev" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:6px;font:600 11px 'Sora';color:#262420;background:{{ ev.bg }};border-radius:8px;padding:5px 8px">
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{ ev.dot }};flex-shrink:0"></span>
+                  <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ev.name }}</span>
+                  <sc-if value="{{ ev.span }}"><span style="font:600 9.5px 'Sora';color:#B3AE9F">{{ ev.span }}</span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <div style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:40px">
+            <sc-for list="{{ day.tasks }}" as="task" hint-placeholder-count="2">
+              <div onClick="{{ task.openModal }}" style="border-radius:11px;padding:9px 11px;cursor:pointer;border-left:3px solid {{ task.accent }};background:{{ task.bg }};opacity:{{ task.opacity }}">
+                <div style="display:flex;align-items:flex-start;gap:7px">
+                  <input type="checkbox" checked="{{ task.completed }}" onClick="{{ task.toggle }}" style="margin-top:2px" />
+                  <div style="flex:1;font:600 13px 'Sora';color:#262420;text-decoration:{{ task.strike }};word-break:break-word">{{ task.name }}</div>
+                  <sc-if value="{{ task.mit }}"><span title="Prioridade do dia" style="font-size:12px">⭐</span></sc-if>
+                  <sc-if value="{{ task.urgent }}"><span style="font:700 9px 'Sora';color:#C1622D">URGENTE</span></sc-if>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:5px;font:600 10.5px 'Sora';color:#8B8778">
+                  <sc-if value="{{ task.duration }}"><span>⏱ {{ task.duration }}</span></sc-if>
+                  <sc-if value="{{ task.tag }}"><span>{{ task.tag }}</span></sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="padding:8px 10px 12px">
+            <input placeholder="+ Nova tarefa" style="width:100%;border:1px solid #ECE6D8;border-radius:10px;padding:8px 10px;font:500 12.5px 'Sora';background:#FBF9F4;outline:none" />
+          </div>
+        </div>
+      </sc-for>
+    </main>
+    </sc-if>
+
+    <!-- ===================== CALENDAR VIEW ===================== -->
+    <sc-if value="{{ !isBoardView }}">
+    <main style="flex:1;overflow-y:auto;padding:20px 26px;position:relative">
+      <button type="button" onClick="{{ openEventModal }}" title="Novo evento" style="position:absolute;right:34px;bottom:24px;width:52px;height:52px;border-radius:50%;border:none;background:#262420;color:#fff;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(38,36,32,.25);cursor:pointer;z-index:5" style-hover="background:#3A3630">+</button>
+      <div style="background:#FFFFFF;border-radius:16px;box-shadow:0 1px 2px rgba(38,36,32,.05);overflow:hidden">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid #F1ECE0;position:sticky;top:0;background:#FFFFFF">
+          <span style="padding:12px 0;text-align:center;font:700 10.5px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Dom</span>
+          <span style="padding:12px 0;text-align:center;font:700 10.5px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Seg</span>
+          <span style="padding:12px 0;text-align:center;font:700 10.5px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Ter</span>
+          <span style="padding:12px 0;text-align:center;font:700 10.5px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Qua</span>
+          <span style="padding:12px 0;text-align:center;font:700 10.5px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Qui</span>
+          <span style="padding:12px 0;text-align:center;font:700 10.5px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Sex</span>
+          <span style="padding:12px 0;text-align:center;font:700 10.5px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Sáb</span>
+        </div>
+        <div style="padding:16px 16px 6px;font:700 14px 'Sora';color:#262420">Julho 2026</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr)">
+          <sc-for list="{{ calendarCells }}" as="cell" hint-placeholder-count="35">
+            <div onClick="{{ cell.open }}" style="min-height:100px;border-top:1px solid #F1ECE0;border-right:1px solid #F1ECE0;padding:6px 7px;display:flex;flex-direction:column;gap:4px;cursor:pointer;background:{{ cell.bg }}" style-hover="background:#FBF9F4">
+              <span style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11.5px 'Sora';background:{{ cell.numBg }};color:{{ cell.numColor }}">{{ cell.num }}</span>
+              <sc-for list="{{ cell.events }}" as="ev" hint-placeholder-count="0">
+                <div style="display:flex;align-items:center;gap:4px;font:600 10px 'Sora';color:{{ ev.textColor }};background:{{ ev.bg }};border-radius:6px;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                  <span style="width:5px;height:5px;border-radius:50%;background:{{ ev.dot }};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis">{{ ev.name }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </main>
+    </sc-if>
+  </div>
+
+  <!-- ===================== DAY DRAWER (Visão do Dia) — encaixado como a sidebar, redimensionável ===================== -->
+  <div style="width:{{ dockedDrawerWidth }};flex-shrink:0;background:#FFFFFF;border-left:1px solid #ECE6D8;display:flex;flex-direction:column;overflow:hidden;position:relative;transition:{{ drawerWidthTransition }}">
+    <sc-if value="{{ showResizeHandle }}" hint-placeholder-val="{{ false }}">
+      <div onMouseDown="{{ startResize }}" title="Arraste para redimensionar" style="position:absolute;left:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:5" style-hover="background:rgba(58,54,48,.1)"></div>
+    </sc-if>
+    <div style="width:{{ drawerSizePx }};height:100%;display:flex;flex-direction:column">
+      <div style="padding:20px 22px 14px;border-bottom:1px solid #F1ECE0;display:flex;align-items:flex-start">
+        <div>
+          <div style="font:800 17px 'Sora';color:#262420;white-space:nowrap">{{ selectedDay.fullLabel }}</div>
+          <div style="font:600 11.5px 'Sora';color:#B3AE9F;margin-top:2px">{{ drawerSubtitle }}</div>
+        </div>
+        <div style="flex:1"></div>
+        <button type="button" onClick="{{ toggleDrawerExpand }}" title="Abrir como pop-up" style="border:none;background:#F5F1E8;width:28px;height:28px;border-radius:8px;color:#7A766C;font-size:13px;cursor:pointer;flex-shrink:0;margin-right:6px" style-hover="background:#ECE6D8">⤢</button>
+        <button type="button" onClick="{{ closeDayDrawer }}" style="border:none;background:#F5F1E8;width:28px;height:28px;border-radius:8px;color:#7A766C;font-size:15px;cursor:pointer;flex-shrink:0" style-hover="background:#ECE6D8">×</button>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:18px">
+        <div>
+          <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Boards no dia</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{ drawerBoards }}" as="b" hint-placeholder-count="2">
+              <label onClick="{{ b.toggle }}" style="display:flex;align-items:center;gap:7px;border:1px solid #ECE6D8;border-radius:20px;padding:6px 12px 6px 8px;cursor:pointer;background:{{ b.checked ? '#FBF9F4' : '#FFFFFF' }};opacity:{{ b.checked ? 1 : 0.5 }}">
+                <input type="checkbox" checked="{{ b.checked }}" readOnly style="pointer-events:none" />
+                <span style="width:8px;height:8px;border-radius:50%;background:{{ b.color }};flex-shrink:0"></span>
+                <span style="font:600 12px 'Sora';color:#262420">{{ b.name }}</span>
+              </label>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-if value="{{ !shutdownOpen }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⭐ Prioridades do dia</div>
+            <sc-if value="{{ selectedDay.hasMit }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ selectedDay.mitTasks }}" as="mt" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:8px;background:#FBF6E9;border:1px solid #F0E4C0;border-radius:11px;padding:9px 11px;margin-bottom:6px">
+                  <span>⭐</span><span style="flex:1;font:600 13px 'Sora'">{{ mt.name }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ !selectedDay.hasMit }}">
+              <div style="border:1.5px dashed #E3DDCF;border-radius:11px;padding:12px;font:500 12px 'Sora';color:#B3AE9F;text-align:center">Marque até 3 prioridades</div>
+            </sc-if>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="width:8px;height:8px;border-radius:50%;background:#3A6604"></span>
+              <span style="font:700 12.5px 'Sora';color:#262420">Trabalho</span>
+            </div>
+            <div style="display:flex;gap:6px;font:600 11px 'Sora';color:#7A766C;background:#FBF9F4;border-radius:9px;padding:8px 10px;margin-bottom:10px">
+              <span>Previsto {{ selectedDay.planned }}</span><span>·</span><span>Feito {{ selectedDay.done }}</span><span>·</span><span>Resta {{ selectedDay.rest }}</span>
+            </div>
+            <sc-for list="{{ selectedDay.tasks }}" as="task" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:8px;border-radius:10px;padding:8px 10px;margin-bottom:6px;background:{{ task.bg }};border-left:3px solid {{ task.accent }}">
+                <input type="checkbox" checked="{{ task.completed }}" />
+                <span style="flex:1;font:600 12.5px 'Sora';text-decoration:{{ task.strike }}">{{ task.name }}</span>
+                <sc-if value="{{ task.duration }}"><span style="font:600 10.5px 'Sora';color:#8B8778">{{ task.duration }}</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ shutdownOpen }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Fechar o dia</div>
+            <div style="font:500 12px 'Sora';color:#8B8778;margin-bottom:10px">O que fazer com as tarefas não concluídas?</div>
+            <sc-if value="{{ !selectedDay.hasPending }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px dashed #E3DDCF;border-radius:11px;padding:14px;font:500 12px 'Sora';color:#B3AE9F;text-align:center">Nenhuma tarefa pendente 🎉</div>
+            </sc-if>
+            <sc-if value="{{ selectedDay.hasPending }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <span style="width:8px;height:8px;border-radius:50%;background:#3A6604"></span>
+                <span style="font:700 12.5px 'Sora';color:#262420">Trabalho</span>
+              </div>
+              <sc-for list="{{ selectedDay.pendingTasks }}" as="pt" hint-placeholder-count="2">
+                <div style="border-bottom:1px solid #F1ECE0;padding:10px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <span style="flex:1;min-width:120px;font:600 13px 'Sora';color:#262420">{{ pt.name }}</span>
+                  <div style="display:flex;gap:6px">
+                    <button type="button" onClick="{{ pt.setAmanha }}" style="border:none;border-radius:8px;padding:7px 12px;font:700 11px 'Sora';cursor:pointer;background:{{ pt.bgAmanha }};color:{{ pt.fgAmanha }}">Amanhã</button>
+                    <button type="button" onClick="{{ pt.setOutra }}" style="border:none;border-radius:8px;padding:7px 12px;font:700 11px 'Sora';cursor:pointer;background:{{ pt.bgOutra }};color:{{ pt.fgOutra }}">Outra data</button>
+                    <button type="button" onClick="{{ pt.setIgnorar }}" style="border:none;border-radius:8px;padding:7px 12px;font:700 11px 'Sora';cursor:pointer;background:{{ pt.bgIgnorar }};color:{{ pt.fgIgnorar }}">Ignorar</button>
+                  </div>
+                </div>
+              </sc-for>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="padding:16px 22px;border-top:1px solid #F1ECE0;display:flex;gap:8px">
+        <sc-if value="{{ !shutdownOpen }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ openShutdown }}" style="flex:1;border:none;background:#262420;color:#fff;font:700 13px 'Sora';padding:12px;border-radius:11px;cursor:pointer" style-hover="background:#3A3630">Fechar o dia</button>
+        </sc-if>
+        <sc-if value="{{ shutdownOpen }}" hint-placeholder-val="{{ false }}">
+          <button type="button" onClick="{{ backToNormal }}" style="flex:1;border:none;background:#F5F1E8;color:#262420;font:700 13px 'Sora';padding:12px;border-radius:11px;cursor:pointer" style-hover="background:#ECE6D8">Voltar</button>
+          <button type="button" onClick="{{ finalizeShutdown }}" style="flex:1;border:none;background:#262420;color:#fff;font:700 13px 'Sora';padding:12px;border-radius:11px;cursor:pointer" style-hover="background:#3A3630">Encerrar</button>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== DAY DRAWER — modo pop-up central ===================== -->
+  <sc-if value="{{ drawerExpanded }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(38,36,32,.32);z-index:96;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease" onClick="{{ toggleDrawerExpand }}">
+      <div style="width:680px;max-width:92vw;height:78vh;background:#fff;border-radius:20px;box-shadow:0 24px 60px rgba(38,36,32,.28);display:flex;flex-direction:column;overflow:hidden;animation:modalIn .18s ease" onClick="{{ stopProp }}">
+        <div style="padding:22px 26px 16px;border-bottom:1px solid #F1ECE0;display:flex;align-items:flex-start">
+          <div>
+            <div style="font:800 19px 'Sora';color:#262420">{{ selectedDay.fullLabel }}</div>
+            <div style="font:600 12px 'Sora';color:#B3AE9F;margin-top:2px">{{ drawerSubtitle }}</div>
+          </div>
+          <div style="flex:1"></div>
+          <button type="button" onClick="{{ toggleDrawerExpand }}" title="Encaixar na lateral" style="border:none;background:#F5F1E8;width:30px;height:30px;border-radius:8px;color:#7A766C;font-size:13px;cursor:pointer;flex-shrink:0;margin-right:6px" style-hover="background:#ECE6D8">⤡</button>
+          <button type="button" onClick="{{ closeDayDrawer }}" style="border:none;background:#F5F1E8;width:30px;height:30px;border-radius:8px;color:#7A766C;font-size:16px;cursor:pointer;flex-shrink:0" style-hover="background:#ECE6D8">×</button>
+        </div>
+
+        <div style="flex:1;overflow-y:auto;padding:20px 26px;display:flex;flex-direction:column;gap:18px">
+          <div>
+            <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Boards no dia</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <sc-for list="{{ drawerBoards }}" as="b2" hint-placeholder-count="2">
+                <label onClick="{{ b2.toggle }}" style="display:flex;align-items:center;gap:7px;border:1px solid #ECE6D8;border-radius:20px;padding:6px 12px 6px 8px;cursor:pointer;background:{{ b2.checked ? '#FBF9F4' : '#FFFFFF' }};opacity:{{ b2.checked ? 1 : 0.5 }}">
+                  <input type="checkbox" checked="{{ b2.checked }}" readOnly style="pointer-events:none" />
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ b2.color }};flex-shrink:0"></span>
+                  <span style="font:600 12px 'Sora';color:#262420">{{ b2.name }}</span>
+                </label>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ !shutdownOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:24px;flex-wrap:wrap">
+              <div style="flex:1;min-width:220px">
+                <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⭐ Prioridades do dia</div>
+                <sc-if value="{{ selectedDay.hasMit }}" hint-placeholder-val="{{ false }}">
+                  <sc-for list="{{ selectedDay.mitTasks }}" as="mt2" hint-placeholder-count="1">
+                    <div style="display:flex;align-items:center;gap:8px;background:#FBF6E9;border:1px solid #F0E4C0;border-radius:11px;padding:9px 11px;margin-bottom:6px">
+                      <span>⭐</span><span style="flex:1;font:600 13px 'Sora'">{{ mt2.name }}</span>
+                    </div>
+                  </sc-for>
+                </sc-if>
+                <sc-if value="{{ !selectedDay.hasMit }}">
+                  <div style="border:1.5px dashed #E3DDCF;border-radius:11px;padding:12px;font:500 12px 'Sora';color:#B3AE9F;text-align:center">Marque até 3 prioridades</div>
+                </sc-if>
+              </div>
+
+              <div style="flex:1;min-width:220px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#3A6604"></span>
+                  <span style="font:700 12.5px 'Sora';color:#262420">Trabalho</span>
+                </div>
+                <div style="display:flex;gap:6px;font:600 11px 'Sora';color:#7A766C;background:#FBF9F4;border-radius:9px;padding:8px 10px;margin-bottom:10px">
+                  <span>Previsto {{ selectedDay.planned }}</span><span>·</span><span>Feito {{ selectedDay.done }}</span><span>·</span><span>Resta {{ selectedDay.rest }}</span>
+                </div>
+                <sc-for list="{{ selectedDay.tasks }}" as="task2" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:8px;border-radius:10px;padding:8px 10px;margin-bottom:6px;background:{{ task2.bg }};border-left:3px solid {{ task2.accent }}">
+                    <input type="checkbox" checked="{{ task2.completed }}" />
+                    <span style="flex:1;font:600 12.5px 'Sora';text-decoration:{{ task2.strike }}">{{ task2.name }}</span>
+                    <sc-if value="{{ task2.duration }}"><span style="font:600 10.5px 'Sora';color:#8B8778">{{ task2.duration }}</span></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ shutdownOpen }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Fechar o dia</div>
+              <div style="font:500 12px 'Sora';color:#8B8778;margin-bottom:10px">O que fazer com as tarefas não concluídas?</div>
+              <sc-if value="{{ !selectedDay.hasPending }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px dashed #E3DDCF;border-radius:11px;padding:14px;font:500 12px 'Sora';color:#B3AE9F;text-align:center">Nenhuma tarefa pendente 🎉</div>
+              </sc-if>
+              <sc-if value="{{ selectedDay.hasPending }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#3A6604"></span>
+                  <span style="font:700 12.5px 'Sora';color:#262420">Trabalho</span>
+                </div>
+                <sc-for list="{{ selectedDay.pendingTasks }}" as="pt2" hint-placeholder-count="2">
+                  <div style="border-bottom:1px solid #F1ECE0;padding:10px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <span style="flex:1;min-width:160px;font:600 13px 'Sora';color:#262420">{{ pt2.name }}</span>
+                    <div style="display:flex;gap:6px">
+                      <button type="button" onClick="{{ pt2.setAmanha }}" style="border:none;border-radius:8px;padding:7px 12px;font:700 11px 'Sora';cursor:pointer;background:{{ pt2.bgAmanha }};color:{{ pt2.fgAmanha }}">Amanhã</button>
+                      <button type="button" onClick="{{ pt2.setOutra }}" style="border:none;border-radius:8px;padding:7px 12px;font:700 11px 'Sora';cursor:pointer;background:{{ pt2.bgOutra }};color:{{ pt2.fgOutra }}">Outra data</button>
+                      <button type="button" onClick="{{ pt2.setIgnorar }}" style="border:none;border-radius:8px;padding:7px 12px;font:700 11px 'Sora';cursor:pointer;background:{{ pt2.bgIgnorar }};color:{{ pt2.fgIgnorar }}">Ignorar</button>
+                    </div>
+                  </div>
+                </sc-for>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="padding:18px 26px;border-top:1px solid #F1ECE0;display:flex;gap:8px">
+          <sc-if value="{{ !shutdownOpen }}" hint-placeholder-val="{{ true }}">
+            <button type="button" onClick="{{ openShutdown }}" style="flex:1;border:none;background:#262420;color:#fff;font:700 13px 'Sora';padding:12px;border-radius:11px;cursor:pointer" style-hover="background:#3A3630">Fechar o dia</button>
+          </sc-if>
+          <sc-if value="{{ shutdownOpen }}" hint-placeholder-val="{{ false }}">
+            <button type="button" onClick="{{ backToNormal }}" style="flex:1;border:none;background:#F5F1E8;color:#262420;font:700 13px 'Sora';padding:12px;border-radius:11px;cursor:pointer" style-hover="background:#ECE6D8">Voltar</button>
+            <button type="button" onClick="{{ finalizeShutdown }}" style="flex:1;border:none;background:#262420;color:#fff;font:700 13px 'Sora';padding:12px;border-radius:11px;cursor:pointer" style-hover="background:#3A3630">Encerrar</button>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===================== TASK MODAL ===================== -->
+  <sc-if value="{{ taskModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(38,36,32,.3);z-index:95;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease" onClick="{{ closeTaskModal }}">
+      <div style="width:360px;max-height:85vh;overflow-y:auto;background:#fff;border-radius:18px;padding:22px;position:relative;box-shadow:0 20px 50px rgba(38,36,32,.2);animation:modalIn .18s ease" onClick="{{ stopProp }}">
+        <button type="button" onClick="{{ closeTaskModal }}" style="position:absolute;top:14px;right:16px;border:none;background:none;font-size:20px;color:#B3AE9F;cursor:pointer">×</button>
+        <input value="{{ selectedTask.name }}" style="width:100%;border:none;font:700 17px 'Sora';padding:0;outline:none;margin-bottom:16px" />
+
+        <label style="display:block;font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em;margin-bottom:14px">Data de entrega
+          <input type="date" value="2026-07-07" style="display:block;width:100%;margin-top:5px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 10px;font:500 13px 'Sora';background:#FBF9F4" />
+        </label>
+        <label style="display:block;font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em;margin-bottom:14px">Duração prevista (min)
+          <input type="number" value="{{ selectedTask.durationRaw }}" style="display:block;width:100%;margin-top:5px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 10px;font:500 13px 'Sora';background:#FBF9F4" />
+        </label>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="checkbox" checked="{{ selectedTask.urgent }}" /><span style="font:700 12.5px 'Sora';color:#262420">Urgente</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <input type="checkbox" checked="{{ selectedTask.completed }}" /><span style="font:700 12.5px 'Sora';color:#262420">Concluída</span>
+        </div>
+
+        <button type="button" style="width:100%;border:none;background:#FBEAE0;color:#C1622D;font:700 13px 'Sora';padding:11px;border-radius:11px;cursor:pointer">Excluir tarefa</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===================== SETTINGS MODAL ===================== -->
+  <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(38,36,32,.3);z-index:95;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease" onClick="{{ closeSettings }}">
+      <div style="width:440px;max-height:85vh;overflow-y:auto;background:#fff;border-radius:18px;padding:24px;position:relative;box-shadow:0 20px 50px rgba(38,36,32,.2);animation:modalIn .18s ease" onClick="{{ stopProp }}">
+        <button type="button" onClick="{{ closeSettings }}" style="position:absolute;top:16px;right:18px;border:none;background:none;font-size:20px;color:#B3AE9F;cursor:pointer">×</button>
+        <div style="font:800 17px 'Sora';color:#262420;margin-bottom:18px">Configurações</div>
+
+        <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Campos personalizados</div>
+        <sc-for list="{{ customFields }}" as="field" hint-placeholder-count="2">
+          <div style="border:1px solid #ECE6D8;border-radius:12px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <input value="{{ field.name }}" style="flex:1;border:none;background:transparent;font:700 12.5px 'Sora';color:#262420;text-transform:uppercase;letter-spacing:.03em;padding:2px 4px;outline:none" />
+              <button type="button" style="border:none;background:none;color:#B3AE9F;cursor:pointer;font-size:13px">✕</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ field.values }}" as="val" hint-placeholder-count="2">
+                <div style="display:flex;align-items:center;gap:6px;background:#FBF9F4;border:1px solid #ECE6D8;border-radius:20px;padding:5px 10px 5px 8px">
+                  <span style="width:9px;height:9px;border-radius:50%;background:{{ val.color }};flex-shrink:0"></span>
+                  <span style="font:600 11.5px 'Sora';color:#262420">{{ val.name }}</span>
+                </div>
+              </sc-for>
+              <button type="button" style="border:1px dashed #DCD6C6;background:none;border-radius:20px;padding:5px 10px;font:600 11.5px 'Sora';color:#B3AE9F;cursor:pointer">+ valor</button>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="display:flex;gap:8px;margin:6px 0 22px">
+          <input placeholder="Novo campo personalizado" style="flex:1;border:1px solid #ECE6D8;border-radius:9px;padding:9px 11px;font:500 13px 'Sora';background:#FBF9F4;outline:none" />
+          <button type="button" style="border:none;background:#3A6604;color:#fff;font:700 12px 'Sora';padding:0 16px;border-radius:9px;cursor:pointer" style-hover="background:#2F5303">Adicionar</button>
+        </div>
+
+        <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Pomodoro</div>
+        <div style="display:flex;gap:10px">
+          <label style="flex:1;font:700 11px 'Sora';color:#7A766C">Foco
+            <input type="number" value="25" style="display:block;width:100%;margin-top:5px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 10px;font:500 13px 'Sora';background:#FBF9F4" />
+          </label>
+          <label style="flex:1;font:700 11px 'Sora';color:#7A766C">Pausa curta
+            <input type="number" value="5" style="display:block;width:100%;margin-top:5px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 10px;font:500 13px 'Sora';background:#FBF9F4" />
+          </label>
+          <label style="flex:1;font:700 11px 'Sora';color:#7A766C">Pausa longa
+            <input type="number" value="15" style="display:block;width:100%;margin-top:5px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 10px;font:500 13px 'Sora';background:#FBF9F4" />
+          </label>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===================== EVENT MODAL ===================== -->
+  <sc-if value="{{ eventModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(38,36,32,.3);z-index:95;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease" onClick="{{ closeEventModal }}">
+      <div style="width:360px;max-height:85vh;overflow-y:auto;background:#fff;border-radius:18px;padding:22px;position:relative;box-shadow:0 20px 50px rgba(38,36,32,.2);animation:modalIn .18s ease" onClick="{{ stopProp }}">
+        <button type="button" onClick="{{ closeEventModal }}" style="position:absolute;top:14px;right:16px;border:none;background:none;font-size:20px;color:#B3AE9F;cursor:pointer">×</button>
+        <input placeholder="Nome do evento" value="Sprint Review" style="width:100%;border:none;font:700 17px 'Sora';padding:0;outline:none;margin-bottom:16px" />
+
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <label style="flex:1;font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Início
+            <input type="date" value="2026-07-15" style="display:block;width:100%;margin-top:5px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 10px;font:500 13px 'Sora';background:#FBF9F4" />
+          </label>
+          <label style="flex:1;font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em">Final
+            <input type="date" value="2026-07-15" style="display:block;width:100%;margin-top:5px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 10px;font:500 13px 'Sora';background:#FBF9F4" />
+          </label>
+        </div>
+
+        <div style="font:700 11px 'Sora';color:#B3AE9F;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Boards relacionados</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
+          <label style="display:flex;align-items:center;gap:8px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 11px;background:#FBF9F4">
+            <input type="checkbox" checked /><span style="width:8px;height:8px;border-radius:50%;background:#3A6604"></span><span style="font:600 13px 'Sora';color:#262420">Trabalho</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;border:1px solid #ECE6D8;border-radius:9px;padding:9px 11px;background:#FBF9F4">
+            <input type="checkbox" checked /><span style="width:8px;height:8px;border-radius:50%;background:#C1622D"></span><span style="font:600 13px 'Sora';color:#262420">Pessoal</span>
+          </label>
+        </div>
+
+        <button type="button" style="width:100%;border:none;background:#3A6604;color:#fff;font:700 13px 'Sora';padding:12px;border-radius:11px;cursor:pointer;margin-bottom:10px" style-hover="background:#2F5303">Salvar evento</button>
+        <button type="button" style="width:100%;border:none;background:#FBEAE0;color:#C1622D;font:700 13px 'Sora';padding:11px;border-radius:11px;cursor:pointer">Excluir evento</button>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    sidebarOpen: false,
+    view: 'board', // 'board' | 'calendar'
+    activeBoardId: 'trabalho',
+    dayDrawerOpen: false,
+    dayDrawerKey: null,
+    drawerSize: 400,
+    drawerExpanded: false,
+    resizing: false,
+    shutdownOpen: false,
+    shutdownChoices: {},
+    taskModalOpen: false,
+    taskModalKey: null,
+    pomodoroExpanded: false,
+    settingsOpen: false,
+    settingsTab: 'campos',
+    drawerBoards: { trabalho: true, pessoal: true },
+    eventModalOpen: false,
+    addingBoard: false,
+    days: {
+      '06': { label: '06/jul · Seg', dow: 'Segunda', total: 2, done: 1, planned: 45, doneMin: 15, rest: 30,
+        events: [],
+        tasks: [
+          { id: 'a1', name: 'Atualizar ppt semanal NAC', duration: '', completed: true, type: 'completed' },
+          { id: 'a2', name: 'Detalhar governança de produtos', duration: '45min', tag: '#1', completed: false, type: 'normal' },
+        ] },
+      '07': { label: '07/jul · Ter', dow: 'Terça', total: 2, done: 0, planned: 60, doneMin: 0, rest: 60,
+        events: [ { name: 'Alinhamento de Squad', dot: '#3A6604', bg: '#EAF0DE' } ],
+        tasks: [
+          { id: 'b1', name: 'Testes First Layer', duration: '1h', completed: false, type: 'urgent', urgent: true, mit: true },
+          { id: 'b2', name: 'Limpar e-mail', tag: '#2', completed: false, type: 'normal' },
+        ] },
+      '08': { label: '08/jul · Qua', dow: 'Quarta', total: 1, done: 0, planned: 0, doneMin: 0, rest: 0,
+        events: [],
+        tasks: [ { id: 'c1', name: 'Agendar reunião com startups', tag: '#1', completed: false, type: 'normal' } ] },
+      '09': { label: '09/jul · Qui', dow: 'Quinta', total: 1, done: 0, planned: 0, doneMin: 0, rest: 0,
+        events: [ { name: 'Fechamento do Sprint', span: '1/2', dot: '#3A6604', bg: '#EAF0DE' } ],
+        tasks: [ { id: 'd1', name: 'Ver extração de dados do GCP', tag: '#1', completed: false, type: 'normal' } ] },
+      '10': { label: '10/jul · Sex', dow: 'Sexta', total: 1, done: 0, planned: 0, doneMin: 0, rest: 0,
+        events: [ { name: 'Fechamento do Sprint', span: '2/2', dot: '#3A6604', bg: '#EAF0DE' }, { name: 'Sprint Review', dot: '#3E6FBD', bg: '#EAF0DE' } ],
+        tasks: [ { id: 'e1', name: 'Montar apresentação Conecta RDA', tag: '#1', completed: false, type: 'normal' } ] },
+    },
+  };
+
+  toggleSidebar = () => this.setState(s => ({ sidebarOpen: !s.sidebarOpen }));
+  togglePomodoro = () => this.setState(s => ({ pomodoroExpanded: !s.pomodoroExpanded }));
+  selectCalendarView = () => this.setState({ view: 'calendar' });
+  selectBoardView = () => this.setState({ view: 'board' });
+  openDayDrawer = (key) => this.setState({ dayDrawerOpen: true, dayDrawerKey: key, shutdownOpen: false, shutdownChoices: {} });
+  closeDayDrawer = () => this.setState({ dayDrawerOpen: false, drawerExpanded: false, shutdownOpen: false });
+  toggleDrawerExpand = () => this.setState(s => ({ drawerExpanded: !s.drawerExpanded }));
+  openShutdown = () => this.setState({ shutdownOpen: true, shutdownChoices: {} });
+  backToNormal = () => this.setState({ shutdownOpen: false });
+  finalizeShutdown = () => this.setState({ shutdownOpen: false, dayDrawerOpen: false, drawerExpanded: false });
+  setShutdownChoice = (taskId, choice) => this.setState(s => ({ shutdownChoices: { ...s.shutdownChoices, [taskId]: choice } }));
+
+  startResize = (e) => {
+    e.preventDefault();
+    this._resizeStartX = e.clientX;
+    this._resizeStartWidth = this.state.drawerSize;
+    this.setState({ resizing: true });
+  };
+  componentDidMount() {
+    this._onMouseMove = (e) => {
+      if (!this.state.resizing) return;
+      const delta = this._resizeStartX - e.clientX;
+      let w = this._resizeStartWidth + delta;
+      w = Math.max(320, Math.min(720, w));
+      this.setState({ drawerSize: w });
+    };
+    this._onMouseUp = () => { if (this.state.resizing) this.setState({ resizing: false }); };
+    window.addEventListener('mousemove', this._onMouseMove);
+    window.addEventListener('mouseup', this._onMouseUp);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('mousemove', this._onMouseMove);
+    window.removeEventListener('mouseup', this._onMouseUp);
+  }
+  openTaskModal = (key) => this.setState({ taskModalOpen: true, taskModalKey: key });
+  closeTaskModal = () => this.setState({ taskModalOpen: false });
+  openSettings = () => this.setState({ settingsOpen: true });
+  closeSettings = () => this.setState({ settingsOpen: false });
+  setSettingsTab = (tab) => this.setState({ settingsTab: tab });
+  toggleDrawerBoard = (id) => this.setState(s => ({ drawerBoards: { ...s.drawerBoards, [id]: !s.drawerBoards[id] } }));
+  openEventModal = () => this.setState({ eventModalOpen: true });
+  closeEventModal = () => this.setState({ eventModalOpen: false });
+  startAddBoard = (e) => { e.stopPropagation(); this.setState({ addingBoard: true }); };
+  cancelAddBoard = () => this.setState({ addingBoard: false });
+  stopProp = (e) => e.stopPropagation();
+
+  toggleTaskDone = (dayKey, taskId) => {
+    this.setState(s => {
+      const days = { ...s.days };
+      const day = { ...days[dayKey] };
+      day.tasks = day.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t);
+      days[dayKey] = day;
+      return { days };
+    });
+  };
+
+  accentFor(task) {
+    if (task.type === 'urgent') return '#C1622D';
+    if (task.type === 'completed' || task.completed) return '#D8D2C2';
+    return '#3A3630';
+  }
+  bgFor(task) {
+    if (task.type === 'urgent') return '#FBEEE6';
+    if (task.type === 'completed' || task.completed) return '#F3F1EA';
+    return '#FBFAF7';
+  }
+
+  renderVals() {
+    const s = this.state;
+    const dayKeys = ['06', '07', '08', '09', '10'];
+
+    const boards = [
+      { id: 'trabalho', name: 'Trabalho', color: '#3A6604' },
+      { id: 'pessoal', name: 'Pessoal', color: '#C1622D' },
+    ].map(b => ({
+      ...b,
+      bg: s.view === 'board' && s.activeBoardId === b.id ? '#EAF0DE' : 'transparent',
+      fg: s.view === 'board' && s.activeBoardId === b.id ? '#3A6604' : '#262420',
+      select: () => this.setState({ view: 'board', activeBoardId: b.id }),
+    }));
+
+    const days = dayKeys.map(k => {
+      const d = s.days[k];
+      const tasks = d.tasks.map(t => ({
+        ...t,
+        accent: this.accentFor(t),
+        bg: this.bgFor(t),
+        opacity: t.completed ? 0.55 : 1,
+        strike: t.completed ? 'line-through' : 'none',
+        toggle: (e) => { e.stopPropagation(); this.toggleTaskDone(k, t.id); },
+        openModal: () => this.openTaskModal(k + ':' + t.id),
+      }));
+      return {
+        key: k,
+        label: d.label,
+        titleColor: k === '07' ? '#3A6604' : '#262420',
+        summary: `${d.total} tarefa${d.total === 1 ? '' : 's'} · ${d.done} concluída${d.done === 1 ? '' : 's'} · ${d.total ? Math.round(d.done / d.total * 100) : 0}%`,
+        timeSummary: `Previsto ${d.planned}min · Feito ${d.doneMin}min · Resta ${d.rest}min`,
+        hasEvents: d.events.length > 0,
+        events: d.events,
+        tasks,
+        open: () => this.openDayDrawer(k),
+      };
+    });
+
+    const selectedDayKey = s.dayDrawerKey || '07';
+    const sd = s.days[selectedDayKey];
+    const mitTasks = sd ? sd.tasks.filter(t => t.mit) : [];
+    const choiceStyle = (choice, target) => choice === target
+      ? { bg: '#262420', fg: '#fff' }
+      : { bg: '#F5F1E8', fg: '#262420' };
+    const pendingTasks = sd ? sd.tasks.filter(t => !t.completed).map(t => {
+      const choice = s.shutdownChoices[t.id];
+      const am = choiceStyle(choice, 'amanha');
+      const ou = choiceStyle(choice, 'outra');
+      const ig = choiceStyle(choice, 'ignorar');
+      return {
+        id: t.id,
+        name: t.name,
+        bgAmanha: am.bg, fgAmanha: am.fg,
+        bgOutra: ou.bg, fgOutra: ou.fg,
+        bgIgnorar: ig.bg, fgIgnorar: ig.fg,
+        setAmanha: () => this.setShutdownChoice(t.id, 'amanha'),
+        setOutra: () => this.setShutdownChoice(t.id, 'outra'),
+        setIgnorar: () => this.setShutdownChoice(t.id, 'ignorar'),
+      };
+    }) : [];
+    const selectedDay = sd ? {
+      fullLabel: sd.label,
+      planned: `${sd.planned}min`,
+      done: `${sd.doneMin}min`,
+      rest: `${sd.rest}min`,
+      hasMit: mitTasks.length > 0,
+      mitTasks,
+      tasks: sd.tasks.map(t => ({ ...t, accent: this.accentFor(t), bg: this.bgFor(t), strike: t.completed ? 'line-through' : 'none' })),
+      hasPending: pendingTasks.length > 0,
+      pendingTasks,
+    } : { fullLabel: '', planned: '', done: '', rest: '', hasMit: false, mitTasks: [], tasks: [], hasPending: false, pendingTasks: [] };
+
+    let selectedTask = { name: '', durationRaw: 0, urgent: false, completed: false };
+    if (s.taskModalKey) {
+      const [dk, tid] = s.taskModalKey.split(':');
+      const t = s.days[dk].tasks.find(x => x.id === tid);
+      if (t) selectedTask = { name: t.name, durationRaw: parseInt(t.duration) || 0, urgent: !!t.urgent, completed: !!t.completed };
+    }
+
+    // calendar (July 2026)
+    const evTrabalho = { textColor: '#3A6604', bg: '#EAF0DE', dot: '#3A6604' };
+    const evPessoal = { textColor: '#C1622D', bg: '#F7E9DF', dot: '#C1622D' };
+    const evMulti = { textColor: '#262420', bg: '#EFEDE6', dot: '#3E6FBD' };
+    const mkCell = (num, opts = {}) => ({
+      num,
+      bg: opts.today ? '#FFFFFF' : (opts.outside ? '#FBFAF7' : '#FFFFFF'),
+      numBg: opts.today ? '#3A6604' : 'transparent',
+      numColor: opts.today ? '#fff' : (opts.outside ? '#D8D2C2' : '#7A766C'),
+      events: opts.events || [],
+      open: () => this.openDayDrawer(String(num).padStart(2, '0')),
+    });
+    const calendarCells = [
+      mkCell(28, { outside: true }), mkCell(29, { outside: true }), mkCell(30, { outside: true }),
+      mkCell(1), mkCell(2), mkCell(3), mkCell(4),
+      mkCell(5), mkCell(6),
+      mkCell(7, { today: true, events: [{ name: 'Alinhamento de Squad', ...evTrabalho }] }),
+      mkCell(8),
+      mkCell(9, { events: [{ name: 'Fechamento do Sprint', ...evTrabalho }] }),
+      mkCell(10, { events: [{ name: 'Fechamento do Sprint', ...evTrabalho }, { name: 'Sprint Review', ...evMulti }] }),
+      mkCell(11),
+      mkCell(12), mkCell(13, { events: [{ name: 'Viagem em família', ...evPessoal }] }),
+      mkCell(14, { events: [{ name: 'Viagem em família', ...evPessoal }] }),
+      mkCell(15, { events: [{ name: 'Viagem em família', ...evPessoal }] }),
+      mkCell(16), mkCell(17), mkCell(18),
+      mkCell(19), mkCell(20), mkCell(21), mkCell(22), mkCell(23), mkCell(24), mkCell(25),
+      mkCell(26), mkCell(27, { events: [{ name: 'Planejamento trimestral', ...evTrabalho }] }),
+      mkCell(28, { events: [{ name: 'Planejamento trimestral', ...evTrabalho }] }),
+      mkCell(29), mkCell(30), mkCell(31), mkCell(1, { outside: true }),
+    ];
+
+    return {
+      sidebarOpen: s.sidebarOpen,
+      sidebarWidth: s.sidebarOpen ? '236px' : '64px',
+      toggleSidebar: this.toggleSidebar,
+      pomoPad: s.sidebarOpen ? '12px' : '10px 6px',
+      pomodoroExpanded: s.pomodoroExpanded,
+      togglePomodoro: this.togglePomodoro,
+      pomoColor: '#3A6604',
+      boards,
+      isBoardView: s.view === 'board',
+      pageTitle: s.view === 'board' ? 'Trabalho' : 'Calendário',
+      calendarNavBg: s.view === 'calendar' ? '#EAF0DE' : 'transparent',
+      calendarNavFg: s.view === 'calendar' ? '#3A6604' : '#262420',
+      selectCalendarView: this.selectCalendarView,
+      days,
+      calendarCells,
+      dayDrawerOpen: s.dayDrawerOpen,
+      dockedDrawerWidth: (s.dayDrawerOpen && !s.drawerExpanded) ? s.drawerSize + 'px' : '0px',
+      drawerSizePx: s.drawerSize + 'px',
+      drawerWidthTransition: s.resizing ? 'none' : 'width .18s ease',
+      showResizeHandle: s.dayDrawerOpen && !s.drawerExpanded,
+      startResize: this.startResize,
+      drawerExpanded: s.drawerExpanded,
+      toggleDrawerExpand: this.toggleDrawerExpand,
+      drawerSubtitle: s.shutdownOpen ? 'Fechando o dia' : 'Visão do dia',
+      closeDayDrawer: this.closeDayDrawer,
+      selectedDay,
+      shutdownOpen: s.shutdownOpen,
+      openShutdown: this.openShutdown,
+      backToNormal: this.backToNormal,
+      finalizeShutdown: this.finalizeShutdown,
+      taskModalOpen: s.taskModalOpen,
+      closeTaskModal: this.closeTaskModal,
+      selectedTask,
+      stopProp: this.stopProp,
+      drawerBoards: [
+        { id: 'trabalho', name: 'Trabalho', color: '#3A6604', checked: s.drawerBoards.trabalho, toggle: () => this.toggleDrawerBoard('trabalho') },
+        { id: 'pessoal', name: 'Pessoal', color: '#C1622D', checked: s.drawerBoards.pessoal, toggle: () => this.toggleDrawerBoard('pessoal') },
+      ],
+      settingsOpen: s.settingsOpen,
+      openSettings: this.openSettings,
+      closeSettings: this.closeSettings,
+      eventModalOpen: s.eventModalOpen,
+      openEventModal: this.openEventModal,
+      closeEventModal: this.closeEventModal,
+      addingBoard: s.addingBoard,
+      startAddBoard: this.startAddBoard,
+      cancelAddBoard: this.cancelAddBoard,
+      customFields: [
+        { id: 'f1', name: 'Projeto', values: [
+          { name: 'Conecta RDA', color: '#3E6FBD' },
+          { name: 'NAC', color: '#3A6604' },
+          { name: 'First Layer', color: '#C1622D' },
+        ] },
+        { id: 'f2', name: 'Modo', values: [
+          { name: 'Execução', color: '#8B8778' },
+          { name: 'Reunião', color: '#C99A2E' },
+        ] },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

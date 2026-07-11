@@ -1,0 +1,12 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente
+.env
+
+# Banco local (não é mais necessário, mas mantido por segurança)
+data.json
+data.json.bak
+
+# Sistema
+.DS_Store

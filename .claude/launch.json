@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tarefas",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["server.js"],
+      "port": 3131,
+      "autoPort": true
+    },
+    {
+      "name": "prototipo-calendario",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["prototype/calendario/serve.js"],
+      "port": 3132
+    }
+  ]
+}

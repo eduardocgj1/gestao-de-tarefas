@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet data-dc-atomics>
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/colors.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/typography.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/effects.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/styles.css">
+<script src="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/_ds_bundle.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--page-bg); }
+  a { color:var(--brand); }
+  a:hover { color:var(--brand-hover); }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#E3DDCF; border-radius:8px; }
+  input[type=text].tf-row-input { border:1px solid transparent; }
+  input[type=text].tf-row-input:focus { border:1px solid var(--border-default); background:#fff; }
+  .tf-field { display:block; font:700 11px var(--font-sans); color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px; }
+  .tf-field input { display:block; width:100%; margin-top:5px; border:1px solid var(--border-default); border-radius:9px; padding:9px 10px; font:500 13px var(--font-sans); background:var(--surface-sunken); box-sizing:border-box; }
+</style>
+</helmet>
+
+<div style="height:100vh;width:100%;display:flex;flex-direction:column;overflow:hidden;background:var(--page-bg);font-family:var(--font-sans)" data-screen-label="Board">
+
+  <!-- app header -->
+  <header style="display:flex;align-items:center;gap:16px;padding:16px 26px;border-bottom:1px solid var(--border-default);background:var(--surface)">
+    <div style="width:30px;height:30px;border-radius:9px;background:var(--brand);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px">T</div>
+    <h1 style="font:700 17px var(--font-sans);margin:0;color:var(--text-primary)">Board · Trabalho</h1>
+    <div style="flex:1"></div>
+    <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,40px" variant="neutral" onClick="{{ openModal }}">Exportar report ↗</x-import>
+    <x-import component-from-global-scope="TarefasDesignSystem_671953.IconButton" hint-size="32px,32px" title="Configurações" onClick="{{ openSettings }}">⚙</x-import>
+  </header>
+
+  <!-- board: real day columns, clickable cards -->
+  <main style="flex:1;display:flex;gap:14px;padding:20px 26px;overflow-x:auto;align-items:flex-start">
+    <sc-for list="{{ days }}" as="day" hint-placeholder-count="5">
+      <div style="width:236px;min-width:236px;background:var(--surface);border-radius:16px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;max-height:100%">
+        <div style="padding:14px 15px 12px;border-bottom:1px solid var(--border-subtle)">
+          <span style="font:700 13.5px var(--font-sans);color:var(--text-primary)">{{ day.label }}</span>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:40px">
+          <sc-for list="{{ day.tasks }}" as="task" hint-placeholder-count="2">
+            <x-import component-from-global-scope="TarefasDesignSystem_671953.TaskCard" hint-size="100%,60px" name="{{ task.name }}" tag="{{ task.tag }}" urgent="{{ task.urgent }}" completed="{{ task.completed }}" on-toggle="{{ task.toggle }}" on-open="{{ task.open }}"></x-import>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </main>
+
+  <!-- ===================== EXPORT MODAL ===================== -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:var(--overlay-scrim-strong);z-index:95;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease" data-screen-label="Exportar atividades">
+      <div onClick="{{ stopProp }}" style="width:920px;max-width:94vw;max-height:88vh;background:var(--surface);border-radius:var(--radius-modal-lg);box-shadow:var(--shadow-modal-lg);display:flex;flex-direction:column;overflow:hidden;animation:modalIn .18s ease">
+
+        <div style="padding:22px 26px 16px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:flex-start;gap:16px">
+          <div>
+            <div style="font:800 19px var(--font-sans);color:var(--text-primary)">Exportar atividades</div>
+            <div style="font:600 12px var(--font-sans);color:var(--text-muted);margin-top:2px">Report semanal · formato pronto para colar no PPT</div>
+          </div>
+          <div style="flex:1"></div>
+
+          <div style="display:flex;align-items:center;gap:6px">
+            <x-import component-from-global-scope="TarefasDesignSystem_671953.IconButton" hint-size="30px,30px" title="Semana anterior" onClick="{{ prevWeek }}">‹</x-import>
+            <span style="font:700 12.5px var(--font-sans);color:var(--text-primary);min-width:132px;text-align:center;background:var(--surface-sunken);border-radius:9px;padding:6px 10px">{{ weekLabel }}</span>
+            <x-import component-from-global-scope="TarefasDesignSystem_671953.IconButton" hint-size="30px,30px" title="Próxima semana" onClick="{{ nextWeek }}">›</x-import>
+          </div>
+
+          <x-import component-from-global-scope="TarefasDesignSystem_671953.IconButton" hint-size="30px,30px" title="Fechar" onClick="{{ closeModal }}">×</x-import>
+        </div>
+
+        <div style="padding:14px 26px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font:700 11px var(--font-sans);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Projetos</span>
+          <sc-for list="{{ projectPills }}" as="p" hint-placeholder-count="2">
+            <x-import component-from-global-scope="TarefasDesignSystem_671953.BoardPill" hint-size="auto,32px" name="{{ p.name }}" color="{{ p.color }}" show-checkbox="{{ true }}" checked="{{ p.checked }}" on-click="{{ p.toggle }}"></x-import>
+          </sc-for>
+        </div>
+
+        <div style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;gap:1px;background:var(--border-subtle)">
+
+          <div style="flex:1;background:var(--surface);display:flex;flex-direction:column;min-width:0;overflow-x:hidden">
+            <div style="display:flex;align-items:center;gap:10px;padding:16px 22px 10px">
+              <span style="font:700 13.5px var(--font-sans);color:var(--text-primary)">Progresso</span>
+              <span style="font:600 11px var(--font-sans);color:var(--text-muted);background:var(--surface-sunken);border-radius:20px;padding:2px 8px">{{ progressoCount }}</span>
+              <div style="flex:1"></div>
+              <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,32px" variant="brand-soft" size="sm" onClick="{{ copyProgresso }}">{{ copyProgressoLabel }}</x-import>
+            </div>
+            <div style="flex:1;padding:4px 14px 20px;display:flex;flex-direction:column;gap:8px">
+              <sc-if value="{{ !hasProgresso }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px dashed #E3DDCF;border-radius:11px;padding:16px;font:500 12px var(--font-sans);color:var(--text-muted);text-align:center;margin:8px 8px">Nenhuma atividade concluída nesta semana</div>
+              </sc-if>
+              <sc-for list="{{ progressoItems }}" as="item" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:6px;padding:2px 8px">
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{ item.boardColor }};flex-shrink:0"></span>
+                  <textarea rows="{{ item.rows }}" class="tf-row-input" value="{{ item.text }}" onChange="{{ item.onChange }}" style="flex:1;border-radius:9px;padding:8px 9px;font:500 12.5px var(--font-sans);background:transparent;color:var(--text-primary);outline:none;min-width:0;resize:none;white-space:pre-wrap;word-break:break-word;font-family:var(--font-sans);line-height:1.4"></textarea>
+                  <button type="button" title="Excluir da lista" onClick="{{ item.remove }}" style="border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:14px;flex-shrink:0;padding:2px 4px" style-hover="color:var(--danger)">×</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:1;background:var(--surface);display:flex;flex-direction:column;min-width:0;overflow-x:hidden">
+            <div style="display:flex;align-items:center;gap:10px;padding:16px 22px 10px">
+              <span style="font:700 13.5px var(--font-sans);color:var(--text-primary)">Próximos passos</span>
+              <span style="font:600 11px var(--font-sans);color:var(--text-muted);background:var(--surface-sunken);border-radius:20px;padding:2px 8px">{{ proximosCount }}</span>
+              <div style="flex:1"></div>
+              <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,32px" variant="brand-soft" size="sm" onClick="{{ copyProximos }}">{{ copyProximosLabel }}</x-import>
+            </div>
+            <div style="flex:1;padding:4px 14px 20px;display:flex;flex-direction:column;gap:8px">
+              <sc-if value="{{ !hasProximos }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px dashed #E3DDCF;border-radius:11px;padding:16px;font:500 12px var(--font-sans);color:var(--text-muted);text-align:center;margin:8px 8px">Nenhuma atividade pendente nesta semana</div>
+              </sc-if>
+              <sc-for list="{{ proximosItems }}" as="item" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:6px;padding:2px 8px">
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{ item.boardColor }};flex-shrink:0"></span>
+                  <textarea rows="{{ item.rows }}" class="tf-row-input" value="{{ item.text }}" onChange="{{ item.onChange }}" style="flex:1;border-radius:9px;padding:8px 9px;font:500 12.5px var(--font-sans);background:transparent;color:var(--text-primary);outline:none;min-width:0;resize:none;white-space:pre-wrap;word-break:break-word;font-family:var(--font-sans);line-height:1.4"></textarea>
+                  <button type="button" title="Excluir da lista" onClick="{{ item.remove }}" style="border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:14px;flex-shrink:0;padding:2px 4px" style-hover="color:var(--danger)">×</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:14px 26px;border-top:1px solid var(--border-subtle);display:flex;align-items:center;gap:10px">
+          <span style="font:500 11.5px var(--font-sans);color:var(--text-muted)">Formato: Descrição (Responsável | Área – DD/MM)</span>
+          <div style="flex:1"></div>
+          <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,38px" variant="neutral" size="sm" onClick="{{ saveView }}">{{ saveLabel }}</x-import>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===================== TASK MODAL ===================== -->
+  <sc-if value="{{ taskModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeTaskModal }}" style="position:fixed;inset:0;background:var(--overlay-scrim);z-index:96;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease" data-screen-label="Card da tarefa">
+      <div onClick="{{ stopProp }}" style="width:380px;max-height:85vh;overflow-y:auto;background:var(--surface);border-radius:var(--radius-modal);padding:22px;position:relative;box-shadow:var(--shadow-modal);animation:modalIn .18s ease">
+        <x-import component-from-global-scope="TarefasDesignSystem_671953.IconButton" hint-size="28px,28px" title="Fechar" onClick="{{ closeTaskModal }}" style="position:absolute;top:14px;right:14px">×</x-import>
+
+        <div style="font:700 17px var(--font-sans);color:var(--text-primary);padding-right:30px;margin-bottom:6px">{{ activeTask.name }}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">
+          <span style="width:8px;height:8px;border-radius:50%;background:{{ activeTask.projectColor }};flex-shrink:0"></span>
+          <span style="font:600 11.5px var(--font-sans);color:var(--text-muted)">{{ activeTask.projectName }} · {{ activeTask.dateLabel }}</span>
+        </div>
+
+        <label style="display:block;font:700 11px var(--font-sans);color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Equipe</label>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+          <sc-if value="{{ !activeTask.hasTeam }}" hint-placeholder-val="{{ true }}">
+            <div style="font:500 12px var(--font-sans);color:var(--text-muted)">Sem equipe cadastrada — usa {{ principalName }} como responsável.</div>
+          </sc-if>
+          <sc-for list="{{ activeTask.team }}" as="m" hint-placeholder-count="0">
+            <div style="display:flex;align-items:center;gap:8px;background:var(--surface-sunken);border-radius:9px;padding:7px 10px">
+              <span style="flex:1;font:600 12.5px var(--font-sans);color:var(--text-primary)">{{ m.name }}<sc-if value="{{ m.area }}"><span style="color:var(--text-muted);font-weight:500"> · {{ m.area }}</span></sc-if></span>
+              <button type="button" onClick="{{ m.remove }}" style="border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:13px" style-hover="color:var(--danger)">×</button>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ !addingMember }}" hint-placeholder-val="{{ true }}">
+          <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,36px" variant="brand-soft" size="sm" onClick="{{ startAddMember }}" style="margin-bottom:18px">+ Adicionar equipe</x-import>
+        </sc-if>
+
+        <sc-if value="{{ addingMember }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid var(--border-default);border-radius:11px;padding:12px;margin-bottom:18px;position:relative">
+            <input type="text" autoFocus placeholder="Nome" value="{{ memberName }}" onChange="{{ onMemberNameChange }}" style="width:100%;border:1px solid var(--border-default);border-radius:9px;padding:8px 10px;font:500 12.5px var(--font-sans);background:var(--surface-sunken);margin-bottom:6px;outline:none;box-sizing:border-box" />
+            <sc-if value="{{ hasMemberSuggestions }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px solid var(--border-default);border-radius:9px;overflow:hidden;margin-bottom:6px;background:#fff">
+                <sc-for list="{{ memberSuggestions }}" as="s" hint-placeholder-count="0">
+                  <div onClick="{{ s.pick }}" style="padding:7px 10px;font:600 12px var(--font-sans);cursor:pointer;color:var(--text-primary)" style-hover="background:var(--surface-sunken)">{{ s.label }}</div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <input type="text" placeholder="Área / empresa" value="{{ memberArea }}" onChange="{{ onMemberAreaChange }}" style="width:100%;border:1px solid var(--border-default);border-radius:9px;padding:8px 10px;font:500 12.5px var(--font-sans);background:var(--surface-sunken);margin-bottom:10px;outline:none;box-sizing:border-box" />
+            <div style="display:flex;gap:8px">
+              <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,34px" variant="brand" size="sm" onClick="{{ confirmAddMember }}" style="flex:1">Adicionar</x-import>
+              <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,34px" variant="neutral" size="sm" onClick="{{ cancelAddMember }}" style="flex:1">Cancelar</x-import>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="checkbox" checked="{{ activeTask.urgent }}" readOnly /><span style="font:700 12.5px var(--font-sans);color:var(--text-primary)">Urgente</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" checked="{{ activeTask.completed }}" onChange="{{ toggleActiveCompleted }}" /><span style="font:700 12.5px var(--font-sans);color:var(--text-primary)">Concluída</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===================== SETTINGS MODAL ===================== -->
+  <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeSettings }}" style="position:fixed;inset:0;background:var(--overlay-scrim);z-index:96;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease" data-screen-label="Configurações">
+      <div onClick="{{ stopProp }}" style="width:460px;max-height:85vh;overflow-y:auto;background:var(--surface);border-radius:var(--radius-modal);padding:22px;position:relative;box-shadow:var(--shadow-modal);animation:modalIn .18s ease">
+        <x-import component-from-global-scope="TarefasDesignSystem_671953.IconButton" hint-size="28px,28px" title="Fechar" onClick="{{ closeSettings }}" style="position:absolute;top:14px;right:14px">×</x-import>
+
+        <div style="font:800 18px var(--font-sans);color:var(--text-primary);margin-bottom:18px">Configurações</div>
+
+        <div style="font:700 11px var(--font-sans);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Pessoas</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+          <sc-for list="{{ people }}" as="pe" hint-placeholder-count="1">
+            <div style="display:flex;align-items:center;gap:8px;background:var(--surface-sunken);border-radius:10px;padding:9px 11px">
+              <div style="flex:1;min-width:0">
+                <div style="font:700 12.5px var(--font-sans);color:var(--text-primary)">{{ pe.name }}</div>
+                <sc-if value="{{ pe.area }}"><div style="font:500 11px var(--font-sans);color:var(--text-muted)">{{ pe.area }}</div></sc-if>
+              </div>
+              <sc-if value="{{ pe.principal }}" hint-placeholder-val="{{ false }}">
+                <x-import component-from-global-scope="TarefasDesignSystem_671953.Badge" hint-size="auto,22px" tone="brand">Principal</x-import>
+              </sc-if>
+              <sc-if value="{{ !pe.principal }}" hint-placeholder-val="{{ true }}">
+                <button type="button" onClick="{{ pe.makePrincipal }}" style="border:none;background:none;color:var(--brand);cursor:pointer;font:700 11px var(--font-sans)">Definir principal</button>
+                <button type="button" onClick="{{ pe.remove }}" title="Remover" style="border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:13px" style-hover="color:var(--danger)">×</button>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ !addingPerson }}" hint-placeholder-val="{{ true }}">
+          <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,36px" variant="brand-soft" size="sm" onClick="{{ startAddPerson }}">+ Adicionar pessoa</x-import>
+        </sc-if>
+        <sc-if value="{{ addingPerson }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid var(--border-default);border-radius:11px;padding:12px">
+            <input type="text" autoFocus placeholder="Nome" value="{{ personName }}" onChange="{{ onPersonNameChange }}" style="width:100%;border:1px solid var(--border-default);border-radius:9px;padding:8px 10px;font:500 12.5px var(--font-sans);background:var(--surface-sunken);margin-bottom:6px;outline:none;box-sizing:border-box" />
+            <input type="text" placeholder="Área / empresa" value="{{ personArea }}" onChange="{{ onPersonAreaChange }}" style="width:100%;border:1px solid var(--border-default);border-radius:9px;padding:8px 10px;font:500 12.5px var(--font-sans);background:var(--surface-sunken);margin-bottom:10px;outline:none;box-sizing:border-box" />
+            <div style="display:flex;gap:8px">
+              <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,34px" variant="brand" size="sm" onClick="{{ confirmAddPerson }}" style="flex:1">Adicionar</x-import>
+              <x-import component-from-global-scope="TarefasDesignSystem_671953.Button" hint-size="auto,34px" variant="neutral" size="sm" onClick="{{ cancelAddPerson }}" style="flex:1">Cancelar</x-import>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    modalOpen: false,
+    weekIndex: 1,
+    projects: {},
+    edits: {},
+    deleted: {},
+    copyProgressoLabel: 'Copiar',
+    copyProximosLabel: 'Copiar',
+    saveLabel: 'Salvar visualização',
+
+    taskModalOpen: false,
+    activeTaskId: null,
+    overrides: {
+      t9: { team: [{ name: 'Karina', area: 'Produtos' }, { name: 'Jean', area: 'Produtos' }] },
+    },
+    addingMember: false,
+    memberName: '',
+    memberArea: '',
+
+    settingsOpen: false,
+    people: [
+      { id: 'p_voce', name: 'Você', area: '', principal: true },
+      { id: 'p_karina', name: 'Karina', area: 'Produtos', principal: false },
+      { id: 'p_jean', name: 'Jean', area: 'Produtos', principal: false },
+    ],
+    addingPerson: false,
+    personName: '',
+    personArea: '',
+  };
+
+  projects = {
+    portal_nac: { name: 'Portal NAC', color: '#38D9A9' },
+    autagend: { name: 'Autagend.', color: '#FFA94D' },
+    processo_ia: { name: 'Processo IA', color: '#FF6B6B' },
+    marisa_care: { name: 'Marisa.Care', color: '#F783AC' },
+    first_layer: { name: 'First Layer', color: '#F783AC' },
+    sem_projeto: { name: 'Sem projeto', color: '#D8D2C2' },
+  };
+
+  boards = {
+    trabalho: { name: 'Trabalho' },
+    pessoal: { name: 'Pessoal' },
+  };
+
+  weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  weeks = [
+    { label: '29 jun – 03 jul', tasks: [] },
+    {
+      label: '06 jul – 10 jul',
+      tasks: [
+        { id: 't1', name: 'Liberar acesso ao GitHub', date: '2026-07-10', completed: false, board: 'trabalho', project: 'processo_ia' },
+        { id: 't2', name: 'Detalhar governança de produtos (quinzenal e material)', date: '2026-07-10', completed: false, board: 'trabalho', project: 'portal_nac' },
+        { id: 't3', name: 'Montar apresentação do Conecta RDA', date: '2026-07-10', completed: true, board: 'trabalho', project: 'sem_projeto' },
+        { id: 't4', name: 'Alinhar chatbot cirúrgico com Larissa', date: '2026-07-10', completed: true, board: 'trabalho', project: 'sem_projeto' },
+        { id: 't5', name: 'material first layer e marisa para Fabio', date: '2026-07-10', completed: true, board: 'trabalho', project: 'first_layer' },
+        { id: 't6', name: 'Dados para Dimensionamento First Layer', date: '2026-07-10', completed: true, board: 'trabalho', project: 'first_layer' },
+        { id: 't7', name: 'Fazer status semanal STG', date: '2026-07-10', completed: false, board: 'trabalho', project: 'sem_projeto' },
+        { id: 't8', name: 'Pagar contas', date: '2026-07-10', completed: false, board: 'pessoal', project: 'sem_projeto', urgent: true },
+        { id: 't9', name: 'Estudo de rollout do NAC (plano e dados de suporte)', date: '2026-07-08', completed: true, board: 'trabalho', project: 'portal_nac' },
+        { id: 't10', name: 'Detalhar features para refinamento', date: '2026-07-08', completed: true, board: 'trabalho', project: 'portal_nac' },
+        { id: 't11', name: 'Arrumar a casa', date: '2026-07-08', completed: true, board: 'pessoal', project: 'sem_projeto' },
+        { id: 't12', name: 'Comprar passagens para Itu', date: '2026-07-08', completed: true, board: 'pessoal', project: 'sem_projeto' },
+        { id: 't13', name: 'Definir tema para Conecta RDA', date: '2026-07-07', completed: true, board: 'trabalho', project: 'sem_projeto' },
+        { id: 't14', name: 'Fazer alinhamento de PI Planning com o NAC', date: '2026-07-07', completed: true, board: 'trabalho', project: 'sem_projeto' },
+        { id: 't15', name: 'Alinhar refinamentos com Akad', date: '2026-07-07', completed: true, board: 'trabalho', project: 'portal_nac' },
+        { id: 't16', name: 'Testes First Layer', date: '2026-07-07', completed: true, board: 'trabalho', project: 'first_layer' },
+        { id: 't17', name: 'Material de features - Pós PI Planning', date: '2026-07-06', completed: true, board: 'trabalho', project: 'autagend' },
+        { id: 't18', name: 'Atualizar ppt semanal NAC', date: '2026-07-06', completed: true, board: 'trabalho', project: 'sem_projeto' },
+      ],
+    },
+    { label: '13 jul – 17 jul', tasks: [] },
+  ];
+
+  allTasks() {
+    return this.weeks.flatMap((w) => w.tasks);
+  }
+
+  findTask(id) {
+    return this.allTasks().find((t) => t.id === id);
+  }
+
+  fmtDate(iso) {
+    const [, m, d] = iso.split('-');
+    return `${d}/${m}`;
+  }
+
+  fmtDateLabel(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    return `${this.weekdayNames[d.getDay()]} · ${this.fmtDate(iso)}`;
+  }
+
+  getOverride(id) {
+    return this.state.overrides[id] || {};
+  }
+
+  getTeam(id) {
+    return this.getOverride(id).team || [];
+  }
+
+  isCompleted(task) {
+    const ov = this.getOverride(task.id);
+    return ov.completed !== undefined ? ov.completed : task.completed;
+  }
+
+  joinNames(names) {
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} e ${names[1]}`;
+    return `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
+  }
+
+  principalName() {
+    const p = this.state.people.find((x) => x.principal);
+    return p ? p.name : 'Você';
+  }
+
+  responsavelBlock(task) {
+    const team = this.getTeam(task.id);
+    if (team.length) {
+      const byArea = new Map();
+      team.forEach((m) => {
+        const key = m.area || '';
+        if (!byArea.has(key)) byArea.set(key, []);
+        byArea.get(key).push(m.name);
+      });
+      const groups = [];
+      byArea.forEach((names, area) => {
+        groups.push(area ? `${this.joinNames(names)} | ${area}` : this.joinNames(names));
+      });
+      return groups.join(', ');
+    }
+    return this.principalName();
+  }
+
+  defaultText(task) {
+    const b = this.boards[task.board];
+    return `${task.name} (${this.responsavelBlock(task)} | ${b.name} – ${this.fmtDate(task.date)})`;
+  }
+
+  buildItems(list) {
+    return list.map((t) => {
+      const p = this.projects[t.project] || this.projects.sem_projeto;
+      const text = this.state.edits[t.id] ?? this.defaultText(t);
+      return {
+        id: t.id,
+        boardColor: p.color,
+        text,
+        rows: Math.max(1, Math.ceil(text.length / 52)),
+        onChange: (e) => {
+          const v = e.target.value;
+          this.setState((s) => ({ edits: { ...s.edits, [t.id]: v } }));
+        },
+        remove: () => {
+          this.setState((s) => ({ deleted: { ...s.deleted, [t.id]: true } }));
+        },
+      };
+    });
+  }
+
+  copyText(list) {
+    return list.map((i) => i.text).join('\n');
+  }
+
+  renderVals() {
+    const week = this.weeks[this.state.weekIndex];
+    const projIdsInWeek = [...new Set(week.tasks.map((t) => t.project || 'sem_projeto'))];
+    const active = week.tasks.filter(
+      (t) => (this.state.projects[t.project] ?? true) && !this.state.deleted[t.id]
+    );
+    active.sort((a, b) => b.date.localeCompare(a.date));
+
+    const progressoTasks = active.filter((t) => this.isCompleted(t));
+    const proximosTasks = active.filter((t) => !this.isCompleted(t));
+
+    const progressoItems = this.buildItems(progressoTasks);
+    const proximosItems = this.buildItems(proximosTasks);
+
+    // board columns for the current-data week
+    const boardWeek = this.weeks[1];
+    const byDate = new Map();
+    boardWeek.tasks.forEach((t) => {
+      if (!byDate.has(t.date)) byDate.set(t.date, []);
+      byDate.get(t.date).push(t);
+    });
+    const days = [...byDate.keys()].sort().map((date) => ({
+      label: this.fmtDateLabel(date),
+      tasks: byDate.get(date).map((t) => {
+        const p = this.projects[t.project] || this.projects.sem_projeto;
+        return {
+          name: t.name,
+          tag: p.name === 'Sem projeto' ? '' : p.name,
+          urgent: !!t.urgent,
+          completed: this.isCompleted(t),
+          toggle: () => {
+            const cur = this.isCompleted(t);
+            this.setState((s) => ({ overrides: { ...s.overrides, [t.id]: { ...this.getOverride(t.id), completed: !cur } } }));
+          },
+          open: () => this.setState({ taskModalOpen: true, activeTaskId: t.id, addingMember: false, memberName: '', memberArea: '' }),
+        };
+      }),
+    }));
+
+    // active task modal data
+    let activeTask = null;
+    if (this.state.activeTaskId) {
+      const t = this.findTask(this.state.activeTaskId);
+      const p = this.projects[t.project] || this.projects.sem_projeto;
+      const team = this.getTeam(t.id);
+      activeTask = {
+        id: t.id,
+        name: t.name,
+        projectName: p.name,
+        projectColor: p.color,
+        dateLabel: this.fmtDateLabel(t.date),
+        urgent: !!t.urgent,
+        completed: this.isCompleted(t),
+        hasTeam: team.length > 0,
+        team: team.map((m, idx) => ({
+          name: m.name,
+          area: m.area,
+          remove: () => {
+            this.setState((s) => {
+              const cur = this.getTeam(t.id).slice();
+              cur.splice(idx, 1);
+              return { overrides: { ...s.overrides, [t.id]: { ...this.getOverride(t.id), team: cur } } };
+            });
+          },
+        })),
+      };
+    }
+
+    const memberSuggestions = this.state.memberName
+      ? this.state.people
+          .filter((p) => p.name.toLowerCase().includes(this.state.memberName.toLowerCase()))
+          .slice(0, 4)
+          .map((p) => ({
+            label: p.area ? `${p.name} · ${p.area}` : p.name,
+            pick: () => this.setState({ memberName: p.name, memberArea: p.area }),
+          }))
+      : [];
+
+    return {
+      modalOpen: this.state.modalOpen,
+      openModal: () => this.setState({ modalOpen: true }),
+      closeModal: () => this.setState({ modalOpen: false }),
+      stopProp: (e) => e.stopPropagation(),
+
+      weekLabel: week.label,
+      prevWeek: () => this.setState((s) => ({ weekIndex: Math.max(0, s.weekIndex - 1) })),
+      nextWeek: () => this.setState((s) => ({ weekIndex: Math.min(this.weeks.length - 1, s.weekIndex + 1) })),
+
+      projectPills: projIdsInWeek.map((id) => ({
+        name: this.projects[id].name,
+        color: this.projects[id].color,
+        checked: this.state.projects[id] ?? true,
+        toggle: () => this.setState((s) => ({ projects: { ...s.projects, [id]: !(s.projects[id] ?? true) } })),
+      })),
+
+      progressoCount: progressoItems.length,
+      hasProgresso: progressoItems.length > 0,
+      progressoItems,
+      copyProgressoLabel: this.state.copyProgressoLabel,
+      copyProgresso: () => {
+        navigator.clipboard?.writeText(this.copyText(progressoItems)).catch(() => {});
+        this.setState({ copyProgressoLabel: 'Copiado ✓' });
+        setTimeout(() => this.setState({ copyProgressoLabel: 'Copiar' }), 1500);
+      },
+
+      proximosCount: proximosItems.length,
+      hasProximos: proximosItems.length > 0,
+      proximosItems,
+      copyProximosLabel: this.state.copyProximosLabel,
+      copyProximos: () => {
+        navigator.clipboard?.writeText(this.copyText(proximosItems)).catch(() => {});
+        this.setState({ copyProximosLabel: 'Copiado ✓' });
+        setTimeout(() => this.setState({ copyProximosLabel: 'Copiar' }), 1500);
+      },
+
+      saveLabel: this.state.saveLabel,
+      saveView: () => {
+        this.setState({ saveLabel: 'Visualização salva ✓' });
+        setTimeout(() => this.setState({ saveLabel: 'Salvar visualização' }), 1500);
+      },
+
+      days,
+
+      taskModalOpen: this.state.taskModalOpen,
+      activeTask,
+      closeTaskModal: () => this.setState({ taskModalOpen: false, activeTaskId: null, addingMember: false }),
+      toggleActiveCompleted: () => {
+        const t = this.findTask(this.state.activeTaskId);
+        const cur = this.isCompleted(t);
+        this.setState((s) => ({ overrides: { ...s.overrides, [t.id]: { ...this.getOverride(t.id), completed: !cur } } }));
+      },
+      principalName: this.principalName(),
+
+      addingMember: this.state.addingMember,
+      memberName: this.state.memberName,
+      memberArea: this.state.memberArea,
+      onMemberNameChange: (e) => this.setState({ memberName: e.target.value }),
+      onMemberAreaChange: (e) => this.setState({ memberArea: e.target.value }),
+      memberSuggestions,
+      hasMemberSuggestions: memberSuggestions.length > 0,
+      startAddMember: () => this.setState({ addingMember: true, memberName: '', memberArea: '' }),
+      cancelAddMember: () => this.setState({ addingMember: false, memberName: '', memberArea: '' }),
+      confirmAddMember: () => {
+        const name = this.state.memberName.trim();
+        if (!name) return;
+        let area = this.state.memberArea.trim();
+        const taskId = this.state.activeTaskId;
+        this.setState((s) => {
+          const existing = s.people.find((p) => p.name.toLowerCase() === name.toLowerCase());
+          let people = s.people;
+          if (!existing) {
+            people = [...s.people, { id: 'p_' + Math.random().toString(36).slice(2, 9), name, area, principal: false }];
+          } else if (!area) {
+            area = existing.area;
+          }
+          const team = this.getTeam(taskId).concat([{ name, area }]);
+          return {
+            people,
+            overrides: { ...s.overrides, [taskId]: { ...this.getOverride(taskId), team } },
+            addingMember: false,
+            memberName: '',
+            memberArea: '',
+          };
+        });
+      },
+
+      settingsOpen: this.state.settingsOpen,
+      openSettings: () => this.setState({ settingsOpen: true }),
+      closeSettings: () => this.setState({ settingsOpen: false, addingPerson: false }),
+      people: this.state.people.map((p) => ({
+        name: p.name,
+        area: p.area,
+        principal: p.principal,
+        makePrincipal: () => this.setState((s) => ({ people: s.people.map((x) => ({ ...x, principal: x.id === p.id })) })),
+        remove: () => this.setState((s) => ({ people: s.people.filter((x) => x.id !== p.id) })),
+      })),
+      addingPerson: this.state.addingPerson,
+      personName: this.state.personName,
+      personArea: this.state.personArea,
+      onPersonNameChange: (e) => this.setState({ personName: e.target.value }),
+      onPersonAreaChange: (e) => this.setState({ personArea: e.target.value }),
+      startAddPerson: () => this.setState({ addingPerson: true, personName: '', personArea: '' }),
+      cancelAddPerson: () => this.setState({ addingPerson: false, personName: '', personArea: '' }),
+      confirmAddPerson: () => {
+        const name = this.state.personName.trim();
+        if (!name) return;
+        const area = this.state.personArea.trim();
+        this.setState((s) => ({
+          people: [...s.people, { id: 'p_' + Math.random().toString(36).slice(2, 9), name, area, principal: false }],
+          addingPerson: false,
+          personName: '',
+          personArea: '',
+        }));
+      },
+    };
+  }
+}
+
+</script>
+</body>
+</html>

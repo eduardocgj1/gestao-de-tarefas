@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tarefas 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-top">
+      <div class="app-logo">T</div>
+      <span class="sidebar-app-name">Tarefas</span>
+      <button type="button" id="sidebarCollapseBtn" class="sidebar-collapse-btn" title="Recolher">‹</button>
+    </div>
+    <div class="sidebar-expand-wrap">
+      <button type="button" id="sidebarExpandBtn" class="sidebar-expand-btn" title="Expandir">›</button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Boards</div>
+      <div id="sidebarBoards"></div>
+      <div id="sidebarAddBoardArea"></div>
+      <div class="sidebar-separator"></div>
+      <button type="button" id="sidebarCalendarItem" class="sidebar-calendar-item">
+        <span class="icon-calendar-wrap"><span class="icon-calendar"></span></span>
+        <span class="sidebar-calendar-label">Calendário</span>
+      </button>
+    </nav>
+    <div class="sidebar-pomodoro-wrap">
+      <div class="pomodoro" id="pomodoroWidget">
+        <div class="pomo-header" id="pomoHeaderToggle">
+          <span id="pomoDot" class="dot"></span>
+          <span id="pomoModeLabel" class="pomo-header-label">Foco</span>
+          <span id="pomoTime" class="pomo-header-time" title="Clique para editar o tempo restante" tabindex="0"></span>
+        </div>
+        <div class="pomo-expanded">
+          <div class="pomo-tabs">
+            <button type="button" class="pomo-tab" data-mode="focus">Foco</button>
+            <button type="button" class="pomo-tab" data-mode="short">Pausa curta</button>
+            <button type="button" class="pomo-tab" data-mode="long">Pausa longa</button>
+          </div>
+          <div class="pomo-controls-row">
+            <button type="button" id="pomoToggle" class="pomo-play-btn" title="Iniciar/pausar">▶</button>
+            <button type="button" id="pomoReset" class="pomo-reset-btn" title="Reiniciar">↺</button>
+            <div id="pomoDots" class="pomo-cycle-dots"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <h1 id="appTitle">Tarefas 2026</h1>
+      <div class="board-legend hidden" id="boardLegend"></div>
+      <div class="spacer"></div>
+      <div class="nav">
+        <div class="nav-board" id="navBoardControls">
+          <button id="prevWeek" title="Semana anterior">‹‹</button>
+          <button id="prevDay" title="Dia anterior">‹</button>
+          <span id="weekRange"></span>
+          <button id="todayBtn">Hoje</button>
+          <button id="nextDay" title="Próximo dia">›</button>
+          <button id="nextWeek" title="Próxima semana">››</button>
+        </div>
+        <div class="nav-calendar hidden" id="navCalendarControls">
+          <span id="monthRange"></span>
+          <button id="calendarTodayBtn">Hoje</button>
+        </div>
+      </div>
+      <button type="button" id="exportReportBtn" class="export-report-btn" title="Exportar report">Exportar report ↗</button>
+      <button id="settingsBtn" class="icon-btn settings-btn" title="Configurações">⚙</button>
+    </header>
+
+    <main id="board" class="board"></main>
+
+    <main id="calendarView" class="calendar-view hidden">
+      <div class="calendar-scroll" id="calendarScroll">
+        <div class="calendar-weekdays">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+        </div>
+        <div id="calendarMonths"></div>
+      </div>
+      <button type="button" id="addEventFab" class="fab-add-event" title="Novo evento">+</button>
+    </main>
+  </div>
+
+  <div id="dayDrawerDocked" class="day-drawer-docked hidden">
+    <div id="dayDrawerResizeHandle" class="day-drawer-resize-handle" title="Arraste para redimensionar"></div>
+    <div id="dayPopupPanel" class="day-popup-panel">
+      <div class="day-popup-topbar">
+        <div>
+          <div id="dayPopupHeader" class="day-popup-header"></div>
+          <div id="dayPopupSubtitle" class="day-popup-subtitle">Visão do dia</div>
+        </div>
+        <div class="day-popup-topbar-spacer"></div>
+        <div class="day-popup-topbar-actions">
+          <button type="button" id="dayPopupExpandBtn" class="icon-btn" title="Abrir como pop-up">⤢</button>
+          <button type="button" id="closeDayPopup" class="icon-btn" title="Fechar">×</button>
+        </div>
+      </div>
+      <div id="dayPopupBoardChecklist" class="day-popup-board-checklist"></div>
+      <div id="dayPopupBody" class="day-popup-body"></div>
+      <div id="dayPopupFooter" class="day-popup-footer"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="modalOverlay" class="modal-overlay hidden">
+  <div class="modal">
+    <button id="closeModal" class="close-btn">&times;</button>
+    <input id="f-name" class="f-name" placeholder="Nome da atividade">
+
+    <label>Data de entrega
+      <input type="date" id="f-date">
+    </label>
+
+    <label>Link
+      <input type="url" id="f-link" placeholder="https://">
+    </label>
+
+    <div id="f-fields" class="f-fields"></div>
+
+    <div id="taskModalMeta" class="task-modal-meta"></div>
+
+    <div class="modal-section team-section">
+      <label>Equipe</label>
+      <div id="teamEmptyState" class="team-empty-state hidden"></div>
+      <div id="teamMembersList" class="team-members-list"></div>
+      <button type="button" id="addTeamMemberBtn" class="add-team-btn">+ Adicionar equipe</button>
+      <div id="addTeamMemberForm" class="add-team-form hidden">
+        <div class="add-team-form-field">
+          <input type="text" id="teamMemberName" placeholder="Nome" autocomplete="off">
+          <div id="teamMemberSuggestions" class="autocomplete-suggestions hidden"></div>
+        </div>
+        <input type="text" id="teamMemberArea" placeholder="Área / empresa">
+        <div class="add-team-form-actions">
+          <button type="button" id="confirmAddTeamMember" class="btn-brand-sm">Adicionar</button>
+          <button type="button" id="cancelAddTeamMember" class="btn-neutral-sm">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <label>Duração prevista (minutos)
+      <input type="number" id="f-duration" min="0" step="5">
+    </label>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="f-delegated"> Delegado
+    </label>
+
+    <div id="delegateFields" class="hidden">
+      <label>Delegado para
+        <input type="text" id="f-delegatedTo">
+      </label>
+      <label>Data de entrega combinada
+        <input type="date" id="f-delegatedDate">
+      </label>
+    </div>
+
+    <label id="priorityField">Prioridade
+      <input type="number" id="f-priority" min="1">
+    </label>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="f-urgent"> Urgente
+    </label>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="f-completed"> Concluída
+    </label>
+
+    <button id="deleteTask" class="delete-btn">Excluir tarefa</button>
+  </div>
+</div>
+
+<div id="eventModalOverlay" class="modal-overlay hidden">
+  <div class="modal">
+    <button id="closeEventModal" class="close-btn">&times;</button>
+    <input id="ev-name" class="f-name" placeholder="Nome do evento">
+
+    <div class="date-range-row">
+      <div>
+        <label>Data de início
+          <input type="date" id="ev-start">
+        </label>
+      </div>
+      <div>
+        <label>Data de final
+          <input type="date" id="ev-end">
+        </label>
+      </div>
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="ev-holiday"> Feriado
+    </label>
+
+    <label>Boards relacionados</label>
+    <div class="board-checklist" id="ev-boards"></div>
+
+    <button type="button" id="saveEventBtn" class="modal-save-btn">Salvar evento</button>
+    <button type="button" id="deleteEventBtn" class="delete-btn hidden">Excluir evento</button>
+  </div>
+</div>
+
+<div id="settingsOverlay" class="modal-overlay hidden">
+  <div class="modal settings-modal">
+    <button id="closeSettings" class="close-btn">&times;</button>
+    <h2>Configurações</h2>
+
+    <div id="fieldsSettings"></div>
+
+    <div class="settings-section">
+      <form id="addFieldForm" class="class-add-form">
+        <input type="text" id="newFieldName" placeholder="Novo campo personalizado" required>
+        <button type="submit">Adicionar campo</button>
+      </form>
+    </div>
+
+    <div class="settings-section">
+      <h3>Pomodoro</h3>
+      <label>Foco (minutos)
+        <input type="number" id="pomoSetFocus" min="1">
+      </label>
+      <label>Pausa curta (minutos)
+        <input type="number" id="pomoSetShort" min="1">
+      </label>
+      <label>Pausa longa (minutos)
+        <input type="number" id="pomoSetLong" min="1">
+      </label>
+    </div>
+
+    <div class="settings-section">
+      <h3>Pessoas</h3>
+      <div id="peopleList" class="people-list"></div>
+      <button type="button" id="addPersonBtn" class="add-person-btn">+ Adicionar pessoa</button>
+      <div id="addPersonForm" class="add-person-form hidden">
+        <input type="text" id="newPersonName" placeholder="Nome" autocomplete="off">
+        <input type="text" id="newPersonArea" placeholder="Área / empresa">
+        <div class="add-person-form-actions">
+          <button type="button" id="confirmAddPerson" class="btn-brand-sm">Adicionar</button>
+          <button type="button" id="cancelAddPerson" class="btn-neutral-sm">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dayPopupOverlay" class="modal-overlay day-popup-overlay hidden">
+  <div class="modal day-popup" id="dayPopupModalHost"></div>
+</div>
+
+<div id="exportOverlay" class="modal-overlay export-overlay hidden">
+  <div class="modal export-modal">
+    <div class="export-header">
+      <div>
+        <div class="export-title">Exportar atividades</div>
+        <div class="export-subtitle">Report semanal · formato pronto para colar no PPT</div>
+      </div>
+      <div class="export-header-spacer"></div>
+      <div class="export-week-switcher">
+        <button type="button" id="exportPrevWeek" class="icon-btn" title="Semana anterior">‹</button>
+        <span id="exportWeekLabel" class="export-week-chip"></span>
+        <button type="button" id="exportNextWeek" class="icon-btn" title="Próxima semana">›</button>
+      </div>
+      <button type="button" id="closeExportModal" class="close-btn">&times;</button>
+    </div>
+
+    <div class="export-filter-row">
+      <span class="export-filter-label">PROJETOS</span>
+      <div id="exportProjectPills" class="export-project-pills"></div>
+    </div>
+
+    <div class="export-columns">
+      <div class="export-column" data-col="progresso">
+        <div class="export-column-header">
+          <span class="export-column-title">Progresso</span>
+          <span id="exportProgressoCount" class="export-count-pill"></span>
+          <button type="button" class="export-copy-btn" data-col="progresso">Copiar</button>
+        </div>
+        <div id="exportProgressoBody" class="export-column-body"></div>
+      </div>
+      <div class="export-column" data-col="proximos">
+        <div class="export-column-header">
+          <span class="export-column-title">Próximos passos</span>
+          <span id="exportProximosCount" class="export-count-pill"></span>
+          <button type="button" class="export-copy-btn" data-col="proximos">Copiar</button>
+        </div>
+        <div id="exportProximosBody" class="export-column-body"></div>
+      </div>
+    </div>
+
+    <div class="export-footer">
+      <span class="export-footer-caption">Formato: Descrição (Responsável | Área – DD/MM)</span>
+      <button type="button" id="exportSaveViewBtn" class="export-save-btn">Salvar visualização</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
