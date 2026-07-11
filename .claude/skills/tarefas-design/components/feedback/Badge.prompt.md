@@ -1,4 +1,4 @@
-Tiny uppercase text badge. Currently only used for the "URGENTE" task marker.
+Badge de texto em caixa alta, pequeno. Usado atualmente apenas para o marcador "URGENTE" nos cards de tarefa.
 
 ```jsx
 <Badge>URGENTE</Badge>

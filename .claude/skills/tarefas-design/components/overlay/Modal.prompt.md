@@ -1,5 +1,4 @@
-Centered dialog with scrim backdrop — task modal (360px), event modal (360px),
-settings modal (440px), or the expanded day-drawer popup (`large`, 680px/78vh).
+Dialog centralizado com backdrop de scrim — modal de tarefa (360px), modal de evento (360px), configurações (440px) ou o popup expandido do drawer do dia (`large`, 680px / 78vh).
 
 ```jsx
 <Modal width={360} onClose={close}>

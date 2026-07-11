@@ -1,8 +1,8 @@
-Text/date/number field for modal forms, styled with a sunken sand background.
+Campo de texto, data ou número para formulários em modais, estilizado com fundo sand rebaixado.
 
 ```jsx
 <Input label="Duração prevista (min)" type="number" value={45} />
-<Input big value="Detalhar governança de produtos" /> {/* borderless title input */}
+<Input big value="Detalhar governança de produtos" /> {/* input de título sem borda */}
 ```
 
-`big` renders the borderless 700/17px style used for modal title fields (task/event name).
+`big` renderiza o estilo sem borda 700/17px usado para campos de título em modais (nome de tarefa ou evento).

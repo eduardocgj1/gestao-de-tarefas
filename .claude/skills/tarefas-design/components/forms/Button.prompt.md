@@ -1,4 +1,4 @@
-Primary action button used across headers, drawers, and modals in Tarefas.
+Botão de ação principal usado em cabeçalhos, drawers e modais do app.
 
 ```jsx
 <Button variant="brand" onClick={save}>Adicionar</Button>
@@ -6,7 +6,4 @@ Primary action button used across headers, drawers, and modals in Tarefas.
 <Button variant="danger-soft">Excluir tarefa</Button>
 ```
 
-Variants: `dark` (Fechar o dia / Encerrar), `brand` (Salvar evento, Adicionar),
-`neutral` (Voltar, toolbar icons-as-text), `brand-soft` (Hoje pill),
-`danger-soft` (Excluir tarefa / evento). Sizes: `sm` (compact pill actions like
-Amanhã/Outra data/Ignorar), `md` (default), `lg` (full-width footer CTAs).
+Variantes: `dark` (Fechar o dia / Encerrar), `brand` (Salvar evento, Adicionar), `neutral` (Voltar, ações de toolbar), `brand-soft` (pill Hoje), `danger-soft` (Excluir tarefa / evento). Tamanhos: `sm` (ações compactas como Amanhã / Outra data / Ignorar), `md` (padrão), `lg` (CTAs de rodapé em largura total).

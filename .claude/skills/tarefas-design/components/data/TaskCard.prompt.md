@@ -1,10 +1,8 @@
-The primary content unit inside a day column or the "Visão do Dia" drawer.
+Unidade principal de conteúdo dentro de uma coluna de dia ou do drawer "Visão do Dia".
 
 ```jsx
 <TaskCard name="Testes First Layer" duration="1h" urgent mit />
 <TaskCard name="Atualizar ppt semanal NAC" completed />
 ```
 
-Left-border + background pair encodes state: normal (near-black/off-white),
-urgent (terracotta), completed (gray + strikethrough + 0.55 opacity). `mit`
-shows the ⭐ "priority of the day" marker.
+O par borda-esquerda + fundo codifica o estado: normal (quase preto / off-white), urgente (terracota), concluída (cinza + tachado + opacidade 0.55). A prop `mit` exibe o marcador ⭐ "prioridade do dia".

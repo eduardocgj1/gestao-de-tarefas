@@ -1,8 +1,8 @@
-Square icon-only button for header/nav/drawer chrome — settings gear, close ×, week arrows.
+Botão quadrado com ícone apenas, para chrome de cabeçalho, navegação e drawer — engrenagem de configurações, fechar ×, setas de semana.
 
 ```jsx
 <IconButton title="Configurações" onClick={openSettings}>⚙</IconButton>
 <IconButton active>‹</IconButton>
 ```
 
-Use `active` for the current toggled state (e.g. Calendário nav highlighted green).
+Use `active` para o estado de toggle ativo (ex: navegação Calendário destacada em verde).

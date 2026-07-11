@@ -1,8 +1,7 @@
-Small circular progress indicator in each day column's header, showing task completion.
+Indicador circular de progresso no cabeçalho de cada coluna de dia, mostrando o percentual de conclusão das tarefas.
 
 ```jsx
 <ProgressRing pct={60} />
 ```
 
-The reference prototype rendered a static ring (border top-color accent); this
-component drives the same visual with a conic-gradient so it can reflect real progress.
+O protótipo de referência renderizava um anel estático (border-top-color colorido); este componente usa conic-gradient para refletir o progresso real.

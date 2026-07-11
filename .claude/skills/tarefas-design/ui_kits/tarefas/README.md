@@ -1,14 +1,20 @@
 # Tarefas — UI Kit
 
-Interactive recreation of the "Tarefas" day-management app: sidebar navigation,
-day-column board, monthly calendar, the "Visão do Dia" drawer (docked +
-expanded modes, resizable, with shutdown flow), and task/event/settings modals.
+Recriação interativa do app Tarefas: sidebar de navegação, board de colunas por dia, calendário mensal, drawer "Visão do Dia" (modos encaixado e expandido, redimensionável, com fluxo de fechamento do dia) e modais de tarefa, evento e configurações.
 
-Built from this design system's `components/` primitives (Button, IconButton,
-Input, Checkbox, TaskCard, BoardPill, EventChip, ProgressRing, Modal, Badge, Fab).
+Construído a partir dos componentes primitivos em `components/` (Button, IconButton, Input, Checkbox, TaskCard, BoardPill, EventChip, ProgressRing, Modal, Badge, Fab).
 
-Files:
-- `index.html` — app shell + state (React, no build step)
-- `Sidebar.jsx`, `BoardView.jsx`, `CalendarView.jsx`, `DayDrawer.jsx`, `Modals.jsx` — screen-level composition (plain globals, not bundled DS components)
+## Arquivos
 
-Source: `Atualização de design/prototype-reference.dc.html` + `README.md` (attached handoff package, Portuguese).
+- `index.html` — shell do app + estado (React, sem build step)
+- `Sidebar.jsx` — navegação lateral colapsável
+- `BoardView.jsx` — board de colunas por dia
+- `CalendarView.jsx` — calendário mensal
+- `DayDrawer.jsx` — drawer "Visão do Dia" (encaixado + expandido + fluxo de fechamento)
+- `Modals.jsx` — modais de tarefa, evento e configurações
+
+## Como usar
+
+Abra `index.html` diretamente no browser para ver o app interativo completo.
+
+Fonte: `docs/features/atualizacao-de-design/prototype-reference.dc.html` + spec em `docs/features/atualizacao-de-design/spec.md`.
