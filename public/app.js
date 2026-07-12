@@ -805,7 +805,7 @@ function buildRecurrenceRule() {
   } else if (type === 'weekly') {
     rule.days = [...weekdayPillEls].filter(p => p.classList.contains('selected')).map(p => p.dataset.day);
   } else if (type === 'monthly') {
-    rule.dayOfMonth = new Date(createTaskDateKey + 'T00:00:00').getDate();
+    rule.dayOfMonth = new Date((ct.date.value || createTaskDateKey) + 'T00:00:00').getDate();
   } else if (type === 'custom') {
     rule.interval = Math.max(2, Math.min(60, Number(recCustomIntervalEl.value) || 2));
   }
@@ -831,7 +831,7 @@ function formatRecurrenceSummary(rule) {
 function updateRecurrenceSummary() {
   if (!recurrenceOn) return;
   const rule = buildRecurrenceRule();
-  const hasZeroOccurrences = !!rule.endDate && generateRecurrenceInstances(rule, createTaskDateKey).length === 0;
+  const hasZeroOccurrences = !!rule.endDate && generateRecurrenceInstances(rule, ct.date.value || createTaskDateKey).length === 0;
   if (hasZeroOccurrences) {
     recurrenceSummaryEl.textContent = 'Esse padrão não gera nenhuma ocorrência antes da data de término.';
     recurrenceSummaryEl.classList.add('error');
@@ -904,11 +904,77 @@ weekdayPillEls.forEach(p => p.addEventListener('click', () => {
 document.querySelectorAll('input[name="rec-daily"]').forEach(r => r.addEventListener('change', updateRecurrenceSummary));
 recCustomIntervalEl.addEventListener('input', updateRecurrenceSummary);
 recEndDateEl.addEventListener('change', updateRecurrenceSummary);
+ct.date.addEventListener('change', () => {
+  recMonthlyDayEl.textContent = new Date((ct.date.value || createTaskDateKey) + 'T00:00:00').getDate();
+  updateRecurrenceSummary();
+});
 
 board.addEventListener('click', e => {
   const addRecurringBtn = e.target.closest('.add-recurring-btn');
   if (addRecurringBtn) { openCreateTaskModal(addRecurringBtn.dataset.date); }
 });
+
+// ---------- create modal: aviso de volume (>90 instâncias) ----------
+const RECURRENCE_VOLUME_WARNING_THRESHOLD = 90;
+const confirmVolumeOverlay = document.getElementById('confirmVolumeOverlay');
+const confirmVolumeCountEl = document.getElementById('confirmVolumeCount');
+const confirmVolumeStartEl = document.getElementById('confirmVolumeStart');
+const confirmVolumeEndEl = document.getElementById('confirmVolumeEnd');
+const confirmVolumeBtnEl = document.getElementById('confirmVolumeBtn');
+const cancelVolumeBtnEl = document.getElementById('cancelVolumeBtn');
+
+let pendingRecurrenceRule = null;
+let pendingRecurrenceDates = null;
+
+function closeConfirmVolumeOverlay() {
+  confirmVolumeOverlay.classList.add('hidden');
+  pendingRecurrenceRule = null;
+  pendingRecurrenceDates = null;
+}
+
+function handleSaveCreateTask() {
+  if (saveCreateTaskBtn.disabled) return;
+  const name = ct.name.value.trim();
+  if (!name) return;
+  const startDateKey = ct.date.value || createTaskDateKey;
+
+  if (!recurrenceOn) {
+    commitCreateTask(null, [startDateKey]);
+    return;
+  }
+
+  const rule = buildRecurrenceRule();
+  const dates = generateRecurrenceInstances(rule, startDateKey);
+  if (!dates.length) return; // guarda extra: botão já deveria estar disabled (fe-09)
+
+  if (dates.length > RECURRENCE_VOLUME_WARNING_THRESHOLD) {
+    pendingRecurrenceRule = rule;
+    pendingRecurrenceDates = dates;
+    confirmVolumeCountEl.textContent = dates.length;
+    confirmVolumeStartEl.textContent = fmtDateBR(startDateKey);
+    confirmVolumeEndEl.textContent = fmtDateBR(rule.endDate);
+    confirmVolumeBtnEl.textContent = `Criar ${dates.length} tarefas`;
+    confirmVolumeOverlay.classList.remove('hidden');
+    return;
+  }
+
+  commitCreateTask(rule, dates);
+}
+
+saveCreateTaskBtn.addEventListener('click', handleSaveCreateTask);
+cancelVolumeBtnEl.addEventListener('click', closeConfirmVolumeOverlay);
+confirmVolumeOverlay.addEventListener('click', e => { if (e.target === confirmVolumeOverlay) closeConfirmVolumeOverlay(); });
+confirmVolumeBtnEl.addEventListener('click', () => {
+  const rule = pendingRecurrenceRule, dates = pendingRecurrenceDates;
+  confirmVolumeOverlay.classList.add('hidden');
+  pendingRecurrenceRule = null;
+  pendingRecurrenceDates = null;
+  commitCreateTask(rule, dates);
+});
+
+function commitCreateTask(rule, dates) {
+  // Implementado em fe-11 (gera as instâncias e salva).
+}
 
 // ---------- modal ----------
 const overlay = document.getElementById('modalOverlay');

@@ -250,7 +250,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 - [x] `fe-09` Validação de zero-ocorrências: recalcula com `fe-07` a cada mudança e alterna a classe `.error` do `.recurrence-summary` de `fe-03`, aplicando/removendo `disabled` no botão "Salvar tarefa" enquanto o erro estiver ativo
        Onde: `app.js`, no bloco de `fe-08`
        Depende de: `fe-07`, `fe-08`
-- [ ] `fe-10` Aviso de volume: ao clicar "Salvar tarefa", se `fe-07` retornar mais de 90 datas, abre `confirmVolumeOverlay` de `fe-03` (com o texto preenchido com `N`) em vez de salvar direto; "Cancelar" fecha só esse overlay e mantém o modal de criação aberto com os dados preenchidos; "Criar N tarefas" prossegue para `fe-11`
+- [x] `fe-10` Aviso de volume: ao clicar "Salvar tarefa", se `fe-07` retornar mais de 90 datas, abre `confirmVolumeOverlay` de `fe-03` (com o texto preenchido com `N`) em vez de salvar direto; "Cancelar" fecha só esse overlay e mantém o modal de criação aberto com os dados preenchidos; "Criar N tarefas" prossegue para `fe-11`
        Onde: `app.js`, no bloco de `fe-08`
        Depende de: `fe-07`, `fe-08`
 - [ ] `fe-11` Handler de "Salvar tarefa" do modal de criação: se Recorrente ativo, gera `seriesId` (`uid()`), monta `recurrenceRule`, chama `fe-07` e cria uma task por data retornada — estendendo o padrão de `addTask()` (app.js:698) para aceitar os campos do formulário novo (nome, link) e replicar `recurrenceRule`/`seriesId`/`isException:false` em todas; se marcada urgente, aplica `urgentRankBase = Date.now()` decrescente por instância (mesmo padrão de `finalizeOrder`, app.js:1009,1013). Se Recorrente desativado, cria uma única task (comportamento equivalente ao `addTask()` atual)
@@ -297,6 +297,8 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 
 ### Desvios da spec
 - **`fe-08` — trigger do modal "Nova tarefa"**: a spec deixou o gatilho como "a definir" (botão junto ao formulário rápido de coluna). Decisão conservadora: adicionado um botão `🔁` (`.add-recurring-btn`) ao lado do input existente do `add-form` de cada coluna, sem alterar o comportamento do fluxo de criação rápida (o botão é `type="button"`, não interfere no `submit` do formulário). Isso exigiu um pequeno ajuste de layout em `.add-form` (`display:flex`) em `styles.css`, além do estilo do próprio botão — não previsto na task `fe-06` (já fechada), mas mínimo e necessário para o gatilho funcionar/ser usável.
+- **`fe-10` — data efetiva de início da série**: a spec (`fe-07`/`fe-11`) fala em "startDateKey" sem detalhar o que acontece se o usuário alterar o campo "Data" do modal depois de abri-lo (o valor inicial é a data da coluna clicada). Decisão conservadora: `ct.date.value` (o campo de data do próprio modal) passou a ser a fonte de verdade da data de início em tempo de salvar/validar — inclusive para recalcular o dia fixo do padrão "Mensal" — em vez do valor congelado no momento da abertura (`createTaskDateKey`), que só serve de default inicial. Isso evita que mudar a data depois de abrir o modal gere uma série com data de início desalinhada do que está visível no campo.
+- **`fe-10` — placeholder de `commitCreateTask()`**: como a função que efetivamente cria as tarefas só é implementada na task `fe-11` (que depende de `fe-10`), um placeholder vazio foi criado nesta task para manter o arquivo executável entre commits; substituído pela implementação real na task `fe-11`.
 
 ### Problemas encontrados
 - _n/a_
