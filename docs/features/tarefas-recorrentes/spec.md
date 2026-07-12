@@ -244,7 +244,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 - [x] `fe-07` Função pura `generateRecurrenceInstances(rule, startDateKey)` → retorna array de `dateKey`s segundo os 4 padrões (`daily`+`workdaysOnly`, `weekly`+`days[]`, `monthly`+`dayOfMonth` pulando meses que não têm o dia, `custom`+`interval`), respeitando `endDate`
        Onde: `app.js`, próximo às funções de data (`toKey`/`addDays`, app.js:70-71)
        Depende de: nenhuma
-- [ ] `fe-08` Abrir/fechar o modal de `fe-01` (trigger a definir: botão junto ao formulário rápido de coluna); toggle "Recorrente" expande/colapsa o painel; troca de abas do padrão; função `formatRecurrenceSummary(rule)` e atualização ao vivo da linha de resumo a cada mudança nos controles
+- [x] `fe-08` Abrir/fechar o modal de `fe-01` (trigger a definir: botão junto ao formulário rápido de coluna); toggle "Recorrente" expande/colapsa o painel; troca de abas do padrão; função `formatRecurrenceSummary(rule)` e atualização ao vivo da linha de resumo a cada mudança nos controles
        Onde: `app.js`, novo bloco `---------- create modal ----------` próximo ao bloco `---------- modal ----------` (app.js:715)
        Depende de: `fe-02`
 - [ ] `fe-09` Validação de zero-ocorrências: recalcula com `fe-07` a cada mudança e alterna a classe `.error` do `.recurrence-summary` de `fe-03`, aplicando/removendo `disabled` no botão "Salvar tarefa" enquanto o erro estiver ativo
@@ -296,7 +296,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 > Preencher durante e após o desenvolvimento.
 
 ### Desvios da spec
-- _n/a — desenvolvimento ainda não iniciado_
+- **`fe-08` — trigger do modal "Nova tarefa"**: a spec deixou o gatilho como "a definir" (botão junto ao formulário rápido de coluna). Decisão conservadora: adicionado um botão `🔁` (`.add-recurring-btn`) ao lado do input existente do `add-form` de cada coluna, sem alterar o comportamento do fluxo de criação rápida (o botão é `type="button"`, não interfere no `submit` do formulário). Isso exigiu um pequeno ajuste de layout em `.add-form` (`display:flex`) em `styles.css`, além do estilo do próprio botão — não previsto na task `fe-06` (já fechada), mas mínimo e necessário para o gatilho funcionar/ser usável.
 
 ### Problemas encontrados
 - _n/a_

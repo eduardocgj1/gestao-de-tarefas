@@ -699,6 +699,7 @@ function columnHtml(d) {
     </div>
     <form class="add-form" data-date="${key}">
       <input type="text" placeholder="+ nova tarefa" required>
+      <button type="button" class="add-recurring-btn" data-date="${key}" title="Nova tarefa recorrente">🔁</button>
     </form>
   </div>`;
 }
@@ -756,6 +757,143 @@ function deleteTask(id, board = currentBoard()) {
   board.tasks = board.tasks.filter(t => t.id !== id);
   save(); refreshCalendarAndBoard();
 }
+
+// ---------- create modal ----------
+const createTaskOverlay = document.getElementById('createTaskOverlay');
+const ct = {
+  name: document.getElementById('ct-name'),
+  date: document.getElementById('ct-date'),
+  link: document.getElementById('ct-link'),
+};
+const recToggleRow = document.getElementById('recToggleRow');
+const recToggleSwitch = document.getElementById('recToggleSwitch');
+const recToggleHint = document.getElementById('recToggleHint');
+const recurrencePanel = document.getElementById('recurrencePanel');
+const recTabs = document.querySelectorAll('.rec-tab');
+const recSections = document.querySelectorAll('.rec-section');
+const recMonthlyDayEl = document.getElementById('rec-monthly-day');
+const recCustomIntervalEl = document.getElementById('rec-custom-interval');
+const recEndDateEl = document.getElementById('rec-end-date');
+const recurrenceSummaryEl = document.getElementById('recurrenceSummary');
+const weekdayPillEls = document.querySelectorAll('.weekday-pill');
+const saveCreateTaskBtn = document.getElementById('saveCreateTask');
+
+const WEEKDAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const WEEKDAY_LABEL_PT = { mon: 'seg', tue: 'ter', wed: 'qua', thu: 'qui', fri: 'sex', sat: 'sáb', sun: 'dom' };
+
+let createTaskDateKey = null;
+let recurrenceOn = false;
+let recActiveTab = 'daily';
+
+function fmtDateBR(dateKey) {
+  if (!dateKey) return '';
+  const [y, m, d] = dateKey.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function joinWeekdayNames(names) {
+  if (names.length === 1) return names[0];
+  return names.slice(0, -1).join(', ') + ' e ' + names[names.length - 1];
+}
+
+function buildRecurrenceRule() {
+  const type = recActiveTab;
+  const rule = { type, endDate: recEndDateEl.value };
+  if (type === 'daily') {
+    const checked = document.querySelector('input[name="rec-daily"]:checked');
+    rule.workdaysOnly = !!checked && checked.value === 'workdays';
+  } else if (type === 'weekly') {
+    rule.days = [...weekdayPillEls].filter(p => p.classList.contains('selected')).map(p => p.dataset.day);
+  } else if (type === 'monthly') {
+    rule.dayOfMonth = new Date(createTaskDateKey + 'T00:00:00').getDate();
+  } else if (type === 'custom') {
+    rule.interval = Math.max(2, Math.min(60, Number(recCustomIntervalEl.value) || 2));
+  }
+  return rule;
+}
+
+function formatRecurrenceSummary(rule) {
+  if (!rule) return '';
+  let desc = '';
+  if (rule.type === 'daily') {
+    desc = rule.workdaysOnly ? 'Todo dia útil' : 'Todos os dias';
+  } else if (rule.type === 'weekly') {
+    const days = WEEKDAY_ORDER.filter(d => (rule.days || []).includes(d)).map(d => WEEKDAY_LABEL_PT[d]);
+    desc = days.length ? `Toda ${joinWeekdayNames(days)}` : 'Nenhum dia selecionado';
+  } else if (rule.type === 'monthly') {
+    desc = `Todo dia ${rule.dayOfMonth} do mês`;
+  } else if (rule.type === 'custom') {
+    desc = `A cada ${rule.interval} dias`;
+  }
+  return rule.endDate ? `🔁 ${desc} · até ${fmtDateBR(rule.endDate)}` : `🔁 ${desc}`;
+}
+
+function updateRecurrenceSummary() {
+  if (!recurrenceOn) return;
+  const rule = buildRecurrenceRule();
+  recurrenceSummaryEl.textContent = formatRecurrenceSummary(rule);
+}
+
+function selectRecTab(type) {
+  recActiveTab = type;
+  recTabs.forEach(t => t.classList.toggle('active', t.dataset.type === type));
+  recSections.forEach(s => s.classList.toggle('active', s.dataset.section === type));
+  updateRecurrenceSummary();
+}
+
+function openCreateTaskModal(dateKey) {
+  createTaskDateKey = dateKey;
+  ct.name.value = '';
+  ct.date.value = dateKey;
+  ct.link.value = '';
+
+  recurrenceOn = false;
+  recToggleSwitch.classList.remove('on');
+  recToggleHint.textContent = 'Não';
+  recurrencePanel.classList.add('hidden');
+
+  recActiveTab = 'daily';
+  document.querySelectorAll('input[name="rec-daily"]')[0].checked = true;
+  weekdayPillEls.forEach(p => p.classList.remove('selected'));
+  recCustomIntervalEl.value = 14;
+  recMonthlyDayEl.textContent = new Date(dateKey + 'T00:00:00').getDate();
+  recEndDateEl.value = '';
+  recEndDateEl.max = '2026-12-31';
+  selectRecTab('daily');
+
+  createTaskOverlay.classList.remove('hidden');
+}
+function closeCreateTaskModal() {
+  createTaskOverlay.classList.add('hidden');
+  createTaskDateKey = null;
+}
+
+document.getElementById('closeCreateTaskModal').addEventListener('click', closeCreateTaskModal);
+document.getElementById('cancelCreateTask').addEventListener('click', closeCreateTaskModal);
+createTaskOverlay.addEventListener('click', e => { if (e.target === createTaskOverlay) closeCreateTaskModal(); });
+
+recTabs.forEach(t => t.addEventListener('click', () => selectRecTab(t.dataset.type)));
+
+recToggleRow.addEventListener('click', () => {
+  recurrenceOn = !recurrenceOn;
+  recToggleSwitch.classList.toggle('on', recurrenceOn);
+  recToggleHint.textContent = recurrenceOn ? 'Sim' : 'Não';
+  recurrencePanel.classList.toggle('hidden', !recurrenceOn);
+  if (recurrenceOn) updateRecurrenceSummary();
+});
+
+weekdayPillEls.forEach(p => p.addEventListener('click', () => {
+  p.classList.toggle('selected');
+  updateRecurrenceSummary();
+}));
+document.querySelectorAll('input[name="rec-daily"]').forEach(r => r.addEventListener('change', updateRecurrenceSummary));
+recCustomIntervalEl.addEventListener('input', updateRecurrenceSummary);
+recEndDateEl.addEventListener('change', updateRecurrenceSummary);
+
+board.addEventListener('click', e => {
+  const addRecurringBtn = e.target.closest('.add-recurring-btn');
+  if (addRecurringBtn) { openCreateTaskModal(addRecurringBtn.dataset.date); }
+});
 
 // ---------- modal ----------
 const overlay = document.getElementById('modalOverlay');
