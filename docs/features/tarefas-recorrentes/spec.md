@@ -228,7 +228,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 - [x] `fe-03` Markup dos dois estados resolvidos pelo `design-critic` (ver "Decisões de UX tomadas" no v2): (a) variante de erro `.recurrence-summary.error` (terracota) no mesmo slot do resumo textual, texto "Esse padrão não gera nenhuma ocorrência antes da data de término.", com o botão "Salvar tarefa" preparado para receber `disabled`; (b) novo overlay `confirmVolumeOverlay` no padrão `.confirm-modal` **sem** `.confirm-options` — ícone 📋, título "Confirmar criação em série", descrição com `{N} tarefas` em negrito, footer `.modal-footer` com "Cancelar"/"Criar {N} tarefas" — ambos ocultos por padrão
        Onde: `index.html`, o item (a) dentro do painel de recorrência de `fe-02`; o item (b) como novo overlay irmão de `fe-05`
        Depende de: `fe-02`
-- [ ] `fe-04` Barra "🔁 Série: {nome} · {resumo} até {data}" no topo do modal de edição existente, oculta por padrão
+- [x] `fe-04` Barra "🔁 Série: {nome} · {resumo} até {data}" no topo do modal de edição existente, oculta por padrão
        Onde: `index.html`, dentro de `#modalOverlay` (linha ~115), antes dos campos do formulário
        Depende de: nenhuma
 - [ ] `fe-05` Markup dos dois modais de confirmação de escopo — "Editar tarefa recorrente" (✏️) e "Excluir tarefa recorrente" (🗑️), cada um com as duas opções em formato cartão-botão (a segunda opção de exclusão em cor de risco)
