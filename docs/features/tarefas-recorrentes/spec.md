@@ -207,7 +207,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 > **Segundo gap:** o protótipo assume um modal de edição com botão "Salvar" explícito, mas o app hoje edita com auto-save por campo (`patch()` disparado a cada `input`/`change`, sem botão salvar — ver `f.name`/`f.date`/etc., app.js:905-926). A pergunta "apenas esta / esta e todas as futuras" (`fe-14`) é adaptada para disparar na *primeira* alteração de campo dentro da sessão de edição (não num clique de "Salvar" que não existe), e a escolha feita vale para o restante da sessão até `closeModal()`.
 
 ### 🗄️ Banco de dados
-- [ ] `db-01` Adicionar colunas `series_id TEXT DEFAULT NULL`, `recurrence_rule JSONB DEFAULT NULL`, `is_exception BOOLEAN DEFAULT false` na tabela `tasks`
+- [x] `db-01` Adicionar colunas `series_id TEXT DEFAULT NULL`, `recurrence_rule JSONB DEFAULT NULL`, `is_exception BOOLEAN DEFAULT false` na tabela `tasks`
        Onde: `schema.sql`, dentro do `CREATE TABLE tasks` (linhas 15-34)
        Depende de: nenhuma
 

@@ -30,7 +30,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at      BIGINT,   -- timestamp em ms (mantendo o formato do app)
   completed_at    BIGINT,
   field_values    JSONB NOT NULL DEFAULT '{}',  -- { fieldId: valueId }
-  team            JSONB NOT NULL DEFAULT '[]'   -- lista de person ids
+  team            JSONB NOT NULL DEFAULT '[]',  -- lista de person ids
+  series_id       TEXT DEFAULT NULL,       -- id da série recorrente (gerado com uid(), mesmo formato dos ids de task); NULL para tarefas não recorrentes
+  recurrence_rule JSONB DEFAULT NULL,      -- regra da série (replicada em todas as instâncias não-exceção); ver docs/features/tarefas-recorrentes/spec.md
+  is_exception    BOOLEAN DEFAULT FALSE    -- true quando a instância foi editada/movida individualmente e saiu da série
 );
 
 -- Eventos de calendário
