@@ -716,7 +716,6 @@ function columnHtml(d) {
     </div>
     <form class="add-form" data-date="${key}">
       <input type="text" placeholder="+ nova tarefa" required>
-      <button type="button" class="add-recurring-btn" data-date="${key}" title="Nova tarefa recorrente">🔁</button>
     </form>
   </div>`;
 }
@@ -776,13 +775,7 @@ function deleteTask(id, board = currentBoard()) {
   save(); refreshCalendarAndBoard();
 }
 
-// ---------- create modal ----------
-const createTaskOverlay = document.getElementById('createTaskOverlay');
-const ct = {
-  name: document.getElementById('ct-name'),
-  date: document.getElementById('ct-date'),
-  link: document.getElementById('ct-link'),
-};
+// ---------- recorrência: tornar uma tarefa aberta recorrente ----------
 const recToggleRow = document.getElementById('recToggleRow');
 const recToggleSwitch = document.getElementById('recToggleSwitch');
 const recToggleHint = document.getElementById('recToggleHint');
@@ -794,12 +787,11 @@ const recCustomIntervalEl = document.getElementById('rec-custom-interval');
 const recEndDateEl = document.getElementById('rec-end-date');
 const recurrenceSummaryEl = document.getElementById('recurrenceSummary');
 const weekdayPillEls = document.querySelectorAll('.weekday-pill');
-const saveCreateTaskBtn = document.getElementById('saveCreateTask');
+const applyRecurrenceBtn = document.getElementById('applyRecurrenceBtn');
 
 const WEEKDAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const WEEKDAY_LABEL_PT = { mon: 'seg', tue: 'ter', wed: 'qua', thu: 'qui', fri: 'sex', sat: 'sáb', sun: 'dom' };
 
-let createTaskDateKey = null;
 let recurrenceOn = false;
 let recActiveTab = 'daily';
 
@@ -823,7 +815,7 @@ function buildRecurrenceRule() {
   } else if (type === 'weekly') {
     rule.days = [...weekdayPillEls].filter(p => p.classList.contains('selected')).map(p => p.dataset.day);
   } else if (type === 'monthly') {
-    rule.dayOfMonth = new Date((ct.date.value || createTaskDateKey) + 'T00:00:00').getDate();
+    rule.dayOfMonth = new Date(f.date.value + 'T00:00:00').getDate();
   } else if (type === 'custom') {
     rule.interval = Math.max(2, Math.min(60, Number(recCustomIntervalEl.value) || 2));
   }
@@ -851,8 +843,8 @@ function updateRecurrenceSummary() {
   const rule = buildRecurrenceRule();
   // Sem data de término, generateRecurrenceInstances() não tem como calcular ocorrências futuras —
   // trata como o mesmo caso de "zero ocorrências" (bloqueia o salvamento com o mesmo erro inline),
-  // em vez de deixar passar em branco e falhar silenciosamente ao clicar "Salvar tarefa".
-  const hasZeroOccurrences = !rule.endDate || generateRecurrenceInstances(rule, ct.date.value || createTaskDateKey).length === 0;
+  // em vez de deixar passar em branco e falhar silenciosamente ao clicar "Aplicar recorrência".
+  const hasZeroOccurrences = !rule.endDate || generateRecurrenceInstances(rule, f.date.value).length === 0;
   if (hasZeroOccurrences) {
     recurrenceSummaryEl.textContent = 'Esse padrão não gera nenhuma ocorrência antes da data de término.';
     recurrenceSummaryEl.classList.add('error');
@@ -860,7 +852,7 @@ function updateRecurrenceSummary() {
     recurrenceSummaryEl.textContent = formatRecurrenceSummary(rule);
     recurrenceSummaryEl.classList.remove('error');
   }
-  saveCreateTaskBtn.disabled = hasZeroOccurrences;
+  applyRecurrenceBtn.disabled = hasZeroOccurrences;
 }
 
 function selectRecTab(type) {
@@ -870,12 +862,7 @@ function selectRecTab(type) {
   updateRecurrenceSummary();
 }
 
-function openCreateTaskModal(dateKey) {
-  createTaskDateKey = dateKey;
-  ct.name.value = '';
-  ct.date.value = dateKey;
-  ct.link.value = '';
-
+function resetRecurrencePanel(dateKey) {
   recurrenceOn = false;
   recToggleSwitch.classList.remove('on');
   recToggleHint.textContent = 'Não';
@@ -889,19 +876,9 @@ function openCreateTaskModal(dateKey) {
   recEndDateEl.value = '';
   recEndDateEl.max = '2026-12-31';
   recurrenceSummaryEl.classList.remove('error');
-  saveCreateTaskBtn.disabled = false;
+  applyRecurrenceBtn.disabled = false;
   selectRecTab('daily');
-
-  createTaskOverlay.classList.remove('hidden');
 }
-function closeCreateTaskModal() {
-  createTaskOverlay.classList.add('hidden');
-  createTaskDateKey = null;
-}
-
-document.getElementById('closeCreateTaskModal').addEventListener('click', closeCreateTaskModal);
-document.getElementById('cancelCreateTask').addEventListener('click', closeCreateTaskModal);
-createTaskOverlay.addEventListener('click', e => { if (e.target === createTaskOverlay) closeCreateTaskModal(); });
 
 recTabs.forEach(t => t.addEventListener('click', () => selectRecTab(t.dataset.type)));
 
@@ -914,7 +891,7 @@ recToggleRow.addEventListener('click', () => {
     updateRecurrenceSummary();
   } else {
     recurrenceSummaryEl.classList.remove('error');
-    saveCreateTaskBtn.disabled = false;
+    applyRecurrenceBtn.disabled = false;
   }
 });
 
@@ -925,17 +902,8 @@ weekdayPillEls.forEach(p => p.addEventListener('click', () => {
 document.querySelectorAll('input[name="rec-daily"]').forEach(r => r.addEventListener('change', updateRecurrenceSummary));
 recCustomIntervalEl.addEventListener('input', updateRecurrenceSummary);
 recEndDateEl.addEventListener('change', updateRecurrenceSummary);
-ct.date.addEventListener('change', () => {
-  recMonthlyDayEl.textContent = new Date((ct.date.value || createTaskDateKey) + 'T00:00:00').getDate();
-  updateRecurrenceSummary();
-});
 
-board.addEventListener('click', e => {
-  const addRecurringBtn = e.target.closest('.add-recurring-btn');
-  if (addRecurringBtn) { openCreateTaskModal(addRecurringBtn.dataset.date); }
-});
-
-// ---------- create modal: aviso de volume (>90 instâncias) ----------
+// ---------- recorrência: aviso de volume (>90 instâncias) ----------
 const RECURRENCE_VOLUME_WARNING_THRESHOLD = 90;
 const confirmVolumeOverlay = document.getElementById('confirmVolumeOverlay');
 const confirmVolumeCountEl = document.getElementById('confirmVolumeCount');
@@ -953,17 +921,9 @@ function closeConfirmVolumeOverlay() {
   pendingRecurrenceDates = null;
 }
 
-function handleSaveCreateTask() {
-  if (saveCreateTaskBtn.disabled) return;
-  const name = ct.name.value.trim();
-  if (!name) return;
-  const startDateKey = ct.date.value || createTaskDateKey;
-
-  if (!recurrenceOn) {
-    commitCreateTask(null, [startDateKey]);
-    return;
-  }
-
+function handleApplyRecurrence() {
+  if (applyRecurrenceBtn.disabled) return;
+  const startDateKey = f.date.value;
   const rule = buildRecurrenceRule();
   const dates = generateRecurrenceInstances(rule, startDateKey);
   if (!dates.length) return; // guarda extra: botão já deveria estar disabled (fe-09)
@@ -979,10 +939,10 @@ function handleSaveCreateTask() {
     return;
   }
 
-  commitCreateTask(rule, dates);
+  commitRecurrenceForEditingTask(rule, dates);
 }
 
-saveCreateTaskBtn.addEventListener('click', handleSaveCreateTask);
+applyRecurrenceBtn.addEventListener('click', handleApplyRecurrence);
 cancelVolumeBtnEl.addEventListener('click', closeConfirmVolumeOverlay);
 confirmVolumeOverlay.addEventListener('click', e => { if (e.target === confirmVolumeOverlay) closeConfirmVolumeOverlay(); });
 confirmVolumeBtnEl.addEventListener('click', () => {
@@ -990,36 +950,37 @@ confirmVolumeBtnEl.addEventListener('click', () => {
   confirmVolumeOverlay.classList.add('hidden');
   pendingRecurrenceRule = null;
   pendingRecurrenceDates = null;
-  commitCreateTask(rule, dates);
+  commitRecurrenceForEditingTask(rule, dates);
 });
 
-function commitCreateTask(rule, dates) {
-  const board = currentBoard();
+// Transforma a tarefa aberta na primeira ocorrência de uma nova série: a instância existente é
+// reaproveitada (mantém id/histórico) e as demais datas do rule viram novas tarefas.
+function commitRecurrenceForEditingTask(rule, dates) {
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (!t) return;
   const tasks = board.tasks;
-  const name = ct.name.value.trim();
-  const link = ct.link.value.trim();
+  const seriesId = uid();
 
-  function pushInstance(dateKey, seriesId, recurrenceRule) {
-    const normalMax = tasks.filter(t => t.date === dateKey && !t.urgent).reduce((m, t) => Math.max(m, t.priority || 0), 0);
+  function pushInstance(dateKey) {
+    const normalMax = tasks.filter(x => x.date === dateKey && !x.urgent).reduce((m, x) => Math.max(m, x.priority || 0), 0);
     tasks.push({
-      id: uid(), name, date: dateKey, deliveryDate: dateKey, link, duration: 0,
+      id: uid(), name: t.name, date: dateKey, deliveryDate: dateKey, link: t.link, duration: 0,
       priority: normalMax + 1, urgent: false, urgentRank: 0,
       delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
       fieldValues: {}, team: [],
-      seriesId, recurrenceRule, isException: false,
+      seriesId, recurrenceRule: rule, isException: false,
     });
   }
 
-  if (!rule) {
-    pushInstance(dates[0], null, null);
-  } else {
-    const seriesId = uid();
-    dates.forEach(dateKey => pushInstance(dateKey, seriesId, rule));
-  }
+  t.seriesId = seriesId;
+  t.recurrenceRule = rule;
+  t.isException = false;
+  dates.filter(dateKey => dateKey !== t.date).forEach(pushInstance);
 
-  closeCreateTaskModal();
   save();
-  render();
+  refreshCalendarAndBoard();
+  openModal(editingId, board);
 }
 
 // ---------- modal ----------
@@ -1186,8 +1147,12 @@ function openModal(id, board = currentBoard()) {
     // perguntar escopo, quando na verdade não vai (ver critério de aceite sobre isException).
     seriesInfoTextEl.textContent = formatSeriesInfoText(t);
     seriesInfoBarEl.classList.remove('hidden');
+    recToggleRow.classList.add('hidden');
+    recurrencePanel.classList.add('hidden');
   } else {
     seriesInfoBarEl.classList.add('hidden');
+    recToggleRow.classList.remove('hidden');
+    resetRecurrencePanel(t.deliveryDate || t.date);
   }
   f.name.value = t.name;
   f.date.value = t.deliveryDate || t.date;
@@ -1316,6 +1281,11 @@ f.date.addEventListener('change', () => directPatch(t => {
   t.date = f.date.value;
   markExceptionIfMoved(t, prevDate);
 }));
+f.date.addEventListener('change', () => {
+  if (!recurrenceOn) return;
+  recMonthlyDayEl.textContent = new Date(f.date.value + 'T00:00:00').getDate();
+  updateRecurrenceSummary();
+});
 f.link.addEventListener('input', () => patch(t => (t.link = f.link.value)));
 f.duration.addEventListener('input', () => patch(t => (t.duration = Number(f.duration.value) || 0)));
 f.priority.addEventListener('change', () => patch((t, board) => { if (!t.urgent && !t.completed) setPriority(t, Number(f.priority.value) || 1, board); }));
