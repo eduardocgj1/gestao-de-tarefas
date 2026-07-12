@@ -189,6 +189,75 @@
       <input type="date" id="ct-date">
     </label>
 
+    <div class="toggle-row" id="recToggleRow">
+      <span class="tr-icon">🔁</span>
+      <span class="tr-label">Recorrente</span>
+      <span class="tr-hint" id="recToggleHint">Não</span>
+      <div class="toggle-switch" id="recToggleSwitch"></div>
+    </div>
+
+    <div class="recurrence-panel hidden" id="recurrencePanel">
+      <div class="recurrence-type-tabs">
+        <button type="button" class="rec-tab active" data-type="daily">Diário</button>
+        <button type="button" class="rec-tab" data-type="weekly">Semanal</button>
+        <button type="button" class="rec-tab" data-type="monthly">Mensal</button>
+        <button type="button" class="rec-tab" data-type="custom">Personalizado</button>
+      </div>
+
+      <div class="recurrence-options">
+        <div class="rec-section active" data-section="daily">
+          <div class="rec-options-list">
+            <label class="rec-option-row">
+              <input type="radio" name="rec-daily" value="all" checked>
+              <span>Todos os dias</span>
+            </label>
+            <label class="rec-option-row">
+              <input type="radio" name="rec-daily" value="workdays">
+              <span>Apenas dias úteis (seg–sex)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="rec-section" data-section="weekly">
+          <div class="weekday-pills">
+            <span class="weekday-pill" data-day="mon">Seg</span>
+            <span class="weekday-pill" data-day="tue">Ter</span>
+            <span class="weekday-pill" data-day="wed">Qua</span>
+            <span class="weekday-pill" data-day="thu">Qui</span>
+            <span class="weekday-pill" data-day="fri">Sex</span>
+            <span class="weekday-pill" data-day="sat">Sáb</span>
+            <span class="weekday-pill" data-day="sun">Dom</span>
+          </div>
+        </div>
+
+        <div class="rec-section" data-section="monthly">
+          <div class="rec-options-list">
+            <label class="rec-option-row">
+              <span>Todo dia <strong id="rec-monthly-day">1</strong> do mês</span>
+            </label>
+          </div>
+          <div class="rec-hint-text">O dia é definido automaticamente pela data de início.</div>
+        </div>
+
+        <div class="rec-section" data-section="custom">
+          <div class="custom-interval-row">
+            <span>A cada</span>
+            <input type="number" id="rec-custom-interval" value="14" min="2" max="60">
+            <span>dias</span>
+          </div>
+          <div class="rec-hint-text">Intervalo entre 2 e 60 dias.</div>
+        </div>
+      </div>
+
+      <div class="end-date-row">
+        <label>Repetir até
+          <input type="date" id="rec-end-date">
+        </label>
+      </div>
+
+      <div class="recurrence-summary" id="recurrenceSummary"></div>
+    </div>
+
     <label>Link
       <input type="url" id="ct-link" placeholder="https://">
     </label>
