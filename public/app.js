@@ -2312,15 +2312,20 @@ function mondayOfWeek(d) {
   const dow = d.getDay(); // 0=dom..6=sáb
   return addDays(d, dow === 0 ? -6 : 1 - dow);
 }
-function previousCompleteMonday(today = new Date()) {
-  const thisMonday = mondayOfWeek(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
-  return addDays(thisMonday, -7);
+function currentWeekMonday() {
+  const today = new Date();
+  return mondayOfWeek(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 }
-function exportWeekMonday(offset) { return addDays(previousCompleteMonday(new Date()), offset * 7); }
+function exportWeekMonday(offset) { return addDays(currentWeekMonday(), offset * 7); }
 function exportWeekDates(monday) { return [0, 1, 2, 3, 4].map(i => toKey(addDays(monday, i))); }
 function exportWeekLabelText(monday) {
   const fri = addDays(monday, 4);
   return `${String(monday.getDate()).padStart(2, '0')}/${MON[monday.getMonth()]} – ${String(fri.getDate()).padStart(2, '0')}/${MON[fri.getMonth()]}`;
+}
+function exportColumnWeekLabel(monday) {
+  const fri = addDays(monday, 4);
+  const fmt = d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `${fmt(monday)} - ${fmt(fri)}`;
 }
 function exportViewKey(boardId, monday) { return `${boardId}::${toKey(monday)}`; }
 
@@ -2367,11 +2372,11 @@ function buildExportRows() {
 
   const visible = ts => ts
     .filter(t => !exportRowDeletions.has(t.id))
-    .filter(t => exportProjectFilter[taskProjectInfo(t, board).id] !== false);
+    .filter(t => exportProjectFilter[taskProjectInfo(t, board).id] === true);
   const sortByDateDesc = ts => [...ts].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
 
   return {
-    board, monday, projectsPresent,
+    board, monday, nextMonday, projectsPresent,
     progresso: sortByDateDesc(visible(weekTasks).filter(t => t.completed)),
     proximos: sortByDateDesc(visible(nextWeekTasks).filter(t => !t.completed)),
   };
@@ -2394,7 +2399,7 @@ function exportEmptyStateHtml(msg) { return `<div class="export-empty-state">${m
 
 function exportProjectPillsHtml(projectsPresent) {
   return [...projectsPresent.values()].map(p => {
-    const checked = exportProjectFilter[p.id] !== false;
+    const checked = exportProjectFilter[p.id] === true;
     return `
     <label class="export-project-pill${checked ? ' checked' : ''}">
       <input type="checkbox" class="export-pill-checkbox" data-project-id="${p.id}" ${checked ? 'checked' : ''}>
@@ -2407,9 +2412,16 @@ function autoGrowTextarea(el) { el.style.height = 'auto'; el.style.height = el.s
 
 function renderExportModal() {
   if (!exportOpen) return;
-  const { board, monday, projectsPresent, progresso, proximos } = buildExportRows();
+  const { board, monday, nextMonday, projectsPresent, progresso, proximos } = buildExportRows();
   document.getElementById('exportWeekLabel').textContent = exportWeekLabelText(monday);
   document.getElementById('exportProjectPills').innerHTML = exportProjectPillsHtml(projectsPresent);
+  document.getElementById('exportProgressoWeek').textContent = exportColumnWeekLabel(monday);
+  document.getElementById('exportProximosWeek').textContent = exportColumnWeekLabel(nextMonday);
+  const projectIds = [...projectsPresent.keys()];
+  const allSelected = projectIds.length > 0 && projectIds.every(id => exportProjectFilter[id] === true);
+  const selectAllBtn = document.getElementById('exportSelectAllBtn');
+  selectAllBtn.textContent = allSelected ? 'Limpar seleção' : 'Selecionar todos';
+  selectAllBtn.disabled = projectIds.length === 0;
   document.getElementById('exportProgressoCount').textContent = progresso.length;
   document.getElementById('exportProximosCount').textContent = proximos.length;
   document.getElementById('exportProgressoBody').innerHTML = progresso.length
@@ -2461,6 +2473,14 @@ function saveExportView() {
   setTimeout(() => { btn.textContent = 'Salvar visualização'; }, 1500);
 }
 
+function toggleSelectAllProjects() {
+  const { projectsPresent } = buildExportRows();
+  const ids = [...projectsPresent.keys()];
+  const allSelected = ids.length > 0 && ids.every(id => exportProjectFilter[id] === true);
+  ids.forEach(id => { exportProjectFilter[id] = !allSelected; });
+  renderExportModal();
+}
+
 function copyExportColumn(colKey, btn) {
   const { progresso, proximos } = buildExportRows();
   const rows = colKey === 'progresso' ? progresso : proximos;
@@ -2480,6 +2500,7 @@ document.getElementById('exportOverlay').addEventListener('click', e => {
 document.getElementById('exportPrevWeek').addEventListener('click', () => changeExportWeek(-1));
 document.getElementById('exportNextWeek').addEventListener('click', () => changeExportWeek(1));
 document.getElementById('exportSaveViewBtn').addEventListener('click', saveExportView);
+document.getElementById('exportSelectAllBtn').addEventListener('click', toggleSelectAllProjects);
 
 document.querySelector('.export-modal').addEventListener('click', e => {
   const copyBtn = e.target.closest('.export-copy-btn');
