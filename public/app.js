@@ -1302,12 +1302,60 @@ f.urgent.addEventListener('change', () => patch((t, board) => {
   else { const max = board.tasks.filter(x => x.date === t.date && !x.urgent && x.id !== t.id).reduce((m, x) => Math.max(m, x.priority || 0), 0); t.priority = max + 1; }
 }));
 
+// ---------- exclusão em série: "apenas esta ocorrência" x "esta e todas as futuras" ----------
+const confirmDeleteScopeOverlay = document.getElementById('confirmDeleteScopeOverlay');
+const deleteScopeOnlyThisBtn = document.getElementById('deleteScopeOnlyThis');
+const deleteScopeAllFutureBtn = document.getElementById('deleteScopeAllFuture');
+const deleteScopeOnlyThisDescEl = document.getElementById('deleteScopeOnlyThisDesc');
+const deleteScopeAllFutureDescEl = document.getElementById('deleteScopeAllFutureDesc');
+const cancelDeleteScopeBtn = document.getElementById('cancelDeleteScope');
+
+function openDeleteScopeModal(t) {
+  const dateLabel = fmtDateBR(t.date);
+  deleteScopeOnlyThisDescEl.textContent = `Somente ${dateLabel} será removida. O restante da série permanece.`;
+  deleteScopeAllFutureDescEl.textContent = `${dateLabel} e todas as ocorrências posteriores serão excluídas. Ocorrências anteriores permanecem.`;
+  confirmDeleteScopeOverlay.classList.remove('hidden');
+}
+function closeDeleteScopeModal() { confirmDeleteScopeOverlay.classList.add('hidden'); }
+
+// Remove a instância selecionada e todas as posteriores da série (date >= a dela), inclusive as
+// que já eram exceção (is_exception = true) — diferente da edição em massa, que não afeta exceções.
+function deleteSeriesFromInstance(t, board) {
+  board.tasks = board.tasks.filter(x => !(x.seriesId === t.seriesId && x.date >= t.date));
+  save();
+  refreshCalendarAndBoard();
+}
+
+deleteScopeOnlyThisBtn.addEventListener('click', () => {
+  closeDeleteScopeModal();
+  if (!editingId) return;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  deleteTask(editingId, board);
+  closeModal();
+});
+deleteScopeAllFutureBtn.addEventListener('click', () => {
+  closeDeleteScopeModal();
+  if (!editingId) return;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (!t) return;
+  deleteSeriesFromInstance(t, board);
+  closeModal();
+});
+cancelDeleteScopeBtn.addEventListener('click', closeDeleteScopeModal);
+confirmDeleteScopeOverlay.addEventListener('click', e => { if (e.target === confirmDeleteScopeOverlay) closeDeleteScopeModal(); });
+
 document.getElementById('deleteTask').addEventListener('click', () => {
-  if (editingId) {
-    const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-    deleteTask(editingId, board);
-    closeModal();
+  if (!editingId) return;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (!t) return;
+  if (t.seriesId && !t.isException) {
+    openDeleteScopeModal(t);
+    return;
   }
+  deleteTask(editingId, board);
+  closeModal();
 });
 
 // ---------- board interactions (delegated) ----------
