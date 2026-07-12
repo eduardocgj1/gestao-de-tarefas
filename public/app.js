@@ -69,6 +69,56 @@ function clamp(d) {
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function startOfWeek(d) { return addDays(d, -d.getDay()); }
 function toKey(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+// ---------- recorrência ----------
+const REC_WEEKDAY_INDEX = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+function generateRecurrenceInstances(rule, startDateKey) {
+  const start = new Date(startDateKey + 'T00:00:00');
+  const end = new Date(rule.endDate + 'T00:00:00');
+  const keys = [];
+  if (isNaN(start) || isNaN(end) || start > end) return keys;
+
+  if (rule.type === 'daily') {
+    let d = new Date(start);
+    while (d <= end) {
+      const dow = d.getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      if (!(rule.workdaysOnly && isWeekend)) keys.push(toKey(d));
+      d = addDays(d, 1);
+    }
+  } else if (rule.type === 'weekly') {
+    const selected = new Set((rule.days || []).map(k => REC_WEEKDAY_INDEX[k]));
+    let d = new Date(start);
+    while (d <= end) {
+      if (selected.has(d.getDay())) keys.push(toKey(d));
+      d = addDays(d, 1);
+    }
+  } else if (rule.type === 'monthly') {
+    const dayOfMonth = rule.dayOfMonth;
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cursor <= end) {
+      const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+      if (dayOfMonth <= daysInMonth) {
+        const candidate = new Date(cursor.getFullYear(), cursor.getMonth(), dayOfMonth);
+        if (candidate >= start && candidate <= end) keys.push(toKey(candidate));
+      }
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    }
+  } else if (rule.type === 'custom') {
+    const interval = Math.max(2, Math.min(60, Number(rule.interval) || 2));
+    let d = new Date(start);
+    while (d <= end) {
+      keys.push(toKey(d));
+      d = addDays(d, interval);
+    }
+  }
+  return keys;
+}
+// Marca a instância como exceção quando sua data efetivamente muda (drag-and-drop, edição de
+// data no modal, "adiar" ou "Fechar o Dia" da Visão do Dia). Não afeta o restante da série.
+function markExceptionIfMoved(t, previousDate) {
+  if (t.seriesId && t.date !== previousDate) t.isException = true;
+}
 function label(d) { return `${String(d.getDate()).padStart(2, '0')}/${MON[d.getMonth()]} - ${DOW[d.getDay()]}`; }
 function fmtMin(m) {
   m = Number(m) || 0;
@@ -654,6 +704,7 @@ function columnHtml(d) {
     </div>
     <form class="add-form" data-date="${key}">
       <input type="text" placeholder="+ nova tarefa" required>
+      <button type="button" class="add-recurring-btn" data-date="${key}" title="Nova tarefa recorrente">🔁</button>
     </form>
   </div>`;
 }
@@ -678,6 +729,7 @@ function cardHtml(t, isMit = false) {
   const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id]) : '').join('');
   return `
   <div class="${cls}" draggable="true" data-id="${t.id}">
+    ${t.seriesId ? '<span class="recurring-badge" title="Tarefa recorrente">🔁</span>' : ''}
     <div class="card-top">
       <input type="checkbox" class="chk-done" ${t.completed ? 'checked' : ''}>
       <div class="card-name">${escapeHtml(t.name)}</div>
@@ -712,6 +764,252 @@ function deleteTask(id, board = currentBoard()) {
   save(); refreshCalendarAndBoard();
 }
 
+// ---------- create modal ----------
+const createTaskOverlay = document.getElementById('createTaskOverlay');
+const ct = {
+  name: document.getElementById('ct-name'),
+  date: document.getElementById('ct-date'),
+  link: document.getElementById('ct-link'),
+};
+const recToggleRow = document.getElementById('recToggleRow');
+const recToggleSwitch = document.getElementById('recToggleSwitch');
+const recToggleHint = document.getElementById('recToggleHint');
+const recurrencePanel = document.getElementById('recurrencePanel');
+const recTabs = document.querySelectorAll('.rec-tab');
+const recSections = document.querySelectorAll('.rec-section');
+const recMonthlyDayEl = document.getElementById('rec-monthly-day');
+const recCustomIntervalEl = document.getElementById('rec-custom-interval');
+const recEndDateEl = document.getElementById('rec-end-date');
+const recurrenceSummaryEl = document.getElementById('recurrenceSummary');
+const weekdayPillEls = document.querySelectorAll('.weekday-pill');
+const saveCreateTaskBtn = document.getElementById('saveCreateTask');
+
+const WEEKDAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const WEEKDAY_LABEL_PT = { mon: 'seg', tue: 'ter', wed: 'qua', thu: 'qui', fri: 'sex', sat: 'sáb', sun: 'dom' };
+
+let createTaskDateKey = null;
+let recurrenceOn = false;
+let recActiveTab = 'daily';
+
+function fmtDateBR(dateKey) {
+  if (!dateKey) return '';
+  const [y, m, d] = dateKey.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function joinWeekdayNames(names) {
+  if (names.length === 1) return names[0];
+  return names.slice(0, -1).join(', ') + ' e ' + names[names.length - 1];
+}
+
+function buildRecurrenceRule() {
+  const type = recActiveTab;
+  const rule = { type, endDate: recEndDateEl.value };
+  if (type === 'daily') {
+    const checked = document.querySelector('input[name="rec-daily"]:checked');
+    rule.workdaysOnly = !!checked && checked.value === 'workdays';
+  } else if (type === 'weekly') {
+    rule.days = [...weekdayPillEls].filter(p => p.classList.contains('selected')).map(p => p.dataset.day);
+  } else if (type === 'monthly') {
+    rule.dayOfMonth = new Date((ct.date.value || createTaskDateKey) + 'T00:00:00').getDate();
+  } else if (type === 'custom') {
+    rule.interval = Math.max(2, Math.min(60, Number(recCustomIntervalEl.value) || 2));
+  }
+  return rule;
+}
+
+function formatRecurrenceSummary(rule) {
+  if (!rule) return '';
+  let desc = '';
+  if (rule.type === 'daily') {
+    desc = rule.workdaysOnly ? 'Todo dia útil' : 'Todos os dias';
+  } else if (rule.type === 'weekly') {
+    const days = WEEKDAY_ORDER.filter(d => (rule.days || []).includes(d)).map(d => WEEKDAY_LABEL_PT[d]);
+    desc = days.length ? `Toda ${joinWeekdayNames(days)}` : 'Nenhum dia selecionado';
+  } else if (rule.type === 'monthly') {
+    desc = `Todo dia ${rule.dayOfMonth} do mês`;
+  } else if (rule.type === 'custom') {
+    desc = `A cada ${rule.interval} dias`;
+  }
+  return rule.endDate ? `🔁 ${desc} · até ${fmtDateBR(rule.endDate)}` : `🔁 ${desc}`;
+}
+
+function updateRecurrenceSummary() {
+  if (!recurrenceOn) return;
+  const rule = buildRecurrenceRule();
+  // Sem data de término, generateRecurrenceInstances() não tem como calcular ocorrências futuras —
+  // trata como o mesmo caso de "zero ocorrências" (bloqueia o salvamento com o mesmo erro inline),
+  // em vez de deixar passar em branco e falhar silenciosamente ao clicar "Salvar tarefa".
+  const hasZeroOccurrences = !rule.endDate || generateRecurrenceInstances(rule, ct.date.value || createTaskDateKey).length === 0;
+  if (hasZeroOccurrences) {
+    recurrenceSummaryEl.textContent = 'Esse padrão não gera nenhuma ocorrência antes da data de término.';
+    recurrenceSummaryEl.classList.add('error');
+  } else {
+    recurrenceSummaryEl.textContent = formatRecurrenceSummary(rule);
+    recurrenceSummaryEl.classList.remove('error');
+  }
+  saveCreateTaskBtn.disabled = hasZeroOccurrences;
+}
+
+function selectRecTab(type) {
+  recActiveTab = type;
+  recTabs.forEach(t => t.classList.toggle('active', t.dataset.type === type));
+  recSections.forEach(s => s.classList.toggle('active', s.dataset.section === type));
+  updateRecurrenceSummary();
+}
+
+function openCreateTaskModal(dateKey) {
+  createTaskDateKey = dateKey;
+  ct.name.value = '';
+  ct.date.value = dateKey;
+  ct.link.value = '';
+
+  recurrenceOn = false;
+  recToggleSwitch.classList.remove('on');
+  recToggleHint.textContent = 'Não';
+  recurrencePanel.classList.add('hidden');
+
+  recActiveTab = 'daily';
+  document.querySelectorAll('input[name="rec-daily"]')[0].checked = true;
+  weekdayPillEls.forEach(p => p.classList.remove('selected'));
+  recCustomIntervalEl.value = 14;
+  recMonthlyDayEl.textContent = new Date(dateKey + 'T00:00:00').getDate();
+  recEndDateEl.value = '';
+  recEndDateEl.max = '2026-12-31';
+  recurrenceSummaryEl.classList.remove('error');
+  saveCreateTaskBtn.disabled = false;
+  selectRecTab('daily');
+
+  createTaskOverlay.classList.remove('hidden');
+}
+function closeCreateTaskModal() {
+  createTaskOverlay.classList.add('hidden');
+  createTaskDateKey = null;
+}
+
+document.getElementById('closeCreateTaskModal').addEventListener('click', closeCreateTaskModal);
+document.getElementById('cancelCreateTask').addEventListener('click', closeCreateTaskModal);
+createTaskOverlay.addEventListener('click', e => { if (e.target === createTaskOverlay) closeCreateTaskModal(); });
+
+recTabs.forEach(t => t.addEventListener('click', () => selectRecTab(t.dataset.type)));
+
+recToggleRow.addEventListener('click', () => {
+  recurrenceOn = !recurrenceOn;
+  recToggleSwitch.classList.toggle('on', recurrenceOn);
+  recToggleHint.textContent = recurrenceOn ? 'Sim' : 'Não';
+  recurrencePanel.classList.toggle('hidden', !recurrenceOn);
+  if (recurrenceOn) {
+    updateRecurrenceSummary();
+  } else {
+    recurrenceSummaryEl.classList.remove('error');
+    saveCreateTaskBtn.disabled = false;
+  }
+});
+
+weekdayPillEls.forEach(p => p.addEventListener('click', () => {
+  p.classList.toggle('selected');
+  updateRecurrenceSummary();
+}));
+document.querySelectorAll('input[name="rec-daily"]').forEach(r => r.addEventListener('change', updateRecurrenceSummary));
+recCustomIntervalEl.addEventListener('input', updateRecurrenceSummary);
+recEndDateEl.addEventListener('change', updateRecurrenceSummary);
+ct.date.addEventListener('change', () => {
+  recMonthlyDayEl.textContent = new Date((ct.date.value || createTaskDateKey) + 'T00:00:00').getDate();
+  updateRecurrenceSummary();
+});
+
+board.addEventListener('click', e => {
+  const addRecurringBtn = e.target.closest('.add-recurring-btn');
+  if (addRecurringBtn) { openCreateTaskModal(addRecurringBtn.dataset.date); }
+});
+
+// ---------- create modal: aviso de volume (>90 instâncias) ----------
+const RECURRENCE_VOLUME_WARNING_THRESHOLD = 90;
+const confirmVolumeOverlay = document.getElementById('confirmVolumeOverlay');
+const confirmVolumeCountEl = document.getElementById('confirmVolumeCount');
+const confirmVolumeStartEl = document.getElementById('confirmVolumeStart');
+const confirmVolumeEndEl = document.getElementById('confirmVolumeEnd');
+const confirmVolumeBtnEl = document.getElementById('confirmVolumeBtn');
+const cancelVolumeBtnEl = document.getElementById('cancelVolumeBtn');
+
+let pendingRecurrenceRule = null;
+let pendingRecurrenceDates = null;
+
+function closeConfirmVolumeOverlay() {
+  confirmVolumeOverlay.classList.add('hidden');
+  pendingRecurrenceRule = null;
+  pendingRecurrenceDates = null;
+}
+
+function handleSaveCreateTask() {
+  if (saveCreateTaskBtn.disabled) return;
+  const name = ct.name.value.trim();
+  if (!name) return;
+  const startDateKey = ct.date.value || createTaskDateKey;
+
+  if (!recurrenceOn) {
+    commitCreateTask(null, [startDateKey]);
+    return;
+  }
+
+  const rule = buildRecurrenceRule();
+  const dates = generateRecurrenceInstances(rule, startDateKey);
+  if (!dates.length) return; // guarda extra: botão já deveria estar disabled (fe-09)
+
+  if (dates.length > RECURRENCE_VOLUME_WARNING_THRESHOLD) {
+    pendingRecurrenceRule = rule;
+    pendingRecurrenceDates = dates;
+    confirmVolumeCountEl.textContent = dates.length;
+    confirmVolumeStartEl.textContent = fmtDateBR(startDateKey);
+    confirmVolumeEndEl.textContent = fmtDateBR(rule.endDate);
+    confirmVolumeBtnEl.textContent = `Criar ${dates.length} tarefas`;
+    confirmVolumeOverlay.classList.remove('hidden');
+    return;
+  }
+
+  commitCreateTask(rule, dates);
+}
+
+saveCreateTaskBtn.addEventListener('click', handleSaveCreateTask);
+cancelVolumeBtnEl.addEventListener('click', closeConfirmVolumeOverlay);
+confirmVolumeOverlay.addEventListener('click', e => { if (e.target === confirmVolumeOverlay) closeConfirmVolumeOverlay(); });
+confirmVolumeBtnEl.addEventListener('click', () => {
+  const rule = pendingRecurrenceRule, dates = pendingRecurrenceDates;
+  confirmVolumeOverlay.classList.add('hidden');
+  pendingRecurrenceRule = null;
+  pendingRecurrenceDates = null;
+  commitCreateTask(rule, dates);
+});
+
+function commitCreateTask(rule, dates) {
+  const board = currentBoard();
+  const tasks = board.tasks;
+  const name = ct.name.value.trim();
+  const link = ct.link.value.trim();
+
+  function pushInstance(dateKey, seriesId, recurrenceRule) {
+    const normalMax = tasks.filter(t => t.date === dateKey && !t.urgent).reduce((m, t) => Math.max(m, t.priority || 0), 0);
+    tasks.push({
+      id: uid(), name, date: dateKey, deliveryDate: dateKey, link, duration: 0,
+      priority: normalMax + 1, urgent: false, urgentRank: 0,
+      delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
+      fieldValues: {}, team: [],
+      seriesId, recurrenceRule, isException: false,
+    });
+  }
+
+  if (!rule) {
+    pushInstance(dates[0], null, null);
+  } else {
+    const seriesId = uid();
+    dates.forEach(dateKey => pushInstance(dateKey, seriesId, rule));
+  }
+
+  closeCreateTaskModal();
+  save();
+  render();
+}
+
 // ---------- modal ----------
 const overlay = document.getElementById('modalOverlay');
 const fFieldsContainer = document.getElementById('f-fields');
@@ -729,6 +1027,13 @@ const f = {
 };
 const delegateFields = document.getElementById('delegateFields');
 const priorityField = document.getElementById('priorityField');
+const seriesInfoBarEl = document.getElementById('seriesInfoBar');
+const seriesInfoTextEl = document.getElementById('seriesInfoText');
+
+function formatSeriesInfoText(t) {
+  const summary = formatRecurrenceSummary(t.recurrenceRule).replace(/^🔁\s*/, '');
+  return `Série: ${t.name} · ${summary}`;
+}
 
 function renderModalFields(task, board = currentBoard()) {
   const fields = board.fields || [];
@@ -863,6 +1168,15 @@ function openModal(id, board = currentBoard()) {
   editingId = id;
   editingTaskBoardId = board.id;
   const t = findTask(id, board);
+  if (t.seriesId && t.recurrenceRule && !t.isException) {
+    // Instâncias já marcadas isException se comportam como tarefa comum (não perguntam escopo ao
+    // editar/excluir) — mostrar a barra de série aqui induziria o usuário a achar que a edição vai
+    // perguntar escopo, quando na verdade não vai (ver critério de aceite sobre isException).
+    seriesInfoTextEl.textContent = formatSeriesInfoText(t);
+    seriesInfoBarEl.classList.remove('hidden');
+  } else {
+    seriesInfoBarEl.classList.add('hidden');
+  }
   f.name.value = t.name;
   f.date.value = t.deliveryDate || t.date;
   f.link.value = t.link || '';
@@ -884,6 +1198,8 @@ function closeModal() {
   overlay.classList.add('hidden');
   editingId = null;
   editingTaskBoardId = null;
+  editScopeChoice = null;
+  pendingPatchFn = null;
   addingTeamMember = false;
   addTeamMemberBtnEl.classList.remove('hidden');
   addTeamMemberFormEl.classList.add('hidden');
@@ -894,7 +1210,72 @@ function closeModal() {
 document.getElementById('closeModal').addEventListener('click', closeModal);
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
 
-function patch(fn) {
+// ---------- edição em série: "apenas esta ocorrência" x "esta e todas as futuras" ----------
+// editScopeChoice vale para o resto da sessão de edição (até closeModal()): null (ainda não perguntado),
+// 'only' (edições aplicam só na instância aberta) ou 'all' (edições propagam para a série).
+let editScopeChoice = null;
+let pendingPatchFn = null;
+
+const confirmEditScopeOverlay = document.getElementById('confirmEditScopeOverlay');
+const editScopeOnlyThisBtn = document.getElementById('editScopeOnlyThis');
+const editScopeAllFutureBtn = document.getElementById('editScopeAllFuture');
+const editScopeOnlyThisDescEl = document.getElementById('editScopeOnlyThisDesc');
+const editScopeAllFutureDescEl = document.getElementById('editScopeAllFutureDesc');
+const cancelEditScopeBtn = document.getElementById('cancelEditScope');
+
+function openEditScopeModal(t) {
+  const dateLabel = fmtDateBR(t.date);
+  editScopeOnlyThisDescEl.textContent = `Somente ${dateLabel} será alterada. O restante da série permanece igual.`;
+  editScopeAllFutureDescEl.textContent = `${dateLabel} e todas as ocorrências seguintes serão atualizadas.`;
+  confirmEditScopeOverlay.classList.remove('hidden');
+}
+function closeEditScopeModal() { confirmEditScopeOverlay.classList.add('hidden'); }
+
+function resolveEditScope(choice) {
+  editScopeChoice = choice;
+  closeEditScopeModal();
+  const fn = pendingPatchFn;
+  pendingPatchFn = null;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (t && fn) {
+    // "Apenas esta ocorrência" tira a instância da série de fato (fe-14/v1): sem isso, ela
+    // continuaria contando como parte ativa da série e seria sobrescrita por um futuro
+    // "esta e todas as futuras" aplicado a partir de uma instância anterior, revertendo
+    // silenciosamente a decisão do usuário de isolar essa ocorrência.
+    if (choice === 'only') t.isException = true;
+    applyPatchWithScope(t, board, fn, choice);
+  }
+}
+editScopeOnlyThisBtn.addEventListener('click', () => resolveEditScope('only'));
+editScopeAllFutureBtn.addEventListener('click', () => resolveEditScope('all'));
+cancelEditScopeBtn.addEventListener('click', () => {
+  // Sem decisão de escopo: descarta a mudança pendente (nada é salvo) e revalida os campos do
+  // modal a partir do estado em memória (que não mudou), já que o app não tem "desfazer" de input.
+  pendingPatchFn = null;
+  closeEditScopeModal();
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  if (editingId) openModal(editingId, board);
+});
+confirmEditScopeOverlay.addEventListener('click', e => { if (e.target === confirmEditScopeOverlay) cancelEditScopeBtn.click(); });
+
+function applyPatchWithScope(t, board, fn, scope) {
+  if (scope === 'all') {
+    board.tasks
+      .filter(x => x.seriesId === t.seriesId && !x.isException && x.date >= t.date)
+      .forEach(x => fn(x, board));
+  } else {
+    fn(t, board);
+  }
+  save();
+  refreshCalendarAndBoard();
+}
+
+// directPatch: aplica a mutação diretamente na instância aberta, sem passar pela pergunta de
+// escopo — usado pelos campos que mudam a data da tarefa (f.date/f.delegatedDate), cujo
+// comportamento ao mover uma instância de série é sempre virar exceção (fe-16), nunca propagar
+// para a série.
+function directPatch(fn) {
   const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
   const t = findTask(editingId, board);
   if (!t) return;
@@ -902,8 +1283,27 @@ function patch(fn) {
   save(); refreshCalendarAndBoard();
 }
 
+function patch(fn) {
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (!t) return;
+
+  if (t.seriesId && !t.isException && editScopeChoice === null) {
+    pendingPatchFn = fn;
+    openEditScopeModal(t);
+    return;
+  }
+
+  applyPatchWithScope(t, board, fn, editScopeChoice);
+}
+
 f.name.addEventListener('input', () => patch(t => (t.name = f.name.value)));
-f.date.addEventListener('change', () => patch(t => { t.deliveryDate = f.date.value; t.date = f.date.value; }));
+f.date.addEventListener('change', () => directPatch(t => {
+  const prevDate = t.date;
+  t.deliveryDate = f.date.value;
+  t.date = f.date.value;
+  markExceptionIfMoved(t, prevDate);
+}));
 f.link.addEventListener('input', () => patch(t => (t.link = f.link.value)));
 f.duration.addEventListener('input', () => patch(t => (t.duration = Number(f.duration.value) || 0)));
 f.priority.addEventListener('change', () => patch((t, board) => { if (!t.urgent && !t.completed) setPriority(t, Number(f.priority.value) || 1, board); }));
@@ -917,20 +1317,80 @@ f.delegated.addEventListener('change', () => {
   patch(t => (t.delegated = f.delegated.checked));
 });
 f.delegatedTo.addEventListener('input', () => patch(t => (t.delegatedTo = f.delegatedTo.value)));
-f.delegatedDate.addEventListener('change', () => patch(t => { t.delegatedDate = f.delegatedDate.value; if (f.delegatedDate.value) t.date = f.delegatedDate.value; }));
-
-f.urgent.addEventListener('change', () => patch((t, board) => {
-  t.urgent = f.urgent.checked;
-  if (t.urgent) { t.urgentRank = Date.now(); }
-  else { const max = board.tasks.filter(x => x.date === t.date && !x.urgent && x.id !== t.id).reduce((m, x) => Math.max(m, x.priority || 0), 0); t.priority = max + 1; }
+f.delegatedDate.addEventListener('change', () => directPatch(t => {
+  const prevDate = t.date;
+  t.delegatedDate = f.delegatedDate.value;
+  if (f.delegatedDate.value) t.date = f.delegatedDate.value;
+  markExceptionIfMoved(t, prevDate);
 }));
 
+f.urgent.addEventListener('change', () => {
+  // urgentRankBase vive no closure do fn passado a patch(): quando o escopo é "esta e todas as
+  // futuras", applyPatchWithScope chama esse fn uma vez por instância da série na mesma execução
+  // síncrona — o contador decrescente garante urgentRank individual e ordem estável entre elas,
+  // igual ao padrão já usado em finalizeOrder() para o drag-and-drop.
+  let urgentRankBase = Date.now();
+  patch((t, board) => {
+    t.urgent = f.urgent.checked;
+    if (t.urgent) { t.urgentRank = urgentRankBase--; }
+    else { const max = board.tasks.filter(x => x.date === t.date && !x.urgent && x.id !== t.id).reduce((m, x) => Math.max(m, x.priority || 0), 0); t.priority = max + 1; }
+  });
+});
+
+// ---------- exclusão em série: "apenas esta ocorrência" x "esta e todas as futuras" ----------
+const confirmDeleteScopeOverlay = document.getElementById('confirmDeleteScopeOverlay');
+const deleteScopeOnlyThisBtn = document.getElementById('deleteScopeOnlyThis');
+const deleteScopeAllFutureBtn = document.getElementById('deleteScopeAllFuture');
+const deleteScopeOnlyThisDescEl = document.getElementById('deleteScopeOnlyThisDesc');
+const deleteScopeAllFutureDescEl = document.getElementById('deleteScopeAllFutureDesc');
+const cancelDeleteScopeBtn = document.getElementById('cancelDeleteScope');
+
+function openDeleteScopeModal(t) {
+  const dateLabel = fmtDateBR(t.date);
+  deleteScopeOnlyThisDescEl.textContent = `Somente ${dateLabel} será removida. O restante da série permanece.`;
+  deleteScopeAllFutureDescEl.textContent = `${dateLabel} e todas as ocorrências posteriores serão excluídas. Ocorrências anteriores permanecem.`;
+  confirmDeleteScopeOverlay.classList.remove('hidden');
+}
+function closeDeleteScopeModal() { confirmDeleteScopeOverlay.classList.add('hidden'); }
+
+// Remove a instância selecionada e todas as posteriores da série (date >= a dela), inclusive as
+// que já eram exceção (is_exception = true) — diferente da edição em massa, que não afeta exceções.
+function deleteSeriesFromInstance(t, board) {
+  board.tasks = board.tasks.filter(x => !(x.seriesId === t.seriesId && x.date >= t.date));
+  save();
+  refreshCalendarAndBoard();
+}
+
+deleteScopeOnlyThisBtn.addEventListener('click', () => {
+  closeDeleteScopeModal();
+  if (!editingId) return;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  deleteTask(editingId, board);
+  closeModal();
+});
+deleteScopeAllFutureBtn.addEventListener('click', () => {
+  closeDeleteScopeModal();
+  if (!editingId) return;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (!t) return;
+  deleteSeriesFromInstance(t, board);
+  closeModal();
+});
+cancelDeleteScopeBtn.addEventListener('click', closeDeleteScopeModal);
+confirmDeleteScopeOverlay.addEventListener('click', e => { if (e.target === confirmDeleteScopeOverlay) closeDeleteScopeModal(); });
+
 document.getElementById('deleteTask').addEventListener('click', () => {
-  if (editingId) {
-    const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-    deleteTask(editingId, board);
-    closeModal();
+  if (!editingId) return;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (!t) return;
+  if (t.seriesId && !t.isException) {
+    openDeleteScopeModal(t);
+    return;
   }
+  deleteTask(editingId, board);
+  closeModal();
 });
 
 // ---------- board interactions (delegated) ----------
@@ -1003,7 +1463,11 @@ function finalizeOrder(col) {
   const dateKey = col.dataset.date;
   const ids = [...col.querySelectorAll('.card')].map(c => c.dataset.id);
   const ordered = ids.map(id => findTask(id));
-  ordered.forEach(t => { t.date = dateKey; });
+  ordered.forEach(t => {
+    const prevDate = t.date;
+    t.date = dateKey;
+    markExceptionIfMoved(t, prevDate);
+  });
 
   let normalIdx = 0;
   let urgentRankBase = Date.now();
@@ -1707,8 +2171,10 @@ function applyShutdown() {
     const t = board && findTask(choice.taskId, board);
     if (!t) return;
     const newDate = (choice.mode === 'custom' && choice.date) ? choice.date : tomorrow;
+    const prevDate = t.date;
     t.date = newDate;
     t.deliveryDate = newDate;
+    markExceptionIfMoved(t, prevDate);
   });
   save();
   refreshCalendarAndBoard();
@@ -1759,9 +2225,11 @@ dayPopupPanelEl.addEventListener('click', e => {
     const board = boards.find(b => b.id === adiar.dataset.boardId);
     const t = board && findTask(adiar.dataset.taskId, board);
     if (t) {
+      const prevDate = t.date;
       const tomorrowKey = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
       t.date = tomorrowKey;
       t.deliveryDate = tomorrowKey;
+      markExceptionIfMoved(t, prevDate);
       save();
       refreshCalendarAndBoard();
       renderDayPopup();

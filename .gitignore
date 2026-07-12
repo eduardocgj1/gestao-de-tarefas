@@ -8,6 +8,10 @@ node_modules/
 data.json
 data.json.bak
 
+# Backups manuais de dados reais (contêm dados pessoais — nunca commitar)
+boards_import.csv
+tasks_import.csv
+
 # Sistema
 .DS_Store
 

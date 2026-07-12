@@ -115,6 +115,7 @@
 <div id="modalOverlay" class="modal-overlay hidden">
   <div class="modal">
     <button id="closeModal" class="close-btn">&times;</button>
+    <div id="seriesInfoBar" class="series-info-bar hidden">🔁 <span id="seriesInfoText"></span></div>
     <input id="f-name" class="f-name" placeholder="Nome da atividade">
 
     <label>Data de entrega
@@ -183,11 +184,80 @@
 <div id="createTaskOverlay" class="modal-overlay hidden">
   <div class="modal">
     <button id="closeCreateTaskModal" class="close-btn">&times;</button>
-    <input id="ct-name" class="f-name" placeholder="Nome da atividade">
+    <input id="ct-name" class="f-name" placeholder="Nome da atividade" required>
 
     <label>Data
       <input type="date" id="ct-date">
     </label>
+
+    <div class="toggle-row" id="recToggleRow">
+      <span class="tr-icon">🔁</span>
+      <span class="tr-label">Recorrente</span>
+      <span class="tr-hint" id="recToggleHint">Não</span>
+      <div class="toggle-switch" id="recToggleSwitch"></div>
+    </div>
+
+    <div class="recurrence-panel hidden" id="recurrencePanel">
+      <div class="recurrence-type-tabs">
+        <button type="button" class="rec-tab active" data-type="daily">Diário</button>
+        <button type="button" class="rec-tab" data-type="weekly">Semanal</button>
+        <button type="button" class="rec-tab" data-type="monthly">Mensal</button>
+        <button type="button" class="rec-tab" data-type="custom">Personalizado</button>
+      </div>
+
+      <div class="recurrence-options">
+        <div class="rec-section active" data-section="daily">
+          <div class="rec-options-list">
+            <label class="rec-option-row">
+              <input type="radio" name="rec-daily" value="all" checked>
+              <span>Todos os dias</span>
+            </label>
+            <label class="rec-option-row">
+              <input type="radio" name="rec-daily" value="workdays">
+              <span>Apenas dias úteis (seg–sex)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="rec-section" data-section="weekly">
+          <div class="weekday-pills">
+            <span class="weekday-pill" data-day="mon">Seg</span>
+            <span class="weekday-pill" data-day="tue">Ter</span>
+            <span class="weekday-pill" data-day="wed">Qua</span>
+            <span class="weekday-pill" data-day="thu">Qui</span>
+            <span class="weekday-pill" data-day="fri">Sex</span>
+            <span class="weekday-pill" data-day="sat">Sáb</span>
+            <span class="weekday-pill" data-day="sun">Dom</span>
+          </div>
+        </div>
+
+        <div class="rec-section" data-section="monthly">
+          <div class="rec-options-list">
+            <label class="rec-option-row">
+              <span>Todo dia <strong id="rec-monthly-day">1</strong> do mês</span>
+            </label>
+          </div>
+          <div class="rec-hint-text">O dia é definido automaticamente pela data de início.</div>
+        </div>
+
+        <div class="rec-section" data-section="custom">
+          <div class="custom-interval-row">
+            <span>A cada</span>
+            <input type="number" id="rec-custom-interval" value="14" min="2" max="60">
+            <span>dias</span>
+          </div>
+          <div class="rec-hint-text">Intervalo entre 2 e 60 dias.</div>
+        </div>
+      </div>
+
+      <div class="end-date-row">
+        <label>Repetir até
+          <input type="date" id="rec-end-date">
+        </label>
+      </div>
+
+      <div class="recurrence-summary" id="recurrenceSummary"></div>
+    </div>
 
     <label>Link
       <input type="url" id="ct-link" placeholder="https://">
@@ -197,6 +267,56 @@
       <button type="button" id="cancelCreateTask" class="btn-neutral">Cancelar</button>
       <button type="button" id="saveCreateTask" class="btn-primary">Salvar tarefa</button>
     </div>
+  </div>
+</div>
+
+<div id="confirmVolumeOverlay" class="modal-overlay hidden">
+  <div class="modal confirm-modal">
+    <div class="confirm-icon">📋</div>
+    <div class="confirm-title">Confirmar criação em série</div>
+    <div class="confirm-desc">Isso vai criar <strong id="confirmVolumeCount">0</strong> tarefas no board, de <span id="confirmVolumeStart"></span> até <span id="confirmVolumeEnd"></span>.</div>
+    <div class="modal-footer">
+      <button type="button" id="cancelVolumeBtn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="confirmVolumeBtn" class="btn-primary">Criar tarefas</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirmEditScopeOverlay" class="modal-overlay hidden">
+  <div class="modal confirm-modal">
+    <div class="confirm-icon">✏️</div>
+    <div class="confirm-title">Editar tarefa recorrente</div>
+    <div class="confirm-desc">Esta tarefa faz parte de uma série recorrente. Como você quer aplicar a edição?</div>
+    <div class="confirm-options">
+      <button type="button" id="editScopeOnlyThis" class="confirm-option">
+        <div class="confirm-option-title">Apenas esta ocorrência</div>
+        <div class="confirm-option-desc" id="editScopeOnlyThisDesc"></div>
+      </button>
+      <button type="button" id="editScopeAllFuture" class="confirm-option">
+        <div class="confirm-option-title">Esta e todas as futuras</div>
+        <div class="confirm-option-desc" id="editScopeAllFutureDesc"></div>
+      </button>
+    </div>
+    <button type="button" id="cancelEditScope" class="btn-neutral confirm-cancel-btn">Cancelar</button>
+  </div>
+</div>
+
+<div id="confirmDeleteScopeOverlay" class="modal-overlay hidden">
+  <div class="modal confirm-modal">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title">Excluir tarefa recorrente</div>
+    <div class="confirm-desc">Esta tarefa faz parte de uma série recorrente. O que você quer excluir?</div>
+    <div class="confirm-options">
+      <button type="button" id="deleteScopeOnlyThis" class="confirm-option">
+        <div class="confirm-option-title">Apenas esta ocorrência</div>
+        <div class="confirm-option-desc" id="deleteScopeOnlyThisDesc"></div>
+      </button>
+      <button type="button" id="deleteScopeAllFuture" class="confirm-option danger">
+        <div class="confirm-option-title">Esta e todas as futuras</div>
+        <div class="confirm-option-desc" id="deleteScopeAllFutureDesc"></div>
+      </button>
+    </div>
+    <button type="button" id="cancelDeleteScope" class="btn-neutral confirm-cancel-btn">Cancelar</button>
   </div>
 </div>
 
