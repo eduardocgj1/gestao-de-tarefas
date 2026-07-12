@@ -282,6 +282,44 @@
   </div>
 </div>
 
+<div id="confirmEditScopeOverlay" class="modal-overlay hidden">
+  <div class="modal confirm-modal">
+    <div class="confirm-icon">✏️</div>
+    <div class="confirm-title">Editar tarefa recorrente</div>
+    <div class="confirm-desc">Esta tarefa faz parte de uma série recorrente. Como você quer aplicar a edição?</div>
+    <div class="confirm-options">
+      <button type="button" id="editScopeOnlyThis" class="confirm-option">
+        <div class="confirm-option-title">Apenas esta ocorrência</div>
+        <div class="confirm-option-desc" id="editScopeOnlyThisDesc"></div>
+      </button>
+      <button type="button" id="editScopeAllFuture" class="confirm-option">
+        <div class="confirm-option-title">Esta e todas as futuras</div>
+        <div class="confirm-option-desc" id="editScopeAllFutureDesc"></div>
+      </button>
+    </div>
+    <button type="button" id="cancelEditScope" class="btn-neutral confirm-cancel-btn">Cancelar</button>
+  </div>
+</div>
+
+<div id="confirmDeleteScopeOverlay" class="modal-overlay hidden">
+  <div class="modal confirm-modal">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title">Excluir tarefa recorrente</div>
+    <div class="confirm-desc">Esta tarefa faz parte de uma série recorrente. O que você quer excluir?</div>
+    <div class="confirm-options">
+      <button type="button" id="deleteScopeOnlyThis" class="confirm-option">
+        <div class="confirm-option-title">Apenas esta ocorrência</div>
+        <div class="confirm-option-desc" id="deleteScopeOnlyThisDesc"></div>
+      </button>
+      <button type="button" id="deleteScopeAllFuture" class="confirm-option danger">
+        <div class="confirm-option-title">Esta e todas as futuras</div>
+        <div class="confirm-option-desc" id="deleteScopeAllFutureDesc"></div>
+      </button>
+    </div>
+    <button type="button" id="cancelDeleteScope" class="btn-neutral confirm-cancel-btn">Cancelar</button>
+  </div>
+</div>
+
 <div id="eventModalOverlay" class="modal-overlay hidden">
   <div class="modal">
     <button id="closeEventModal" class="close-btn">&times;</button>
