@@ -837,7 +837,10 @@ function formatRecurrenceSummary(rule) {
 function updateRecurrenceSummary() {
   if (!recurrenceOn) return;
   const rule = buildRecurrenceRule();
-  const hasZeroOccurrences = !!rule.endDate && generateRecurrenceInstances(rule, ct.date.value || createTaskDateKey).length === 0;
+  // Sem data de término, generateRecurrenceInstances() não tem como calcular ocorrências futuras —
+  // trata como o mesmo caso de "zero ocorrências" (bloqueia o salvamento com o mesmo erro inline),
+  // em vez de deixar passar em branco e falhar silenciosamente ao clicar "Salvar tarefa".
+  const hasZeroOccurrences = !rule.endDate || generateRecurrenceInstances(rule, ct.date.value || createTaskDateKey).length === 0;
   if (hasZeroOccurrences) {
     recurrenceSummaryEl.textContent = 'Esse padrão não gera nenhuma ocorrência antes da data de término.';
     recurrenceSummaryEl.classList.add('error');
@@ -1165,7 +1168,10 @@ function openModal(id, board = currentBoard()) {
   editingId = id;
   editingTaskBoardId = board.id;
   const t = findTask(id, board);
-  if (t.seriesId && t.recurrenceRule) {
+  if (t.seriesId && t.recurrenceRule && !t.isException) {
+    // Instâncias já marcadas isException se comportam como tarefa comum (não perguntam escopo ao
+    // editar/excluir) — mostrar a barra de série aqui induziria o usuário a achar que a edição vai
+    // perguntar escopo, quando na verdade não vai (ver critério de aceite sobre isException).
     seriesInfoTextEl.textContent = formatSeriesInfoText(t);
     seriesInfoBarEl.classList.remove('hidden');
   } else {
@@ -1232,7 +1238,14 @@ function resolveEditScope(choice) {
   pendingPatchFn = null;
   const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
   const t = findTask(editingId, board);
-  if (t && fn) applyPatchWithScope(t, board, fn, choice);
+  if (t && fn) {
+    // "Apenas esta ocorrência" tira a instância da série de fato (fe-14/v1): sem isso, ela
+    // continuaria contando como parte ativa da série e seria sobrescrita por um futuro
+    // "esta e todas as futuras" aplicado a partir de uma instância anterior, revertendo
+    // silenciosamente a decisão do usuário de isolar essa ocorrência.
+    if (choice === 'only') t.isException = true;
+    applyPatchWithScope(t, board, fn, choice);
+  }
 }
 editScopeOnlyThisBtn.addEventListener('click', () => resolveEditScope('only'));
 editScopeAllFutureBtn.addEventListener('click', () => resolveEditScope('all'));
