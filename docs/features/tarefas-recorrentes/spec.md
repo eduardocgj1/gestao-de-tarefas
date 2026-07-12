@@ -212,7 +212,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
        Depende de: nenhuma
 
 ### ⚙️ Backend
-- [ ] `be-01` Mapear os 3 novos campos (`seriesId`↔`series_id`, `recurrenceRule`↔`recurrence_rule`, `isException`↔`is_exception`) em `appTaskToDb()` e `dbTaskToApp()`
+- [x] `be-01` Mapear os 3 novos campos (`seriesId`↔`series_id`, `recurrenceRule`↔`recurrence_rule`, `isException`↔`is_exception`) em `appTaskToDb()` e `dbTaskToApp()`
        Onde: `server.js:160` (`appTaskToDb`) e `server.js:183` (`dbTaskToApp`)
        Depende de: `db-01`
 

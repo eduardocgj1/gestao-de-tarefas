@@ -169,6 +169,9 @@ function appTaskToDb(t, boardId) {
     completed_at:   t.completedAt ?? null,
     field_values:   t.fieldValues ?? {},
     team:           t.team       ?? [],
+    series_id:       t.seriesId       ?? null,
+    recurrence_rule: t.recurrenceRule ?? null,
+    is_exception:    t.isException    ?? false,
   };
 }
 
@@ -191,6 +194,9 @@ function dbTaskToApp(t) {
     completedAt:   t.completed_at   ?? null,
     fieldValues:   t.field_values   ?? {},
     team:          t.team           ?? [],
+    seriesId:       t.series_id       ?? null,
+    recurrenceRule: t.recurrence_rule ?? null,
+    isException:    t.is_exception    ?? false,
   };
 }
 
