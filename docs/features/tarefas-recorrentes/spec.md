@@ -219,7 +219,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 ### 🎨 Frontend — estrutura
 *Só `index.html` e `styles.css` — sem event listeners (isso fica na seção de lógica).*
 
-- [ ] `fe-01` Markup do novo modal "Nova tarefa" (overlay + `.modal`, reaproveitando a classe `.modal` real do app — **360px/`border-radius:18px`, não os 420px/16px do protótipo**, ver correção do `design-critic` em "Decisões de UX tomadas"): campos Nome, Data, Link e footer com "Cancelar"/"Salvar tarefa"
+- [x] `fe-01` Markup do novo modal "Nova tarefa" (overlay + `.modal`, reaproveitando a classe `.modal` real do app — **360px/`border-radius:18px`, não os 420px/16px do protótipo**, ver correção do `design-critic` em "Decisões de UX tomadas"): campos Nome, Data, Link e footer com "Cancelar"/"Salvar tarefa"
        Onde: `index.html`, novo bloco próximo ao `#modalOverlay` existente (linha ~115); reaproveitar `public/styles.css:597-606` (`.modal`) como base, usando `prototype.html:538-650` (`#createOverlay`) só como referência de estrutura/campos, não de dimensões
        Depende de: nenhuma
 - [ ] `fe-02` Markup do toggle "Recorrente" + painel de recorrência (abas Diário/Semanal/Mensal/Personalizado, weekday-pills, campo numérico do personalizado, "Repetir até", linha de resumo textual) dentro do modal de `fe-01`

@@ -180,6 +180,26 @@
   </div>
 </div>
 
+<div id="createTaskOverlay" class="modal-overlay hidden">
+  <div class="modal">
+    <button id="closeCreateTaskModal" class="close-btn">&times;</button>
+    <input id="ct-name" class="f-name" placeholder="Nome da atividade">
+
+    <label>Data
+      <input type="date" id="ct-date">
+    </label>
+
+    <label>Link
+      <input type="url" id="ct-link" placeholder="https://">
+    </label>
+
+    <div class="modal-footer">
+      <button type="button" id="cancelCreateTask" class="btn-neutral">Cancelar</button>
+      <button type="button" id="saveCreateTask" class="btn-primary">Salvar tarefa</button>
+    </div>
+  </div>
+</div>
+
 <div id="eventModalOverlay" class="modal-overlay hidden">
   <div class="modal">
     <button id="closeEventModal" class="close-btn">&times;</button>
