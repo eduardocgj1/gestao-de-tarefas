@@ -241,7 +241,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 ### ⚡ Frontend — lógica
 *Só `app.js`.*
 
-- [ ] `fe-07` Função pura `generateRecurrenceInstances(rule, startDateKey)` → retorna array de `dateKey`s segundo os 4 padrões (`daily`+`workdaysOnly`, `weekly`+`days[]`, `monthly`+`dayOfMonth` pulando meses que não têm o dia, `custom`+`interval`), respeitando `endDate`
+- [x] `fe-07` Função pura `generateRecurrenceInstances(rule, startDateKey)` → retorna array de `dateKey`s segundo os 4 padrões (`daily`+`workdaysOnly`, `weekly`+`days[]`, `monthly`+`dayOfMonth` pulando meses que não têm o dia, `custom`+`interval`), respeitando `endDate`
        Onde: `app.js`, próximo às funções de data (`toKey`/`addDays`, app.js:70-71)
        Depende de: nenhuma
 - [ ] `fe-08` Abrir/fechar o modal de `fe-01` (trigger a definir: botão junto ao formulário rápido de coluna); toggle "Recorrente" expande/colapsa o painel; troca de abas do padrão; função `formatRecurrenceSummary(rule)` e atualização ao vivo da linha de resumo a cada mudança nos controles

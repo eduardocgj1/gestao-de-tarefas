@@ -69,6 +69,51 @@ function clamp(d) {
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function startOfWeek(d) { return addDays(d, -d.getDay()); }
 function toKey(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+// ---------- recorrência ----------
+const REC_WEEKDAY_INDEX = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+function generateRecurrenceInstances(rule, startDateKey) {
+  const start = new Date(startDateKey + 'T00:00:00');
+  const end = new Date(rule.endDate + 'T00:00:00');
+  const keys = [];
+  if (isNaN(start) || isNaN(end) || start > end) return keys;
+
+  if (rule.type === 'daily') {
+    let d = new Date(start);
+    while (d <= end) {
+      const dow = d.getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      if (!(rule.workdaysOnly && isWeekend)) keys.push(toKey(d));
+      d = addDays(d, 1);
+    }
+  } else if (rule.type === 'weekly') {
+    const selected = new Set((rule.days || []).map(k => REC_WEEKDAY_INDEX[k]));
+    let d = new Date(start);
+    while (d <= end) {
+      if (selected.has(d.getDay())) keys.push(toKey(d));
+      d = addDays(d, 1);
+    }
+  } else if (rule.type === 'monthly') {
+    const dayOfMonth = rule.dayOfMonth;
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cursor <= end) {
+      const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+      if (dayOfMonth <= daysInMonth) {
+        const candidate = new Date(cursor.getFullYear(), cursor.getMonth(), dayOfMonth);
+        if (candidate >= start && candidate <= end) keys.push(toKey(candidate));
+      }
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    }
+  } else if (rule.type === 'custom') {
+    const interval = Math.max(2, Math.min(60, Number(rule.interval) || 2));
+    let d = new Date(start);
+    while (d <= end) {
+      keys.push(toKey(d));
+      d = addDays(d, interval);
+    }
+  }
+  return keys;
+}
 function label(d) { return `${String(d.getDate()).padStart(2, '0')}/${MON[d.getMonth()]} - ${DOW[d.getDay()]}`; }
 function fmtMin(m) {
   m = Number(m) || 0;
