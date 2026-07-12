@@ -1187,6 +1187,8 @@ function closeModal() {
   overlay.classList.add('hidden');
   editingId = null;
   editingTaskBoardId = null;
+  editScopeChoice = null;
+  pendingPatchFn = null;
   addingTeamMember = false;
   addTeamMemberBtnEl.classList.remove('hidden');
   addTeamMemberFormEl.classList.add('hidden');
@@ -1197,7 +1199,65 @@ function closeModal() {
 document.getElementById('closeModal').addEventListener('click', closeModal);
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
 
-function patch(fn) {
+// ---------- edição em série: "apenas esta ocorrência" x "esta e todas as futuras" ----------
+// editScopeChoice vale para o resto da sessão de edição (até closeModal()): null (ainda não perguntado),
+// 'only' (edições aplicam só na instância aberta) ou 'all' (edições propagam para a série).
+let editScopeChoice = null;
+let pendingPatchFn = null;
+
+const confirmEditScopeOverlay = document.getElementById('confirmEditScopeOverlay');
+const editScopeOnlyThisBtn = document.getElementById('editScopeOnlyThis');
+const editScopeAllFutureBtn = document.getElementById('editScopeAllFuture');
+const editScopeOnlyThisDescEl = document.getElementById('editScopeOnlyThisDesc');
+const editScopeAllFutureDescEl = document.getElementById('editScopeAllFutureDesc');
+const cancelEditScopeBtn = document.getElementById('cancelEditScope');
+
+function openEditScopeModal(t) {
+  const dateLabel = fmtDateBR(t.date);
+  editScopeOnlyThisDescEl.textContent = `Somente ${dateLabel} será alterada. O restante da série permanece igual.`;
+  editScopeAllFutureDescEl.textContent = `${dateLabel} e todas as ocorrências seguintes serão atualizadas.`;
+  confirmEditScopeOverlay.classList.remove('hidden');
+}
+function closeEditScopeModal() { confirmEditScopeOverlay.classList.add('hidden'); }
+
+function resolveEditScope(choice) {
+  editScopeChoice = choice;
+  closeEditScopeModal();
+  const fn = pendingPatchFn;
+  pendingPatchFn = null;
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (t && fn) applyPatchWithScope(t, board, fn, choice);
+}
+editScopeOnlyThisBtn.addEventListener('click', () => resolveEditScope('only'));
+editScopeAllFutureBtn.addEventListener('click', () => resolveEditScope('all'));
+cancelEditScopeBtn.addEventListener('click', () => {
+  // Sem decisão de escopo: descarta a mudança pendente (nada é salvo) e revalida os campos do
+  // modal a partir do estado em memória (que não mudou), já que o app não tem "desfazer" de input.
+  pendingPatchFn = null;
+  closeEditScopeModal();
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  if (editingId) openModal(editingId, board);
+});
+confirmEditScopeOverlay.addEventListener('click', e => { if (e.target === confirmEditScopeOverlay) cancelEditScopeBtn.click(); });
+
+function applyPatchWithScope(t, board, fn, scope) {
+  if (scope === 'all') {
+    board.tasks
+      .filter(x => x.seriesId === t.seriesId && !x.isException && x.date >= t.date)
+      .forEach(x => fn(x, board));
+  } else {
+    fn(t, board);
+  }
+  save();
+  refreshCalendarAndBoard();
+}
+
+// directPatch: aplica a mutação diretamente na instância aberta, sem passar pela pergunta de
+// escopo — usado pelos campos que mudam a data da tarefa (f.date/f.delegatedDate), cujo
+// comportamento ao mover uma instância de série é sempre virar exceção (fe-16), nunca propagar
+// para a série.
+function directPatch(fn) {
   const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
   const t = findTask(editingId, board);
   if (!t) return;
@@ -1205,8 +1265,22 @@ function patch(fn) {
   save(); refreshCalendarAndBoard();
 }
 
+function patch(fn) {
+  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
+  const t = findTask(editingId, board);
+  if (!t) return;
+
+  if (t.seriesId && !t.isException && editScopeChoice === null) {
+    pendingPatchFn = fn;
+    openEditScopeModal(t);
+    return;
+  }
+
+  applyPatchWithScope(t, board, fn, editScopeChoice);
+}
+
 f.name.addEventListener('input', () => patch(t => (t.name = f.name.value)));
-f.date.addEventListener('change', () => patch(t => { t.deliveryDate = f.date.value; t.date = f.date.value; }));
+f.date.addEventListener('change', () => directPatch(t => { t.deliveryDate = f.date.value; t.date = f.date.value; }));
 f.link.addEventListener('input', () => patch(t => (t.link = f.link.value)));
 f.duration.addEventListener('input', () => patch(t => (t.duration = Number(f.duration.value) || 0)));
 f.priority.addEventListener('change', () => patch((t, board) => { if (!t.urgent && !t.completed) setPriority(t, Number(f.priority.value) || 1, board); }));
@@ -1220,7 +1294,7 @@ f.delegated.addEventListener('change', () => {
   patch(t => (t.delegated = f.delegated.checked));
 });
 f.delegatedTo.addEventListener('input', () => patch(t => (t.delegatedTo = f.delegatedTo.value)));
-f.delegatedDate.addEventListener('change', () => patch(t => { t.delegatedDate = f.delegatedDate.value; if (f.delegatedDate.value) t.date = f.delegatedDate.value; }));
+f.delegatedDate.addEventListener('change', () => directPatch(t => { t.delegatedDate = f.delegatedDate.value; if (f.delegatedDate.value) t.date = f.delegatedDate.value; }));
 
 f.urgent.addEventListener('change', () => patch((t, board) => {
   t.urgent = f.urgent.checked;
