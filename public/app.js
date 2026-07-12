@@ -216,6 +216,7 @@ async function load() {
   renderPomodoro();
   if (pomodoro.running) startPomodoroInterval();
   if (migrated) save();
+  initWeather();
 }
 let saveTimer = null;
 function save() {
@@ -662,6 +663,338 @@ function toggleMit(boardId, dateKey, taskId) {
   setMitIds(boardId, dateKey, ids);
 }
 
+// ---------- weather ----------
+const WEATHER_LOCATION_KEY = 'weather-location';
+const WEATHER_OVERRIDES_KEY = 'weather-date-overrides';
+const WEATHER_CACHE_KEY = 'weather-cache';
+const WEATHER_CACHE_TTL = 60 * 60 * 1000;
+
+const WEATHER_ICONS = {
+  0: '☀️',
+  1: '🌤', 2: '⛅', 3: '🌥',
+  45: '🌫', 48: '🌫',
+  51: '🌦', 53: '🌦', 55: '🌦', 56: '🌦', 57: '🌦',
+  61: '🌧', 63: '🌧', 65: '🌧', 66: '🌧', 67: '🌧',
+  71: '🌨', 73: '🌨', 75: '🌨', 77: '🌨',
+  80: '🌧', 81: '🌧', 82: '🌧',
+  95: '⛈', 96: '⛈', 99: '⛈',
+};
+const WEATHER_LABELS = {
+  0: 'Céu limpo',
+  1: 'Poucas nuvens', 2: 'Parcialmente nublado', 3: 'Nublado',
+  45: 'Neblina', 48: 'Neblina com geada',
+  51: 'Garoa fraca', 53: 'Garoa', 55: 'Garoa forte', 56: 'Garoa congelante', 57: 'Garoa congelante forte',
+  61: 'Chuva fraca', 63: 'Chuva', 65: 'Chuva forte', 66: 'Chuva congelante', 67: 'Chuva congelante forte',
+  71: 'Neve fraca', 73: 'Neve', 75: 'Neve forte', 77: 'Grãos de neve',
+  80: 'Pancadas de chuva fracas', 81: 'Pancadas de chuva', 82: 'Pancadas de chuva fortes',
+  95: 'Tempestade', 96: 'Tempestade com granizo', 99: 'Tempestade forte com granizo',
+};
+function weatherIcon(code) { return WEATHER_ICONS[code] || '🌡'; }
+function weatherLabel(code) { return WEATHER_LABELS[code] || ''; }
+
+let weatherLocation = null;      // { name, latitude, longitude, auto } — cidade padrão (demais dias sem override)
+let weatherLocationPending = true;
+let weatherOverrides = {};       // dateKey -> { name, latitude, longitude } — override por dia
+let weatherCacheMap = {};        // coordsKey -> { fetchedAt, daily }
+let weatherSearchOpen = false;
+let weatherSearchQuery = '';
+let weatherSearchResults = [];
+let weatherSearchTimer = null;
+
+function loadWeatherLocationFromStorage() {
+  try {
+    const raw = localStorage.getItem(WEATHER_LOCATION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveWeatherLocation(loc) {
+  weatherLocation = loc;
+  try { localStorage.setItem(WEATHER_LOCATION_KEY, JSON.stringify(loc)); } catch {}
+}
+
+function loadWeatherOverridesFromStorage() {
+  try {
+    const raw = localStorage.getItem(WEATHER_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function setWeatherOverrideForDate(dateKey, loc) {
+  weatherOverrides[dateKey] = loc;
+  try { localStorage.setItem(WEATHER_OVERRIDES_KEY, JSON.stringify(weatherOverrides)); } catch {}
+}
+
+// Localização efetiva de uma data: override específico ou a cidade padrão
+function weatherLocationForDate(dateKey) {
+  return weatherOverrides[dateKey] || weatherLocation;
+}
+
+// Retorna localização salva ou detecta via browser
+async function getWeatherLocation() {
+  const stored = loadWeatherLocationFromStorage();
+  if (stored && stored.latitude != null && stored.longitude != null) {
+    weatherLocation = stored;
+    return stored;
+  }
+  if (!navigator.geolocation) return null;
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
+    });
+    const loc = { name: 'Local atual', latitude: pos.coords.latitude, longitude: pos.coords.longitude, auto: true };
+    saveWeatherLocation(loc);
+    return loc;
+  } catch {
+    return null;
+  }
+}
+
+function coordsKeyFor(lat, lon) { return `${lat.toFixed(2)},${lon.toFixed(2)}`; }
+
+function loadWeatherCacheMapFromStorage() {
+  try {
+    const raw = localStorage.getItem(WEATHER_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.daily) return { [parsed.coordsKey]: { fetchedAt: parsed.fetchedAt, daily: parsed.daily } }; // formato antigo (única localização)
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch { return {}; }
+}
+function saveWeatherCacheMap() {
+  try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(weatherCacheMap)); } catch {}
+}
+
+// Busca previsão (com cache de 1h) para uma localização específica
+async function fetchWeather(lat, lon) {
+  const coordsKey = coordsKeyFor(lat, lon);
+  const cached = weatherCacheMap[coordsKey];
+  if (cached && (Date.now() - cached.fetchedAt) < WEATHER_CACHE_TTL) return cached;
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=14`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('weather fetch failed');
+    const json = await res.json();
+    const fresh = { fetchedAt: Date.now(), daily: json.daily };
+    weatherCacheMap[coordsKey] = fresh;
+    saveWeatherCacheMap();
+    return fresh;
+  } catch (err) {
+    console.error('Falha ao buscar previsão do tempo:', err);
+    if (cached) return cached; // offline: usa cache expirado se disponível
+    return null;
+  }
+}
+
+// Retorna { icon, label, max, min } para uma dateKey específica (respeita override da data)
+function weatherForDay(dateKey) {
+  const loc = weatherLocationForDate(dateKey);
+  if (!loc) return null;
+  const cache = weatherCacheMap[coordsKeyFor(loc.latitude, loc.longitude)];
+  if (!cache || !cache.daily || !cache.daily.time) return null;
+  const idx = cache.daily.time.indexOf(dateKey);
+  if (idx === -1) return null;
+  const code = cache.daily.weathercode[idx];
+  return {
+    icon: weatherIcon(code),
+    label: weatherLabel(code),
+    max: Math.round(cache.daily.temperature_2m_max[idx]),
+    min: Math.round(cache.daily.temperature_2m_min[idx]),
+  };
+}
+
+function columnWeatherHtml(dateKey) {
+  const loc = weatherLocationForDate(dateKey);
+  const w = weatherForDay(dateKey);
+  const cityBtn = `<button type="button" class="col-weather-city-btn" data-date="${dateKey}" title="${loc ? 'Trocar cidade' : 'Selecionar cidade'}">📍</button>`;
+  if (!w) return `<div class="col-weather col-weather-empty">${cityBtn}</div>`;
+  const cityName = loc ? `<span class="col-weather-city">${escapeHtml(loc.name)}</span>` : '';
+  return `
+  <div class="col-weather">
+    <span class="col-weather-info">${w.icon} ${w.max}° / ${w.min}°</span>
+    ${cityName}
+    ${cityBtn}
+  </div>`;
+}
+
+// Injeta .col-weather em cada .col-header após render()
+function renderWeatherOnColumns() {
+  document.querySelectorAll('.col-header').forEach(headerEl => {
+    const html = columnWeatherHtml(headerEl.dataset.date);
+    const existing = headerEl.querySelector('.col-weather');
+    if (existing) existing.outerHTML = html;
+    else headerEl.insertAdjacentHTML('beforeend', html);
+  });
+}
+
+function cityLabel(c) { return [c.name, c.admin1, c.country].filter(Boolean).join(', '); }
+
+// Campo de busca com autocomplete (usado na Visão do Dia)
+async function searchCity(query) {
+  if (!query || query.trim().length < 2) return [];
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=5&language=pt`);
+    if (!res.ok) throw new Error('geocoding failed');
+    const json = await res.json();
+    return json.results || [];
+  } catch (err) {
+    console.error('Falha ao buscar cidade:', err);
+    return [];
+  }
+}
+
+function weatherCityResultsHtml() {
+  if (weatherSearchResults.length) {
+    return weatherSearchResults.map(c => `
+      <button type="button" class="weather-city-option" data-lat="${c.latitude}" data-lon="${c.longitude}" data-name="${escapeHtml(cityLabel(c))}">${escapeHtml(cityLabel(c))}</button>
+    `).join('');
+  }
+  return weatherSearchQuery.trim().length >= 2 ? '<div class="weather-city-empty">Nenhuma cidade encontrada</div>' : '';
+}
+function renderWeatherCityResults() {
+  const el = document.querySelector('.weather-city-results');
+  if (el) el.innerHTML = weatherCityResultsHtml();
+}
+
+function weatherSearchHtml() {
+  return `
+    <div class="day-popup-weather-search">
+      <div class="day-popup-weather-search-row">
+        <input type="text" id="weatherCityInput" class="weather-city-input" placeholder="Buscar cidade..." value="${escapeHtml(weatherSearchQuery)}" autocomplete="off">
+        <button type="button" id="weatherSearchCancelBtn" class="weather-link-btn">cancelar</button>
+      </div>
+      <div class="weather-city-results">${weatherCityResultsHtml()}</div>
+    </div>`;
+}
+
+// Renderiza bloco de clima dentro do DayPopup
+function renderWeatherInDayPopup(dateKey) {
+  const el = document.getElementById('dayPopupWeather');
+  if (!el) return;
+
+  if (weatherSearchOpen) {
+    el.innerHTML = weatherSearchHtml();
+    return;
+  }
+  const loc = weatherLocationForDate(dateKey);
+  if (!loc) {
+    el.innerHTML = weatherLocationPending
+      ? `<div class="day-popup-weather-loading">Carregando...</div>`
+      : `<div class="day-popup-weather-error">Localização indisponível · <button type="button" id="weatherSearchOpenBtn" class="weather-link-btn">buscar cidade</button></div>`;
+    return;
+  }
+  const w = weatherForDay(dateKey);
+  if (!w) {
+    el.innerHTML = `<div class="day-popup-weather-loading">Carregando...</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="day-popup-weather-row">
+      <span>📍 ${escapeHtml(loc.name)}</span>
+      <button type="button" id="weatherSearchOpenBtn" class="weather-link-btn">trocar cidade</button>
+    </div>
+    <div class="day-popup-weather-forecast">${w.icon} ${escapeHtml(w.label)} · ${w.max}° / ${w.min}°</div>`;
+}
+
+// Muda a cidade apenas para a data informada; as demais seguem a cidade padrão
+async function selectWeatherCity(loc, dateKey) {
+  setWeatherOverrideForDate(dateKey, loc);
+  weatherSearchOpen = false;
+  weatherSearchQuery = '';
+  weatherSearchResults = [];
+  if (dayPopupDate) renderWeatherInDayPopup(dayPopupDate);
+  await fetchWeather(loc.latitude, loc.longitude);
+  renderWeatherOnColumns();
+  if (dayPopupDate) renderWeatherInDayPopup(dayPopupDate);
+}
+
+async function initWeather() {
+  weatherOverrides = loadWeatherOverridesFromStorage();
+  weatherCacheMap = loadWeatherCacheMapFromStorage();
+
+  const loc = await getWeatherLocation();
+  weatherLocationPending = false;
+
+  const uniqueLocs = new Map();
+  if (loc) uniqueLocs.set(coordsKeyFor(loc.latitude, loc.longitude), loc);
+  Object.values(weatherOverrides).forEach(l => {
+    if (l && l.latitude != null && l.longitude != null) uniqueLocs.set(coordsKeyFor(l.latitude, l.longitude), l);
+  });
+  await Promise.all([...uniqueLocs.values()].map(l => fetchWeather(l.latitude, l.longitude)));
+
+  renderWeatherOnColumns();
+  if (dayPopupDate) renderWeatherInDayPopup(dayPopupDate);
+}
+
+// ---------- weather: popover de seleção de cidade (cabeçalho das colunas) ----------
+const weatherPopoverEl = document.getElementById('weatherCityPopover');
+const weatherPopoverInputEl = document.getElementById('weatherPopoverInput');
+let weatherPopoverQuery = '';
+let weatherPopoverResults = [];
+let weatherPopoverTimer = null;
+let weatherPopoverDateKey = null;
+
+function renderWeatherPopoverResults() {
+  const el = document.getElementById('weatherPopoverResults');
+  if (!el) return;
+  if (weatherPopoverResults.length) {
+    el.innerHTML = weatherPopoverResults.map(c => `
+      <button type="button" class="weather-city-option" data-lat="${c.latitude}" data-lon="${c.longitude}" data-name="${escapeHtml(cityLabel(c))}">${escapeHtml(cityLabel(c))}</button>
+    `).join('');
+  } else {
+    el.innerHTML = weatherPopoverQuery.trim().length >= 2 ? '<div class="weather-city-empty">Nenhuma cidade encontrada</div>' : '';
+  }
+}
+
+function onWeatherPopoverOutsideClick(e) {
+  if (!weatherPopoverEl.contains(e.target) && !e.target.closest('.col-weather-city-btn')) closeWeatherPopover();
+}
+function onWeatherPopoverKeydown(e) {
+  if (e.key === 'Escape') closeWeatherPopover();
+}
+
+function openWeatherPopover(anchorEl) {
+  weatherPopoverDateKey = anchorEl.dataset.date;
+  weatherPopoverQuery = '';
+  weatherPopoverResults = [];
+  weatherPopoverInputEl.value = '';
+  renderWeatherPopoverResults();
+
+  weatherPopoverEl.classList.remove('hidden');
+  const rect = anchorEl.getBoundingClientRect();
+  const popoverWidth = weatherPopoverEl.offsetWidth || 220;
+  const left = Math.min(Math.max(10, rect.left), window.innerWidth - popoverWidth - 10);
+  weatherPopoverEl.style.top = `${rect.bottom + 6}px`;
+  weatherPopoverEl.style.left = `${left}px`;
+
+  weatherPopoverInputEl.focus();
+  document.addEventListener('mousedown', onWeatherPopoverOutsideClick);
+  document.addEventListener('keydown', onWeatherPopoverKeydown);
+}
+function closeWeatherPopover() {
+  weatherPopoverEl.classList.add('hidden');
+  document.removeEventListener('mousedown', onWeatherPopoverOutsideClick);
+  document.removeEventListener('keydown', onWeatherPopoverKeydown);
+}
+
+weatherPopoverEl.addEventListener('click', e => {
+  const opt = e.target.closest('.weather-city-option');
+  if (!opt) return;
+  selectWeatherCity({
+    name: opt.dataset.name,
+    latitude: parseFloat(opt.dataset.lat),
+    longitude: parseFloat(opt.dataset.lon),
+    auto: false,
+  }, weatherPopoverDateKey);
+  closeWeatherPopover();
+});
+weatherPopoverInputEl.addEventListener('input', e => {
+  weatherPopoverQuery = e.target.value;
+  clearTimeout(weatherPopoverTimer);
+  weatherPopoverTimer = setTimeout(async () => {
+    weatherPopoverResults = await searchCity(weatherPopoverQuery);
+    renderWeatherPopoverResults();
+  }, 400);
+});
+
 // ---------- rendering ----------
 function render() {
   const days = [];
@@ -679,6 +1012,7 @@ function render() {
   document.getElementById('nextWeek').disabled = addDays(weekStart, 7) > YEAR_END;
 
   board.innerHTML = days.map(d => columnHtml(d)).join('');
+  renderWeatherOnColumns();
 }
 
 function columnHtml(d) {
@@ -1386,6 +1720,8 @@ board.addEventListener('submit', e => {
 });
 
 board.addEventListener('click', e => {
+  const weatherBtn = e.target.closest('.col-weather-city-btn');
+  if (weatherBtn) { openWeatherPopover(weatherBtn); return; }
   const title = e.target.closest('.col-title');
   if (title) { openDayPopup(title.closest('.col-header').dataset.date); return; }
   const chip = e.target.closest('.event-chip');
@@ -1979,6 +2315,9 @@ function openDayPopup(dateKey) {
   dayPopupGrouping = {};
   shutdownChoices = {};
   dayDrawerExpanded = false;
+  weatherSearchOpen = false;
+  weatherSearchQuery = '';
+  weatherSearchResults = [];
   renderDayPopup();
   attachDayPopupPanel();
 }
@@ -2168,6 +2507,7 @@ function renderDayPopup() {
   const d = new Date(dayPopupDate + 'T00:00:00');
   document.getElementById('dayPopupHeader').textContent = label(d);
   document.getElementById('dayPopupSubtitle').textContent = dayPopupMode === 'shutdown' ? 'Fechando o dia' : 'Visão do dia';
+  renderWeatherInDayPopup(dayPopupDate);
   document.getElementById('dayPopupBoardChecklist').innerHTML = dayPopupBoardChecklistHtml();
 
   const bodyEl = document.getElementById('dayPopupBody');
@@ -2243,6 +2583,39 @@ dayPopupPanelEl.addEventListener('click', e => {
   if (e.target.id === 'shutdownEnterBtn') { enterShutdownMode(); return; }
   if (e.target.id === 'shutdownBackBtn') { exitShutdownMode(); return; }
   if (e.target.id === 'shutdownApplyBtn') { applyShutdown(); return; }
+
+  const cityOption = e.target.closest('.weather-city-option');
+  if (cityOption) {
+    selectWeatherCity({
+      name: cityOption.dataset.name,
+      latitude: parseFloat(cityOption.dataset.lat),
+      longitude: parseFloat(cityOption.dataset.lon),
+      auto: false,
+    }, dayPopupDate);
+    return;
+  }
+  if (e.target.id === 'weatherSearchOpenBtn') {
+    weatherSearchOpen = true;
+    weatherSearchQuery = '';
+    weatherSearchResults = [];
+    renderWeatherInDayPopup(dayPopupDate);
+    return;
+  }
+  if (e.target.id === 'weatherSearchCancelBtn') {
+    weatherSearchOpen = false;
+    renderWeatherInDayPopup(dayPopupDate);
+    return;
+  }
+});
+
+dayPopupPanelEl.addEventListener('input', e => {
+  if (e.target.id !== 'weatherCityInput') return;
+  weatherSearchQuery = e.target.value;
+  clearTimeout(weatherSearchTimer);
+  weatherSearchTimer = setTimeout(async () => {
+    weatherSearchResults = await searchCity(weatherSearchQuery);
+    renderWeatherCityResults();
+  }, 400);
 });
 
 dayPopupPanelEl.addEventListener('change', e => {
