@@ -724,6 +724,7 @@ function cardHtml(t, isMit = false) {
   const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id]) : '').join('');
   return `
   <div class="${cls}" draggable="true" data-id="${t.id}">
+    ${t.seriesId ? '<span class="recurring-badge" title="Tarefa recorrente">🔁</span>' : ''}
     <div class="card-top">
       <input type="checkbox" class="chk-done" ${t.completed ? 'checked' : ''}>
       <div class="card-name">${escapeHtml(t.name)}</div>

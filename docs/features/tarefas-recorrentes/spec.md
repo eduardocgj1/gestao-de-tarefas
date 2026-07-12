@@ -256,7 +256,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 - [x] `fe-11` Handler de "Salvar tarefa" do modal de criação: se Recorrente ativo, gera `seriesId` (`uid()`), monta `recurrenceRule`, chama `fe-07` e cria uma task por data retornada — estendendo o padrão de `addTask()` (app.js:698) para aceitar os campos do formulário novo (nome, link) e replicar `recurrenceRule`/`seriesId`/`isException:false` em todas; se marcada urgente, aplica `urgentRankBase = Date.now()` decrescente por instância (mesmo padrão de `finalizeOrder`, app.js:1009,1013). Se Recorrente desativado, cria uma única task (comportamento equivalente ao `addTask()` atual)
        Onde: `app.js`, no bloco de `fe-08`
        Depende de: `fe-01`, `fe-08`, `fe-09`, `fe-10`, `be-01`
-- [ ] `fe-12` Ícone 🔁 no card para toda task com `seriesId` preenchido
+- [x] `fe-12` Ícone 🔁 no card para toda task com `seriesId` preenchido
        Onde: `app.js`, `cardHtml()` (app.js:675-694)
        Depende de: `be-01`, `fe-06`
 - [ ] `fe-13` `openModal()` popula a barra de série de `fe-04` quando `task.seriesId` existe, usando `formatRecurrenceSummary()` (`fe-08`) sobre `task.recurrenceRule`
