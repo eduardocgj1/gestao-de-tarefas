@@ -104,6 +104,7 @@
           <button type="button" id="closeDayPopup" class="icon-btn" title="Fechar">×</button>
         </div>
       </div>
+      <div id="dayPopupWeather" class="day-popup-weather"></div>
       <div id="dayPopupBoardChecklist" class="day-popup-board-checklist"></div>
       <div id="dayPopupBody" class="day-popup-body"></div>
       <div id="dayPopupFooter" class="day-popup-footer"></div>
@@ -429,6 +430,13 @@
       <button type="button" id="exportSaveViewBtn" class="export-save-btn">Salvar visualização</button>
     </div>
   </div>
+</div>
+
+<div id="weatherCityPopover" class="weather-city-popover hidden">
+  <div class="day-popup-weather-search-row">
+    <input type="text" id="weatherPopoverInput" class="weather-city-input" placeholder="Buscar cidade..." autocomplete="off">
+  </div>
+  <div class="weather-city-results" id="weatherPopoverResults"></div>
 </div>
 
 <script src="app.js"></script>
