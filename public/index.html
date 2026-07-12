@@ -269,6 +269,18 @@
   </div>
 </div>
 
+<div id="confirmVolumeOverlay" class="modal-overlay hidden">
+  <div class="modal confirm-modal">
+    <div class="confirm-icon">📋</div>
+    <div class="confirm-title">Confirmar criação em série</div>
+    <div class="confirm-desc">Isso vai criar <strong id="confirmVolumeCount">0</strong> tarefas no board, de <span id="confirmVolumeStart"></span> até <span id="confirmVolumeEnd"></span>.</div>
+    <div class="modal-footer">
+      <button type="button" id="cancelVolumeBtn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="confirmVolumeBtn" class="btn-primary">Criar tarefas</button>
+    </div>
+  </div>
+</div>
+
 <div id="eventModalOverlay" class="modal-overlay hidden">
   <div class="modal">
     <button id="closeEventModal" class="close-btn">&times;</button>
