@@ -416,12 +416,14 @@
     <div class="export-filter-row">
       <span class="export-filter-label">PROJETOS</span>
       <div id="exportProjectPills" class="export-project-pills"></div>
+      <button type="button" id="exportSelectAllBtn" class="export-select-all-btn">Selecionar todos</button>
     </div>
 
     <div class="export-columns">
       <div class="export-column" data-col="progresso">
         <div class="export-column-header">
           <span class="export-column-title">Progresso</span>
+          <span id="exportProgressoWeek" class="export-column-week"></span>
           <span id="exportProgressoCount" class="export-count-pill"></span>
           <button type="button" class="export-copy-btn" data-col="progresso">Copiar</button>
         </div>
@@ -430,6 +432,7 @@
       <div class="export-column" data-col="proximos">
         <div class="export-column-header">
           <span class="export-column-title">Próximos passos</span>
+          <span id="exportProximosWeek" class="export-column-week"></span>
           <span id="exportProximosCount" class="export-count-pill"></span>
           <button type="button" class="export-copy-btn" data-col="proximos">Copiar</button>
         </div>

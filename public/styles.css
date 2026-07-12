@@ -1510,11 +1510,25 @@ body {
 .export-project-pill.checked { background: #FBF9F4; opacity: 1; }
 .export-project-pill:not(.checked) { opacity: .5; }
 
+.export-select-all-btn {
+  margin-left: auto;
+  border: none;
+  background: var(--color-green-soft);
+  color: var(--color-green);
+  font: 700 11.5px var(--font-sora);
+  padding: 6px 12px;
+  border-radius: var(--radius-btn-sm);
+  cursor: pointer;
+}
+.export-select-all-btn:hover { background: var(--color-green-soft-hover); }
+.export-select-all-btn:disabled { opacity: .5; cursor: default; }
+
 .export-columns { flex: 1; min-height: 0; display: flex; overflow-y: auto; overflow-x: hidden; }
 .export-column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .export-column + .export-column { border-left: 1px solid var(--color-border-strong); }
 .export-column-header { display: flex; align-items: center; gap: 8px; padding: 16px 22px 10px; }
 .export-column-title { font: 700 13.5px var(--font-sora); color: var(--color-text); }
+.export-column-week { font: 600 11px var(--font-sora); color: var(--color-text-tertiary); }
 .export-count-pill { font: 600 11px var(--font-sora); background: #FBF9F4; border-radius: var(--radius-pill); padding: 2px 8px; color: var(--color-text-secondary); }
 .export-copy-btn {
   margin-left: auto;
