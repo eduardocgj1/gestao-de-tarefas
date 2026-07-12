@@ -2346,17 +2346,22 @@ function tasksForExportWeek(boardId, monday) {
 function buildExportRows() {
   const board = boards.find(b => b.id === exportBoardId);
   const monday = exportWeekMonday(exportWeekOffset);
+  const nextMonday = addDays(monday, 7);
   const weekTasks = tasksForExportWeek(exportBoardId, monday);
+  const nextWeekTasks = tasksForExportWeek(exportBoardId, nextMonday);
+
   const projectsPresent = new Map();
-  weekTasks.forEach(t => { const p = taskProjectInfo(t, board); if (!projectsPresent.has(p.id)) projectsPresent.set(p.id, p); });
-  const visible = weekTasks
+  [...weekTasks, ...nextWeekTasks].forEach(t => { const p = taskProjectInfo(t, board); if (!projectsPresent.has(p.id)) projectsPresent.set(p.id, p); });
+
+  const visible = ts => ts
     .filter(t => !exportRowDeletions.has(t.id))
     .filter(t => exportProjectFilter[taskProjectInfo(t, board).id] !== false);
-  const sorted = [...visible].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+  const sortByDateDesc = ts => [...ts].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+
   return {
     board, monday, projectsPresent,
-    progresso: sorted.filter(t => t.completed),
-    proximos: sorted.filter(t => !t.completed),
+    progresso: sortByDateDesc(visible(weekTasks).filter(t => t.completed)),
+    proximos: sortByDateDesc(visible(nextWeekTasks).filter(t => !t.completed)),
   };
 }
 
