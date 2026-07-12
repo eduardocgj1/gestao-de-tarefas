@@ -1019,6 +1019,13 @@ const f = {
 };
 const delegateFields = document.getElementById('delegateFields');
 const priorityField = document.getElementById('priorityField');
+const seriesInfoBarEl = document.getElementById('seriesInfoBar');
+const seriesInfoTextEl = document.getElementById('seriesInfoText');
+
+function formatSeriesInfoText(t) {
+  const summary = formatRecurrenceSummary(t.recurrenceRule).replace(/^🔁\s*/, '');
+  return `Série: ${t.name} · ${summary}`;
+}
 
 function renderModalFields(task, board = currentBoard()) {
   const fields = board.fields || [];
@@ -1153,6 +1160,12 @@ function openModal(id, board = currentBoard()) {
   editingId = id;
   editingTaskBoardId = board.id;
   const t = findTask(id, board);
+  if (t.seriesId && t.recurrenceRule) {
+    seriesInfoTextEl.textContent = formatSeriesInfoText(t);
+    seriesInfoBarEl.classList.remove('hidden');
+  } else {
+    seriesInfoBarEl.classList.add('hidden');
+  }
   f.name.value = t.name;
   f.date.value = t.deliveryDate || t.date;
   f.link.value = t.link || '';

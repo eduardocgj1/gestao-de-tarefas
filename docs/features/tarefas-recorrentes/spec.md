@@ -259,7 +259,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 - [x] `fe-12` Ícone 🔁 no card para toda task com `seriesId` preenchido
        Onde: `app.js`, `cardHtml()` (app.js:675-694)
        Depende de: `be-01`, `fe-06`
-- [ ] `fe-13` `openModal()` popula a barra de série de `fe-04` quando `task.seriesId` existe, usando `formatRecurrenceSummary()` (`fe-08`) sobre `task.recurrenceRule`
+- [x] `fe-13` `openModal()` popula a barra de série de `fe-04` quando `task.seriesId` existe, usando `formatRecurrenceSummary()` (`fe-08`) sobre `task.recurrenceRule`
        Onde: `app.js`, `openModal()` (app.js:862-882)
        Depende de: `fe-04`, `fe-08`, `be-01`
 - [ ] `fe-14` Interceptar edição de instância de série: na primeira mudança de campo de uma sessão de edição (qualquer handler `f.*.addEventListener`, app.js:905-926) sobre uma task com `seriesId` e `isException !== true`, abrir o modal de confirmação "Editar" (`fe-05`) antes de aplicar o `patch()`; "apenas esta ocorrência" marca `isException = true` e aplica só nela; "esta e todas as futuras" aplica os mesmos campos (exceto `date`) em todas as tasks do board com o mesmo `seriesId`, `date >=` a da instância editada e `isException !== true`, reaproveitando a forma de mutação de `patch()` (app.js:897). A escolha feita vale para o resto da sessão de edição (até `closeModal()`, app.js:883), sem perguntar de novo a cada campo. Tasks já com `isException = true` editam direto, sem essa pergunta
