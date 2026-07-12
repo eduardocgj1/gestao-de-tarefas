@@ -114,6 +114,11 @@ function generateRecurrenceInstances(rule, startDateKey) {
   }
   return keys;
 }
+// Marca a instância como exceção quando sua data efetivamente muda (drag-and-drop, edição de
+// data no modal, "adiar" ou "Fechar o Dia" da Visão do Dia). Não afeta o restante da série.
+function markExceptionIfMoved(t, previousDate) {
+  if (t.seriesId && t.date !== previousDate) t.isException = true;
+}
 function label(d) { return `${String(d.getDate()).padStart(2, '0')}/${MON[d.getMonth()]} - ${DOW[d.getDay()]}`; }
 function fmtMin(m) {
   m = Number(m) || 0;
@@ -1280,7 +1285,12 @@ function patch(fn) {
 }
 
 f.name.addEventListener('input', () => patch(t => (t.name = f.name.value)));
-f.date.addEventListener('change', () => directPatch(t => { t.deliveryDate = f.date.value; t.date = f.date.value; }));
+f.date.addEventListener('change', () => directPatch(t => {
+  const prevDate = t.date;
+  t.deliveryDate = f.date.value;
+  t.date = f.date.value;
+  markExceptionIfMoved(t, prevDate);
+}));
 f.link.addEventListener('input', () => patch(t => (t.link = f.link.value)));
 f.duration.addEventListener('input', () => patch(t => (t.duration = Number(f.duration.value) || 0)));
 f.priority.addEventListener('change', () => patch((t, board) => { if (!t.urgent && !t.completed) setPriority(t, Number(f.priority.value) || 1, board); }));
@@ -1294,7 +1304,12 @@ f.delegated.addEventListener('change', () => {
   patch(t => (t.delegated = f.delegated.checked));
 });
 f.delegatedTo.addEventListener('input', () => patch(t => (t.delegatedTo = f.delegatedTo.value)));
-f.delegatedDate.addEventListener('change', () => directPatch(t => { t.delegatedDate = f.delegatedDate.value; if (f.delegatedDate.value) t.date = f.delegatedDate.value; }));
+f.delegatedDate.addEventListener('change', () => directPatch(t => {
+  const prevDate = t.date;
+  t.delegatedDate = f.delegatedDate.value;
+  if (f.delegatedDate.value) t.date = f.delegatedDate.value;
+  markExceptionIfMoved(t, prevDate);
+}));
 
 f.urgent.addEventListener('change', () => patch((t, board) => {
   t.urgent = f.urgent.checked;
@@ -1428,7 +1443,11 @@ function finalizeOrder(col) {
   const dateKey = col.dataset.date;
   const ids = [...col.querySelectorAll('.card')].map(c => c.dataset.id);
   const ordered = ids.map(id => findTask(id));
-  ordered.forEach(t => { t.date = dateKey; });
+  ordered.forEach(t => {
+    const prevDate = t.date;
+    t.date = dateKey;
+    markExceptionIfMoved(t, prevDate);
+  });
 
   let normalIdx = 0;
   let urgentRankBase = Date.now();
@@ -2132,8 +2151,10 @@ function applyShutdown() {
     const t = board && findTask(choice.taskId, board);
     if (!t) return;
     const newDate = (choice.mode === 'custom' && choice.date) ? choice.date : tomorrow;
+    const prevDate = t.date;
     t.date = newDate;
     t.deliveryDate = newDate;
+    markExceptionIfMoved(t, prevDate);
   });
   save();
   refreshCalendarAndBoard();
@@ -2184,9 +2205,11 @@ dayPopupPanelEl.addEventListener('click', e => {
     const board = boards.find(b => b.id === adiar.dataset.boardId);
     const t = board && findTask(adiar.dataset.taskId, board);
     if (t) {
+      const prevDate = t.date;
       const tomorrowKey = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
       t.date = tomorrowKey;
       t.deliveryDate = tomorrowKey;
+      markExceptionIfMoved(t, prevDate);
       save();
       refreshCalendarAndBoard();
       renderDayPopup();
