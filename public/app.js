@@ -1311,11 +1311,18 @@ f.delegatedDate.addEventListener('change', () => directPatch(t => {
   markExceptionIfMoved(t, prevDate);
 }));
 
-f.urgent.addEventListener('change', () => patch((t, board) => {
-  t.urgent = f.urgent.checked;
-  if (t.urgent) { t.urgentRank = Date.now(); }
-  else { const max = board.tasks.filter(x => x.date === t.date && !x.urgent && x.id !== t.id).reduce((m, x) => Math.max(m, x.priority || 0), 0); t.priority = max + 1; }
-}));
+f.urgent.addEventListener('change', () => {
+  // urgentRankBase vive no closure do fn passado a patch(): quando o escopo é "esta e todas as
+  // futuras", applyPatchWithScope chama esse fn uma vez por instância da série na mesma execução
+  // síncrona — o contador decrescente garante urgentRank individual e ordem estável entre elas,
+  // igual ao padrão já usado em finalizeOrder() para o drag-and-drop.
+  let urgentRankBase = Date.now();
+  patch((t, board) => {
+    t.urgent = f.urgent.checked;
+    if (t.urgent) { t.urgentRank = urgentRankBase--; }
+    else { const max = board.tasks.filter(x => x.date === t.date && !x.urgent && x.id !== t.id).reduce((m, x) => Math.max(m, x.priority || 0), 0); t.priority = max + 1; }
+  });
+});
 
 // ---------- exclusão em série: "apenas esta ocorrência" x "esta e todas as futuras" ----------
 const confirmDeleteScopeOverlay = document.getElementById('confirmDeleteScopeOverlay');
