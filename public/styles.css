@@ -584,17 +584,6 @@ body {
   background: #FBF9F4;
 }
 .add-form input:focus { outline: none; border-color: var(--color-green); }
-.add-recurring-btn {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-btn-sm);
-  background: #FBF9F4;
-  cursor: pointer;
-  font-size: 13px;
-}
-.add-recurring-btn:hover { background: var(--color-neutral-btn-hover); border-color: var(--color-green); }
 
 /* ================================================================
    Modais
@@ -775,6 +764,9 @@ body {
   background: var(--color-terracotta-soft);
   border-top-color: rgba(193,98,45,.2);
 }
+
+.rec-apply-row { padding: 12px 14px 14px; display: flex; justify-content: flex-end; }
+.rec-apply-row .btn-primary { width: 100%; }
 
 .series-info-bar {
   display: flex; align-items: center; gap: 6px;
