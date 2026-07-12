@@ -91,13 +91,11 @@ async function saveState(state) {
     if (error) throw error;
   }
 
-  // 2. Deletar boards removidos
+  // 2. Deletar boards removidos (só se vieram boards no payload — evita wipe acidental)
   const boardIds = boards.map(b => b.id);
   if (boardIds.length > 0) {
     const { error } = await supabase.from('boards').delete().not('id', 'in', `(${boardIds.map(id => `'${id}'`).join(',')})`);
     if (error) throw error;
-  } else {
-    await supabase.from('boards').delete().neq('id', '');
   }
 
   // 3. Upsert tasks (flatten de todos os boards)
@@ -107,13 +105,11 @@ async function saveState(state) {
     if (error) throw error;
   }
 
-  // 4. Deletar tasks removidas
+  // 4. Deletar tasks removidas (só se vieram boards no payload)
   const taskIds = allTasks.map(t => t.id);
-  if (taskIds.length > 0) {
+  if (boardIds.length > 0 && taskIds.length > 0) {
     const { error } = await supabase.from('tasks').delete().not('id', 'in', `(${taskIds.map(id => `'${id}'`).join(',')})`);
     if (error) throw error;
-  } else {
-    await supabase.from('tasks').delete().neq('id', '');
   }
 
   // 5. Upsert calendar_events
@@ -128,8 +124,6 @@ async function saveState(state) {
   if (eventIds.length > 0) {
     const { error } = await supabase.from('calendar_events').delete().not('id', 'in', `(${eventIds.map(id => `'${id}'`).join(',')})`);
     if (error) throw error;
-  } else {
-    await supabase.from('calendar_events').delete().neq('id', '');
   }
 
   // 6. Upsert people
@@ -141,8 +135,6 @@ async function saveState(state) {
   if (peopleIds.length > 0) {
     const { error } = await supabase.from('people').delete().not('id', 'in', `(${peopleIds.map(id => `'${id}'`).join(',')})`);
     if (error) throw error;
-  } else {
-    await supabase.from('people').delete().neq('id', '');
   }
 
   // 7. Upsert app_state (chaves globais)
