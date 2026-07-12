@@ -164,8 +164,20 @@ function migrateLegacyData(data) {
 
 // ---------- persistence ----------
 async function load() {
-  const res = await fetch('/api/tasks');
-  const data = await res.json();
+  let res, data;
+  try {
+    res = await fetch('/api/tasks');
+    data = await res.json();
+  } catch (err) {
+    console.error('Falha ao carregar dados do servidor:', err);
+    alert('Não foi possível carregar os dados do servidor. Recarregue a página — nada foi salvo.');
+    return;
+  }
+  if (!res.ok || data.error) {
+    console.error('Erro ao carregar dados do servidor:', data.error || res.status);
+    alert('Não foi possível carregar os dados do servidor. Recarregue a página — nada foi salvo.');
+    return;
+  }
 
   let migrated = false;
   if (!data.boards) {
