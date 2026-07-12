@@ -547,6 +547,7 @@ body {
 }
 
 .card {
+  position: relative;
   border-radius: 11px;
   padding: 9px 11px;
   cursor: grab;
@@ -558,6 +559,7 @@ body {
 .card.urgent { background: var(--card-urgent-bg); border-left-color: var(--card-urgent-border); }
 .card.completed { opacity: 0.55; border-left-color: var(--card-done-border); background: var(--card-done-bg); }
 .card.completed .card-name { text-decoration: line-through; }
+.recurring-badge { position: absolute; top: 7px; right: 8px; opacity: .55; font-size: 11px; }
 
 .card-top { display: flex; align-items: flex-start; gap: 7px; }
 .card-top input[type="checkbox"] { margin-top: 2px; }
@@ -648,6 +650,173 @@ body {
   border-radius: 11px;
   cursor: pointer;
 }
+
+/* ================================================================
+   Recorrência — toggle, painel de abas, resumo
+   ================================================================ */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn);
+  background: #FBF9F4;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-row:hover { background: var(--color-neutral-btn); }
+.toggle-row .tr-icon { font-size: 14px; }
+.toggle-row .tr-label { font: 600 13px var(--font-sora); color: var(--color-text); flex: 1; }
+.toggle-row .tr-hint { font: 500 11px var(--font-sora); color: var(--color-text-tertiary); }
+
+.toggle-switch {
+  width: 34px; height: 20px; border-radius: 10px;
+  background: var(--color-border);
+  position: relative; flex-shrink: 0;
+  transition: background .15s;
+}
+.toggle-switch.on { background: var(--color-green); }
+.toggle-switch::after {
+  content: '';
+  position: absolute; top: 3px; left: 3px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff;
+  transition: left .15s;
+}
+.toggle-switch.on::after { left: 17px; }
+
+.recurrence-panel {
+  margin-top: 14px;
+  border: 1px solid var(--color-green);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.recurrence-panel.hidden { display: none; }
+
+.recurrence-type-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border-strong);
+  background: var(--color-green-soft);
+}
+.rec-tab {
+  flex: 1; border: none; background: transparent;
+  padding: 9px 4px; cursor: pointer;
+  font: 600 11px var(--font-sora); color: var(--color-green);
+  border-bottom: 2px solid transparent;
+  transition: border-color .12s, background .12s;
+}
+.rec-tab:hover { background: rgba(58,102,4,.08); }
+.rec-tab.active { border-bottom-color: var(--color-green); background: rgba(58,102,4,.1); }
+
+.recurrence-options { padding: 14px 14px 0; }
+
+.rec-section { display: none; }
+.rec-section.active { display: block; }
+
+.rec-options-list { display: flex; flex-direction: column; gap: 7px; }
+.rec-option-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.rec-option-row input[type="radio"] { accent-color: var(--color-green); cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; }
+.rec-option-row span { font: 500 12.5px var(--font-sora); color: var(--color-text); }
+
+.rec-hint-text { font: 500 11.5px var(--font-sora); color: var(--color-text-tertiary); margin-top: 8px; }
+
+.weekday-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.weekday-pill {
+  padding: 5px 9px; border-radius: 8px;
+  border: 1.5px solid var(--color-border);
+  background: #FBFAF7;
+  font: 600 11px var(--font-sora); cursor: pointer;
+  color: var(--color-text-secondary);
+  user-select: none;
+  transition: all .1s;
+}
+.weekday-pill.selected { background: var(--color-green); color: #fff; border-color: var(--color-green); }
+
+.custom-interval-row { display: flex; align-items: center; gap: 8px; }
+.custom-interval-row span { font: 500 12.5px var(--font-sora); color: var(--color-text); }
+.custom-interval-row input {
+  width: 60px; padding: 7px 8px;
+  border: 1px solid var(--color-border); border-radius: 8px;
+  font: 600 13px var(--font-sora); text-align: center;
+  outline: none; margin: 0;
+}
+.custom-interval-row input:focus { border-color: var(--color-green); }
+
+.end-date-row {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--color-border-strong);
+  margin-top: 14px;
+}
+.end-date-row label { margin-top: 0; }
+
+.recurrence-summary {
+  padding: 8px 14px 12px;
+  font: 500 11.5px var(--font-sora); color: var(--color-green);
+  background: rgba(58,102,4,.05);
+  border-top: 1px solid rgba(58,102,4,.12);
+}
+.recurrence-summary.error {
+  color: var(--color-terracotta);
+  background: var(--color-terracotta-soft);
+  border-top-color: rgba(193,98,45,.2);
+}
+
+.series-info-bar {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 0;
+  padding: 8px 10px;
+  background: var(--color-green-soft);
+  border: 1px solid rgba(58,102,4,.2);
+  border-radius: 9px;
+  font: 600 12px var(--font-sora); color: var(--color-green);
+}
+.series-info-bar.hidden { display: none; }
+
+/* ================================================================
+   Modal de confirmação (escopo de edição/exclusão, aviso de volume)
+   ================================================================ */
+
+.confirm-modal { width: 360px; }
+.confirm-icon { font-size: 28px; margin-bottom: 10px; }
+.confirm-title { font: 700 16px var(--font-sora); color: var(--color-text); margin-bottom: 6px; }
+.confirm-desc { font: 500 12.5px var(--font-sora); color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 20px; }
+.confirm-desc strong { color: var(--color-text); }
+
+.confirm-options { display: flex; flex-direction: column; gap: 8px; }
+.confirm-option {
+  padding: 12px 14px; border-radius: var(--radius-btn);
+  border: 1.5px solid var(--color-border);
+  background: #FBFAF7; cursor: pointer;
+  text-align: left; width: 100%;
+}
+.confirm-option:hover { border-color: var(--color-green); background: var(--color-green-soft); }
+.confirm-option.danger:hover { border-color: var(--color-terracotta); background: var(--color-terracotta-soft); }
+.confirm-option-title { font: 700 13px var(--font-sora); color: var(--color-text); margin-bottom: 2px; }
+.confirm-option.danger .confirm-option-title { color: var(--color-terracotta); }
+.confirm-option-desc { font: 500 11.5px var(--font-sora); color: var(--color-text-secondary); }
+
+.confirm-cancel-btn { margin-top: 12px; width: 100%; }
+
+.modal-footer {
+  margin-top: 18px;
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.btn-primary {
+  padding: 9px 18px; border-radius: var(--radius-btn);
+  border: none; background: var(--color-green); color: #fff;
+  font: 700 13px var(--font-sora); cursor: pointer;
+}
+.btn-primary:hover { background: var(--color-green-hover); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-neutral {
+  padding: 9px 18px; border-radius: var(--radius-btn);
+  border: 1px solid var(--color-border); background: var(--color-neutral-btn);
+  font: 700 13px var(--font-sora); cursor: pointer; color: var(--color-text);
+}
+.btn-neutral:hover { background: var(--color-neutral-btn-hover); }
 
 .settings-modal { width: 440px; }
 .settings-modal h2 { margin: 0 0 6px; font: 800 17px var(--font-sora); }
