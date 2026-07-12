@@ -831,7 +831,15 @@ function formatRecurrenceSummary(rule) {
 function updateRecurrenceSummary() {
   if (!recurrenceOn) return;
   const rule = buildRecurrenceRule();
-  recurrenceSummaryEl.textContent = formatRecurrenceSummary(rule);
+  const hasZeroOccurrences = !!rule.endDate && generateRecurrenceInstances(rule, createTaskDateKey).length === 0;
+  if (hasZeroOccurrences) {
+    recurrenceSummaryEl.textContent = 'Esse padrão não gera nenhuma ocorrência antes da data de término.';
+    recurrenceSummaryEl.classList.add('error');
+  } else {
+    recurrenceSummaryEl.textContent = formatRecurrenceSummary(rule);
+    recurrenceSummaryEl.classList.remove('error');
+  }
+  saveCreateTaskBtn.disabled = hasZeroOccurrences;
 }
 
 function selectRecTab(type) {
@@ -859,6 +867,8 @@ function openCreateTaskModal(dateKey) {
   recMonthlyDayEl.textContent = new Date(dateKey + 'T00:00:00').getDate();
   recEndDateEl.value = '';
   recEndDateEl.max = '2026-12-31';
+  recurrenceSummaryEl.classList.remove('error');
+  saveCreateTaskBtn.disabled = false;
   selectRecTab('daily');
 
   createTaskOverlay.classList.remove('hidden');
@@ -879,7 +889,12 @@ recToggleRow.addEventListener('click', () => {
   recToggleSwitch.classList.toggle('on', recurrenceOn);
   recToggleHint.textContent = recurrenceOn ? 'Sim' : 'Não';
   recurrencePanel.classList.toggle('hidden', !recurrenceOn);
-  if (recurrenceOn) updateRecurrenceSummary();
+  if (recurrenceOn) {
+    updateRecurrenceSummary();
+  } else {
+    recurrenceSummaryEl.classList.remove('error');
+    saveCreateTaskBtn.disabled = false;
+  }
 });
 
 weekdayPillEls.forEach(p => p.addEventListener('click', () => {

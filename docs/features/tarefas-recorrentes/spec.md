@@ -247,7 +247,7 @@ Campos não aplicáveis ao `type` escolhido ficam ausentes do objeto (não `null
 - [x] `fe-08` Abrir/fechar o modal de `fe-01` (trigger a definir: botão junto ao formulário rápido de coluna); toggle "Recorrente" expande/colapsa o painel; troca de abas do padrão; função `formatRecurrenceSummary(rule)` e atualização ao vivo da linha de resumo a cada mudança nos controles
        Onde: `app.js`, novo bloco `---------- create modal ----------` próximo ao bloco `---------- modal ----------` (app.js:715)
        Depende de: `fe-02`
-- [ ] `fe-09` Validação de zero-ocorrências: recalcula com `fe-07` a cada mudança e alterna a classe `.error` do `.recurrence-summary` de `fe-03`, aplicando/removendo `disabled` no botão "Salvar tarefa" enquanto o erro estiver ativo
+- [x] `fe-09` Validação de zero-ocorrências: recalcula com `fe-07` a cada mudança e alterna a classe `.error` do `.recurrence-summary` de `fe-03`, aplicando/removendo `disabled` no botão "Salvar tarefa" enquanto o erro estiver ativo
        Onde: `app.js`, no bloco de `fe-08`
        Depende de: `fe-07`, `fe-08`
 - [ ] `fe-10` Aviso de volume: ao clicar "Salvar tarefa", se `fe-07` retornar mais de 90 datas, abre `confirmVolumeOverlay` de `fe-03` (com o texto preenchido com `N`) em vez de salvar direto; "Cancelar" fecha só esse overlay e mantém o modal de criação aberto com os dados preenchidos; "Criar N tarefas" prossegue para `fe-11`
