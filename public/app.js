@@ -973,7 +973,32 @@ confirmVolumeBtnEl.addEventListener('click', () => {
 });
 
 function commitCreateTask(rule, dates) {
-  // Implementado em fe-11 (gera as instâncias e salva).
+  const board = currentBoard();
+  const tasks = board.tasks;
+  const name = ct.name.value.trim();
+  const link = ct.link.value.trim();
+
+  function pushInstance(dateKey, seriesId, recurrenceRule) {
+    const normalMax = tasks.filter(t => t.date === dateKey && !t.urgent).reduce((m, t) => Math.max(m, t.priority || 0), 0);
+    tasks.push({
+      id: uid(), name, date: dateKey, deliveryDate: dateKey, link, duration: 0,
+      priority: normalMax + 1, urgent: false, urgentRank: 0,
+      delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
+      fieldValues: {}, team: [],
+      seriesId, recurrenceRule, isException: false,
+    });
+  }
+
+  if (!rule) {
+    pushInstance(dates[0], null, null);
+  } else {
+    const seriesId = uid();
+    dates.forEach(dateKey => pushInstance(dateKey, seriesId, rule));
+  }
+
+  closeCreateTaskModal();
+  save();
+  render();
 }
 
 // ---------- modal ----------
