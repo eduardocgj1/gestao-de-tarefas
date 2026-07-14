@@ -3144,4 +3144,69 @@ function renderActivities() {
   container.innerHTML = banner + (groupsHtml || activitiesEmptyStateHtml());
 }
 
+// ---------- criação rápida (Fluxo 1) ----------
+function createBlankActivity(name, categoria) {
+  const now = Date.now();
+  return {
+    id: uid(), name, categoria, status: 'rascunho',
+    descricao: null, fotoCapa: null, vibes: [],
+    modalidadesDuracao: [], meiosTransporte: [], nivelPlanejamento: null,
+    antecedenciaMiniDias: null, decisaoUltimaHora: false, localidade: null, distanciaSP: null,
+    condicaoClimaticaIdeal: [], temperaturaMiniCelsius: null, epocaIdeal: [], perfilGrupo: [],
+    tamanhoGrupo: null, condicionamentoFisico: null, evitarAltaTemporada: false, repetivel: true, petFriendly: null,
+    perfisCusto: {}, variacoes: [], notas: null, links: [],
+    dataInicio: null, boardDestinoId: null, realizacoes: [],
+    checklistTasks: [], createdAt: now, updatedAt: now,
+  };
+}
+
+// Categorias personalizadas já em uso (para autocomplete), derivadas do array `activities` em
+// memória — evita fragmentação por erro de digitação (ver seção "Categoria Personalizada" da spec).
+function customCategoriesInUse() {
+  const known = new Set(ACTIVITY_CATEGORIES);
+  const set = new Set();
+  activities.forEach(a => { if (a.categoria && !known.has(a.categoria)) set.add(a.categoria); });
+  return [...set];
+}
+
+function openActivityQuickCreate() {
+  document.getElementById('activityQuickName').value = '';
+  const sel = document.getElementById('activityQuickCategoria');
+  sel.innerHTML = ACTIVITY_CATEGORIES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  sel.value = ACTIVITY_CATEGORIES[0];
+  document.getElementById('activityQuickCategoriaCustomField').classList.add('hidden');
+  document.getElementById('activityQuickCategoriaCustom').value = '';
+  document.getElementById('activityQuickCategoriaCustomList').innerHTML =
+    customCategoriesInUse().map(c => `<option value="${escapeHtml(c)}">`).join('');
+  document.getElementById('activityQuickCreateOverlay').classList.remove('hidden');
+  document.getElementById('activityQuickName').focus();
+}
+function closeActivityQuickCreate() {
+  document.getElementById('activityQuickCreateOverlay').classList.add('hidden');
+}
+function confirmActivityQuickCreate() {
+  const name = document.getElementById('activityQuickName').value.trim();
+  if (!name) return;
+  const sel = document.getElementById('activityQuickCategoria');
+  let categoria = sel.value;
+  if (categoria === 'Personalizada') {
+    // Normalizado (trim, sem caixa forçada) antes de salvar — ver "Categoria Personalizada" na spec.
+    categoria = document.getElementById('activityQuickCategoriaCustom').value.trim();
+    if (!categoria) return;
+  }
+  activities.push(createBlankActivity(name, categoria));
+  save();
+  closeActivityQuickCreate();
+  renderActivities();
+}
+
+document.getElementById('activityNewBtn').addEventListener('click', openActivityQuickCreate);
+document.getElementById('closeActivityQuickCreate').addEventListener('click', closeActivityQuickCreate);
+document.getElementById('activityQuickCancelBtn').addEventListener('click', closeActivityQuickCreate);
+document.getElementById('activityQuickCreateOverlay').addEventListener('click', e => { if (e.target.id === 'activityQuickCreateOverlay') closeActivityQuickCreate(); });
+document.getElementById('activityQuickCategoria').addEventListener('change', e => {
+  document.getElementById('activityQuickCategoriaCustomField').classList.toggle('hidden', e.target.value !== 'Personalizada');
+});
+document.getElementById('activityQuickCreateBtn').addEventListener('click', confirmActivityQuickCreate);
+
 load();

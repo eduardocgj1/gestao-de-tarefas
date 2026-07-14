@@ -447,6 +447,25 @@
   </div>
 </div>
 
+<div id="activityQuickCreateOverlay" class="modal-overlay hidden">
+  <div class="modal activity-quick-create-modal">
+    <button id="closeActivityQuickCreate" class="close-btn">&times;</button>
+    <h2>Nova atividade</h2>
+    <input type="text" id="activityQuickName" class="f-name" placeholder="O que você quer fazer? Ex.: ir para Ubatuba, cafezinho no Mercadão, aprender fotografia...">
+    <label>Categoria
+      <select id="activityQuickCategoria"></select>
+    </label>
+    <label id="activityQuickCategoriaCustomField" class="hidden">Categoria personalizada
+      <input type="text" id="activityQuickCategoriaCustom" list="activityQuickCategoriaCustomList" placeholder="Digite a categoria">
+      <datalist id="activityQuickCategoriaCustomList"></datalist>
+    </label>
+    <div class="modal-footer">
+      <button type="button" id="activityQuickCancelBtn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="activityQuickCreateBtn" class="btn-primary">Criar</button>
+    </div>
+  </div>
+</div>
+
 <div id="activityFormOverlay" class="modal-overlay hidden">
   <div class="modal activity-form-modal">
     <button id="closeActivityForm" class="close-btn">&times;</button>
