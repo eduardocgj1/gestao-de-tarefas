@@ -3037,4 +3037,72 @@ document.querySelector('.export-modal').addEventListener('input', e => {
   }
 });
 
+// ================================================================
+// Lista de Atividades
+// ================================================================
+
+function findActivity(id) { return activities.find(a => a.id === id); }
+
+// Placeholder até fe-39/fe-40 implementarem busca fuzzy + filtros combináveis.
+function getFilteredActivities() { return activities; }
+
+function groupActivitiesByCategory(list) {
+  const groups = new Map();
+  list.forEach(a => {
+    const key = a.categoria || 'Sem categoria';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(a);
+  });
+  groups.forEach(g => g.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+  return groups;
+}
+
+function activitiesEmptyStateHtml() {
+  return `<div class="activities-empty-state">Nenhuma atividade ainda. Clique em "+ Nova atividade" para começar sua lista.</div>`;
+}
+
+function activityDraftBannerHtml() {
+  const count = activities.filter(a => a.status === 'rascunho').length;
+  if (!count) return '';
+  return `<div class="activity-draft-banner">⚠️ ${count} atividade${count > 1 ? 's' : ''} aguardando detalhamento</div>`;
+}
+
+// Placeholder até fe-19 implementar o card completo (nome, chips, badges, custo).
+function activityCardHtml(a) {
+  return `
+  <div class="activity-card" data-id="${a.id}">
+    <div class="activity-card-name">${escapeHtml(a.name)}</div>
+  </div>`;
+}
+
+function activityGroupHtml(categoria, list) {
+  return `
+  <section class="activity-group">
+    <h2 class="activity-group-title">${escapeHtml(categoria)}</h2>
+    <div class="activity-group-grid">
+      ${list.map(a => activityCardHtml(a)).join('')}
+    </div>
+  </section>`;
+}
+
+// Reconstrói o DOM de #activitiesView — análoga a render() (board) e initCalendarIfNeeded() (calendário).
+function renderActivities() {
+  if (currentView !== 'activities') return;
+  const container = document.getElementById('activitiesView');
+  if (!container) return;
+
+  const banner = activityDraftBannerHtml();
+
+  if (!activities.length) {
+    container.innerHTML = banner + activitiesEmptyStateHtml();
+    return;
+  }
+
+  const filtered = getFilteredActivities();
+  const groups = groupActivitiesByCategory(filtered);
+  const groupsHtml = [...groups.entries()].map(([categoria, list]) => activityGroupHtml(categoria, list)).join('');
+
+  container.innerHTML = banner + (groupsHtml || activitiesEmptyStateHtml());
+}
+
 load();
