@@ -3387,7 +3387,19 @@ function activityDetailHistoryHtml(a) {
 }
 
 function activityDetailFooterHtml(a) {
-  return `<button type="button" class="btn-neutral activity-delete-btn" data-id="${a.id}">Excluir atividade</button>`;
+  const buttons = [];
+  if (a.status === 'quero_fazer') {
+    const checklistEmpty = !(a.checklistTasks || []).length;
+    buttons.push(`<button type="button" class="btn-primary activity-promote-btn" data-id="${a.id}" ${checklistEmpty ? 'disabled title="Adicione ao menos uma tarefa ao checklist para planejar"' : ''}>Mover para Planejada</button>`);
+  }
+  if (a.status === 'planejada') {
+    buttons.push(`<button type="button" class="btn-neutral activity-cancel-plan-btn" data-id="${a.id}">Cancelar planejamento</button>`);
+  }
+  if (a.status !== 'rascunho') {
+    buttons.push(`<button type="button" class="btn-neutral activity-realize-btn" data-id="${a.id}">Marcar como realizada</button>`);
+  }
+  buttons.push(`<button type="button" class="btn-neutral activity-delete-btn" data-id="${a.id}">Excluir atividade</button>`);
+  return buttons.join('');
 }
 
 function openActivityDetail(id) {
@@ -3423,7 +3435,10 @@ document.getElementById('activityDetailOverlay').addEventListener('click', e => 
       patchActivity(a, () => {});
       openActivityDetail(activityDetailId);
     }
+    return;
   }
+  const promoteBtn = e.target.closest('.activity-promote-btn');
+  if (promoteBtn && !promoteBtn.disabled) { openActivityPromote(promoteBtn.dataset.id); return; }
 });
 
 document.getElementById('activitiesView').addEventListener('click', e => {
@@ -4225,5 +4240,103 @@ function maybeAdvanceActivityStatus(a) {
     a.status = 'quero_fazer';
   }
 }
+
+// ---------- promoção do checklist ao board (status → planejada) ----------
+function fmtDateBRWithDow(dateKey) {
+  const d = new Date(dateKey + 'T00:00:00');
+  const dowAbbrev = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()];
+  return `${fmtDateBR(dateKey)} (${dowAbbrev})`;
+}
+
+// Calcula a data de cada tarefa do checklist (data_inicio − antecedenciaMiniDias), com fallback
+// para hoje quando o resultado cair no passado. Usada tanto no preview do dialog quanto na
+// promoção de fato — mantém as duas em sincronia (mesma fórmula).
+function computeChecklistPromotionPreview(a, dataInicio) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const inicio = new Date(dataInicio + 'T00:00:00');
+  return (a.checklistTasks || []).map(t => {
+    let taskDate = null;
+    if (t.antecedenciaMiniDias != null) {
+      const d = new Date(inicio);
+      d.setDate(d.getDate() - t.antecedenciaMiniDias);
+      taskDate = d < today ? toKey(today) : toKey(d);
+    }
+    return { task: t, date: taskDate, isToday: taskDate === toKey(today) };
+  });
+}
+
+function renderActivityPromotePreview(a) {
+  const dataInicio = document.getElementById('activityPromoteDate').value;
+  const el = document.getElementById('activityPromotePreview');
+  if (!dataInicio) { el.innerHTML = ''; return; }
+  const preview = computeChecklistPromotionPreview(a, dataInicio);
+  el.innerHTML = preview.map(p => {
+    const label = p.date == null ? 'Sem data' : (p.isToday ? 'Hoje' : fmtDateBRWithDow(p.date));
+    return `<div class="activity-promote-preview-row"><span>${escapeHtml(p.task.name)}</span><span>→ ${label}</span></div>`;
+  }).join('');
+}
+
+function updateActivityPromoteConfirmState() {
+  const dataInicio = document.getElementById('activityPromoteDate').value;
+  const boardId = document.getElementById('activityPromoteBoard').value;
+  document.getElementById('activityPromoteConfirmBtn').disabled = !dataInicio || !boardId;
+}
+
+function openActivityPromote(id) {
+  const a = findActivity(id);
+  if (!a || !(a.checklistTasks || []).length) return; // guarda extra: botão já deveria estar disabled
+  activityDetailId = id;
+  const tomorrow = toKey(addDays(new Date(), 1));
+  const dateInput = document.getElementById('activityPromoteDate');
+  dateInput.value = tomorrow;
+  dateInput.min = tomorrow;
+  const boardSel = document.getElementById('activityPromoteBoard');
+  boardSel.innerHTML = boards.map(b => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+  renderActivityPromotePreview(a);
+  updateActivityPromoteConfirmState();
+  document.getElementById('activityPromoteOverlay').classList.remove('hidden');
+}
+function closeActivityPromote() {
+  document.getElementById('activityPromoteOverlay').classList.add('hidden');
+}
+
+// Promove o checklist ao board: calcula a data de cada tarefa, define boardId/date e muda o
+// status da atividade para 'planejada'. Fonte de verdade única em activity.checklistTasks — o
+// board passa a exibir essas tarefas via getTasksForDateAndBoard() (fe-14), sem duplicação.
+function promoteChecklistToBoard(activity, boardId, dataInicio) {
+  const preview = computeChecklistPromotionPreview(activity, dataInicio);
+  preview.forEach(({ task, date }) => {
+    task.boardId = boardId;
+    task.date = date;
+    task.deliveryDate = date;
+  });
+  activity.status = 'planejada';
+  activity.dataInicio = dataInicio;
+  activity.boardDestinoId = boardId;
+  activity.updatedAt = Date.now();
+  save();
+  render();
+  renderActivities();
+}
+
+document.getElementById('activityPromoteDate').addEventListener('change', () => {
+  const a = findActivity(activityDetailId);
+  if (a) renderActivityPromotePreview(a);
+  updateActivityPromoteConfirmState();
+});
+document.getElementById('activityPromoteBoard').addEventListener('change', updateActivityPromoteConfirmState);
+document.getElementById('closeActivityPromote').addEventListener('click', closeActivityPromote);
+document.getElementById('activityPromoteCancelBtn').addEventListener('click', closeActivityPromote);
+document.getElementById('activityPromoteOverlay').addEventListener('click', e => { if (e.target.id === 'activityPromoteOverlay') closeActivityPromote(); });
+document.getElementById('activityPromoteConfirmBtn').addEventListener('click', () => {
+  const a = findActivity(activityDetailId);
+  if (!a) return;
+  const dataInicio = document.getElementById('activityPromoteDate').value;
+  const boardId = document.getElementById('activityPromoteBoard').value;
+  if (!dataInicio || !boardId) return;
+  promoteChecklistToBoard(a, boardId, dataInicio);
+  closeActivityPromote();
+  openActivityDetail(a.id);
+});
 
 load();
