@@ -1104,7 +1104,7 @@ function columnHtml(d) {
     </div>
     ${events.length ? `<div class="col-events">${events.map(ev => eventChipHtml(ev, key)).join('')}</div>` : ''}
     <div class="col-body" data-date="${key}">
-      ${orderedItems.map(t => cardHtml(t, mitIds.includes(t.id))).join('')}
+      ${orderedItems.map(t => cardHtml(t, mitIds.includes(t.id), currentBoard())).join('')}
     </div>
     <form class="add-form" data-date="${key}">
       <input type="text" placeholder="+ nova tarefa" required>
@@ -1126,10 +1126,10 @@ function eventChipHtml(ev, key) {
   </div>`;
 }
 
-function cardHtml(t, isMit = false) {
+function cardHtml(t, isMit = false, board = currentBoard()) {
   const cls = ['card', t.urgent ? 'urgent' : 'normal', t.completed ? 'completed' : '', isMit ? 'mit' : ''].join(' ');
-  const fields = currentBoard().fields || [];
-  const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id]) : '').join('');
+  const fields = (board && board.fields) || [];
+  const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id], board) : '').join('');
   return `
   <div class="${cls}" draggable="true" data-id="${t.id}">
     ${t.seriesId ? '<span class="recurring-badge" title="Tarefa recorrente">🔁</span>' : ''}
