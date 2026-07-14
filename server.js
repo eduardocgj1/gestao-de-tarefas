@@ -33,32 +33,52 @@ function parseBody(req) {
 // ── Leitura: monta o estado completo a partir do Supabase ───
 async function loadState() {
   const [
-    { data: boards, error: e1 },
-    { data: tasks,  error: e2 },
-    { data: events, error: e3 },
-    { data: people, error: e4 },
-    { data: state,  error: e5 },
+    { data: boards,     error: e1 },
+    { data: tasks,      error: e2 },
+    { data: events,     error: e3 },
+    { data: people,     error: e4 },
+    { data: state,      error: e5 },
+    { data: activities, error: e6 },
   ] = await Promise.all([
     supabase.from('boards').select('*'),
     supabase.from('tasks').select('*'),
     supabase.from('calendar_events').select('*'),
     supabase.from('people').select('*'),
     supabase.from('app_state').select('*'),
+    supabase.from('activities').select('*'),
   ]);
 
-  if (e1 || e2 || e3 || e4 || e5) {
-    throw new Error([e1, e2, e3, e4, e5].filter(Boolean).map(e => e.message).join('; '));
+  if (e1 || e2 || e3 || e4 || e5 || e6) {
+    throw new Error([e1, e2, e3, e4, e5, e6].filter(Boolean).map(e => e.message).join('; '));
   }
 
   // Indexar estado global
   const appState = Object.fromEntries((state || []).map(r => [r.key, r.value]));
 
-  // Agrupar tasks por board
+  // Separar tasks por board e por atividade.
+  // Tarefas promovidas (com activity_id E board_id) vão APENAS para tasksByActivity —
+  // o board as lê via getTasksForDateAndBoard()/tasksFor(), evitando duplicação na renderização.
   const tasksByBoard = {};
+  const tasksByActivity = {};
   for (const t of tasks || []) {
-    if (!tasksByBoard[t.board_id]) tasksByBoard[t.board_id] = [];
-    tasksByBoard[t.board_id].push(dbTaskToApp(t));
+    const mapped = dbTaskToApp(t);
+    if (t.board_id && !t.activity_id) {
+      // Tarefa de board puro (não pertence a nenhuma atividade)
+      if (!tasksByBoard[t.board_id]) tasksByBoard[t.board_id] = [];
+      tasksByBoard[t.board_id].push(mapped);
+    }
+    if (t.activity_id) {
+      // Tarefa de checklist (promovida ou não) — fonte de verdade em activity.checklistTasks
+      if (!tasksByActivity[t.activity_id]) tasksByActivity[t.activity_id] = [];
+      tasksByActivity[t.activity_id].push(mapped);
+    }
   }
+
+  const mappedActivities = (activities || []).map(a => {
+    const app = dbActivityToApp(a);
+    app.checklistTasks = tasksByActivity[a.id] || [];
+    return app;
+  });
 
   return {
     boards: (boards || []).map(b => ({
@@ -74,6 +94,7 @@ async function loadState() {
     calendarEvents:    (events || []).map(dbEventToApp),
     people:            people || [],
     exportViews:       appState.exportViews      ?? {},
+    activities:        mappedActivities,
   };
 }
 
