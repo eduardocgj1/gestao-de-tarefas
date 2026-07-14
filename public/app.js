@@ -53,6 +53,51 @@ function loadDayDrawerWidth() {
 }
 let dayDrawerWidth = loadDayDrawerWidth();
 
+// ---------- lista de atividades: domínio ----------
+const ACTIVITY_CATEGORIES = [
+  'Explorar a cidade',
+  'Viagem de final de semana',
+  'Viagem longa',
+  'Natureza & aventura',
+  'Hobbies & aprendizado',
+  'Social & cultural',
+  'Descanso intencional',
+  'Personalizada',
+];
+const VIBES = [
+  'Romantico', 'Aventura', 'Relaxamento', 'Cultural', 'Agito social', 'Mochilão',
+  'Natureza & contemplação', 'Gastronômico', 'Fotográfico', 'Desconexão digital', 'Família', 'Solo',
+];
+const MODALIDADES_DURACAO = [
+  'Parada rápida', 'Meio período', 'Dia inteiro', 'Bate volta', 'Final de semana', 'Feriado prolongado', 'Semana+',
+];
+const PERFIS_CUSTO_TIPOS = ['economico', 'padrao', 'conforto'];
+const PERFIS_CUSTO_LABELS = { economico: 'Econômico', padrao: 'Padrão', conforto: 'Conforto' };
+const MEIOS_TRANSPORTE = [
+  'A pé', 'Bicicleta', 'Metro / CPTM', 'Ônibus municipal', 'Ônibus interestadual',
+  'Carro próprio', 'Aplicativo (Uber/99)', 'Aluguel de carro', 'Avião', 'Barco / ferry', 'Van / transfer compartilhado',
+];
+const EPOCAS = ['Jan–Mar', 'Abr–Jun', 'Jul–Set', 'Out–Dez'];
+const CONDICOES_CLIMATICAS = ['Ensolarado', 'Nublado (ok)', 'Chuva (ok)', 'Frio', 'Qualquer'];
+const PERFIS_GRUPO = ['Solo', 'Dupla (casal)', 'Amigos', 'Família', 'Qualquer'];
+const TAMANHOS_GRUPO = ['Solo', 'Dupla', 'Pequeno (3–5)', 'Grande', 'Qualquer'];
+const NIVEIS_CONDICIONAMENTO = ['Não', 'Leve', 'Moderado', 'Intenso'];
+const NIVEIS_PLANEJAMENTO = ['Espontâneo', 'Planejado', 'Requer reserva antecipada'];
+const ACTIVITY_VARIATION_MERGE_FIELDS = [
+  'vibes', 'condicaoClimaticaIdeal', 'temperaturaMiniCelsius', 'antecedenciaMiniDias',
+  'decisaoUltimaHora', 'perfisCusto', 'modalidadesDuracao', 'meiosTransporte',
+  'perfilGrupo', 'evitarAltaTemporada', 'notas',
+];
+
+let activities = [];
+let editingActivityId = null;
+let activityFormStep = 1;
+let activityFormMode = 'create'; // 'create' | 'edit'
+let holidaysCache = null;
+let activityFilters = { categoria: null, vibe: null, status: null, modalidade: null, custoMax: null, epoca: null };
+let activitySearchQuery = '';
+let activityDetailId = null;
+
 const sidebarEl = document.getElementById('sidebar');
 const sidebarBoardsEl = document.getElementById('sidebarBoards');
 const sidebarAddBoardAreaEl = document.getElementById('sidebarAddBoardArea');
