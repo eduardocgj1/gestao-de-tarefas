@@ -1166,6 +1166,30 @@ function findTaskAnywhere(id) {
   }
   return null;
 }
+
+// Resolve a tarefa/board/atividade da tarefa atualmente aberta no modal de edição (editingId),
+// via findTaskAnywhere() — funciona tanto para tarefas de board quanto de checklist. Para
+// tarefas de checklist (source === 'checklist'), `board` retorna um objeto sintético com
+// `.tasks: []` para que funções que esperam `board.tasks` (ex.: setPriority/setCompleted) não
+// quebrem; elas simplesmente não encontram irmãos para reordenar, o que é o comportamento correto
+// para uma tarefa que ainda não está em nenhuma coluna do board.
+function resolveEditingContext() {
+  const found = findTaskAnywhere(editingId);
+  if (!found) return null;
+  const board = found.board || { id: null, tasks: [] };
+  return { task: found.task, board, activity: found.activity, source: found.source };
+}
+
+// Remove a tarefa de onde quer que ela esteja (board ou checklist de atividade).
+function removeTaskAnywhere(id) {
+  const found = findTaskAnywhere(id);
+  if (!found) return;
+  if (found.source === 'board') {
+    found.board.tasks = found.board.tasks.filter(t => t.id !== id);
+  } else {
+    found.activity.checklistTasks = (found.activity.checklistTasks || []).filter(t => t.id !== id);
+  }
+}
 function deleteTask(id, board = currentBoard()) {
   board.tasks = board.tasks.filter(t => t.id !== id);
   save(); refreshCalendarAndBoard();
@@ -1352,9 +1376,9 @@ confirmVolumeBtnEl.addEventListener('click', () => {
 // Transforma a tarefa aberta na primeira ocorrência de uma nova série: a instância existente é
 // reaproveitada (mantém id/histórico) e as demais datas do rule viram novas tarefas.
 function commitRecurrenceForEditingTask(rule, dates) {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
+  const ctx = resolveEditingContext();
+  if (!ctx || ctx.source !== 'board') return; // recorrência só existe para tarefas de board
+  const { task: t, board } = ctx;
   const tasks = board.tasks;
   const seriesId = uid();
 
@@ -1451,8 +1475,8 @@ function taskModalMetaHtml(t, board) {
 }
 
 function currentEditingTask() {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  return findTask(editingId, board);
+  const ctx = resolveEditingContext();
+  return ctx ? ctx.task : null;
 }
 
 function renderTeamSection(t) {
@@ -1533,11 +1557,28 @@ teamMembersListEl.addEventListener('click', e => {
 
 let editingTaskBoardId = null;
 
-function openModal(id, board = currentBoard()) {
+// Abre o modal de edição para uma tarefa de board (passando `board` explicitamente, como sempre
+// foi feito) ou para uma tarefa de checklist de atividade (chamando sem `board` — fe-31 usa esse
+// caminho). Quando a tarefa vem de um checklist ainda não promovido (sem boardId), os campos que
+// dependem de contexto de board (data, prioridade, urgência, recorrência) ficam ocultos — o
+// usuário ainda edita nome, duração, link, delegação, campos customizados (se já promovida) e
+// pode marcar como concluída.
+function openModal(id, board) {
+  const found = board ? { task: findTask(id, board), source: 'board', board, activity: null } : findTaskAnywhere(id);
+  if (!found || !found.task) return;
+  const t = found.task;
   editingId = id;
-  editingTaskBoardId = board.id;
-  const t = findTask(id, board);
-  if (t.seriesId && t.recurrenceRule && !t.isException) {
+  editingTaskBoardId = found.board ? found.board.id : (t.boardId || null);
+  const isChecklistUnpromoted = found.source === 'checklist' && !t.boardId;
+
+  document.getElementById('dateField').classList.toggle('hidden', isChecklistUnpromoted);
+  document.getElementById('urgentField').classList.toggle('hidden', isChecklistUnpromoted);
+
+  if (isChecklistUnpromoted) {
+    seriesInfoBarEl.classList.add('hidden');
+    recToggleRow.classList.add('hidden');
+    recurrencePanel.classList.add('hidden');
+  } else if (t.seriesId && t.recurrenceRule && !t.isException) {
     // Instâncias já marcadas isException se comportam como tarefa comum (não perguntam escopo ao
     // editar/excluir) — mostrar a barra de série aqui induziria o usuário a achar que a edição vai
     // perguntar escopo, quando na verdade não vai (ver critério de aceite sobre isException).
@@ -1548,13 +1589,18 @@ function openModal(id, board = currentBoard()) {
   } else {
     seriesInfoBarEl.classList.add('hidden');
     recToggleRow.classList.remove('hidden');
-    resetRecurrencePanel(t.deliveryDate || t.date);
+    resetRecurrencePanel(t.deliveryDate || t.date || toKey(new Date()));
   }
   f.name.value = t.name;
-  f.date.value = t.deliveryDate || t.date;
+  f.date.value = t.deliveryDate || t.date || '';
   f.link.value = t.link || '';
-  renderModalFields(t, board);
-  document.getElementById('taskModalMeta').innerHTML = taskModalMetaHtml(t, board);
+  // Campos customizados: refletem o board de destino quando a tarefa já pertence a um (board
+  // puro, ou checklist já promovido); tarefa de checklist ainda não promovida não tem board.
+  const fieldsBoard = found.board || boards.find(b => b.id === t.boardId) || { fields: [] };
+  renderModalFields(t, fieldsBoard);
+  document.getElementById('taskModalMeta').innerHTML = t.date
+    ? taskModalMetaHtml(t, fieldsBoard)
+    : (found.activity ? `Checklist de <strong>${escapeHtml(found.activity.name)}</strong> · atividade ainda não planejada` : '');
   renderTeamSection(t);
   f.duration.value = t.duration || 0;
   f.delegated.checked = t.delegated;
@@ -1564,7 +1610,7 @@ function openModal(id, board = currentBoard()) {
   f.urgent.checked = t.urgent;
   f.completed.checked = t.completed;
   delegateFields.classList.toggle('hidden', !t.delegated);
-  priorityField.classList.toggle('hidden', t.completed);
+  priorityField.classList.toggle('hidden', isChecklistUnpromoted || t.completed);
   overlay.classList.remove('hidden');
 }
 function closeModal() {
@@ -1578,6 +1624,7 @@ function closeModal() {
   addTeamMemberFormEl.classList.add('hidden');
   if (dayPopupDate) renderDayPopup();
   if (exportOpen) renderExportModal();
+  if (currentView === 'activities') renderActivities();
 }
 
 document.getElementById('closeModal').addEventListener('click', closeModal);
@@ -1609,9 +1656,9 @@ function resolveEditScope(choice) {
   closeEditScopeModal();
   const fn = pendingPatchFn;
   pendingPatchFn = null;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (t && fn) {
+  const ctx = resolveEditingContext();
+  if (ctx && fn) {
+    const { task: t, board } = ctx;
     // "Apenas esta ocorrência" tira a instância da série de fato (fe-14/v1): sem isso, ela
     // continuaria contando como parte ativa da série e seria sobrescrita por um futuro
     // "esta e todas as futuras" aplicado a partir de uma instância anterior, revertendo
@@ -1627,10 +1674,17 @@ cancelEditScopeBtn.addEventListener('click', () => {
   // modal a partir do estado em memória (que não mudou), já que o app não tem "desfazer" de input.
   pendingPatchFn = null;
   closeEditScopeModal();
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  if (editingId) openModal(editingId, board);
+  if (editingId) openModal(editingId);
 });
 confirmEditScopeOverlay.addEventListener('click', e => { if (e.target === confirmEditScopeOverlay) cancelEditScopeBtn.click(); });
+
+// Chamado após qualquer mutação de tarefa (board ou checklist) para persistir e re-renderizar
+// todas as views que podem estar exibindo essa tarefa.
+function finishTaskMutation() {
+  save();
+  refreshCalendarAndBoard();
+  if (currentView === 'activities') renderActivities();
+}
 
 function applyPatchWithScope(t, board, fn, scope) {
   if (scope === 'all') {
@@ -1640,8 +1694,7 @@ function applyPatchWithScope(t, board, fn, scope) {
   } else {
     fn(t, board);
   }
-  save();
-  refreshCalendarAndBoard();
+  finishTaskMutation();
 }
 
 // directPatch: aplica a mutação diretamente na instância aberta, sem passar pela pergunta de
@@ -1649,17 +1702,16 @@ function applyPatchWithScope(t, board, fn, scope) {
 // comportamento ao mover uma instância de série é sempre virar exceção (fe-16), nunca propagar
 // para a série.
 function directPatch(fn) {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
-  fn(t, board);
-  save(); refreshCalendarAndBoard();
+  const ctx = resolveEditingContext();
+  if (!ctx) return;
+  fn(ctx.task, ctx.board);
+  finishTaskMutation();
 }
 
 function patch(fn) {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
+  const ctx = resolveEditingContext();
+  if (!ctx) return;
+  const { task: t, board } = ctx;
 
   if (t.seriesId && !t.isException && editScopeChoice === null) {
     pendingPatchFn = fn;
@@ -1739,20 +1791,25 @@ function deleteSeriesFromInstance(t, board) {
   refreshCalendarAndBoard();
 }
 
+// Exclui a tarefa aberta no modal de onde quer que ela esteja (board ou checklist de atividade)
+// e re-renderiza tudo que pode estar exibindo essa tarefa.
+function deleteTaskAnywhere(id) {
+  removeTaskAnywhere(id);
+  finishTaskMutation();
+}
+
 deleteScopeOnlyThisBtn.addEventListener('click', () => {
   closeDeleteScopeModal();
   if (!editingId) return;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  deleteTask(editingId, board);
+  deleteTaskAnywhere(editingId);
   closeModal();
 });
 deleteScopeAllFutureBtn.addEventListener('click', () => {
   closeDeleteScopeModal();
   if (!editingId) return;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
-  deleteSeriesFromInstance(t, board);
+  const ctx = resolveEditingContext();
+  if (!ctx || ctx.source !== 'board') return; // séries recorrentes só existem em tarefas de board
+  deleteSeriesFromInstance(ctx.task, ctx.board);
   closeModal();
 });
 cancelDeleteScopeBtn.addEventListener('click', closeDeleteScopeModal);
@@ -1760,14 +1817,14 @@ confirmDeleteScopeOverlay.addEventListener('click', e => { if (e.target === conf
 
 document.getElementById('deleteTask').addEventListener('click', () => {
   if (!editingId) return;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
+  const ctx = resolveEditingContext();
+  if (!ctx) return;
+  const { task: t } = ctx;
   if (t.seriesId && !t.isException) {
     openDeleteScopeModal(t);
     return;
   }
-  deleteTask(editingId, board);
+  deleteTaskAnywhere(editingId);
   closeModal();
 });
 
