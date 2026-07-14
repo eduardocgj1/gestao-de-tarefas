@@ -1236,7 +1236,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 
 ### Backend (server.js)
 
-- [ ] `be-01` Estender `appTaskToDb(t, boardId)` para `appTaskToDb(t, boardId, activityId = null)` e `dbTaskToApp(t)`, incluindo `activity_id`/`activityId` e os três campos de antecedência (`antecedencia_minima_dias`/`antecedenciaMiniDias`, `antecedencia_max_dias`/`antecedenciaMaxDias`, `antecedencia_rec_dias`/`antecedenciaRecDias`), conforme os blocos de código já definidos na seção "Mapeamento app ↔ banco" da spec.
+- [x] `be-01` Estender `appTaskToDb(t, boardId)` para `appTaskToDb(t, boardId, activityId = null)` e `dbTaskToApp(t)`, incluindo `activity_id`/`activityId` e os três campos de antecedência (`antecedencia_minima_dias`/`antecedenciaMiniDias`, `antecedencia_max_dias`/`antecedenciaMaxDias`, `antecedencia_rec_dias`/`antecedenciaRecDias`), conforme os blocos de código já definidos na seção "Mapeamento app ↔ banco" da spec.
        Contexto: funções atuais em `server.js` linhas 152-201. Manter todos os campos existentes intactos — só estender assinatura e objeto de retorno.
        Depende de: `db-01`
 - [ ] `be-02` Criar as funções `appActivityToDb(a)` e `dbActivityToApp(a)` em `server.js`, copiando fielmente o mapeamento definido na spec (inclui `checklistTasks: []` como placeholder em `dbActivityToApp`, populado depois em `loadState()`).

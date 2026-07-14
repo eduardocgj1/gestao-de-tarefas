@@ -149,10 +149,11 @@ async function saveState(state) {
 }
 
 // ── Mapeamento app <-> banco ─────────────────────────────────
-function appTaskToDb(t, boardId) {
+function appTaskToDb(t, boardId, activityId = null) {
   return {
     id:             t.id,
-    board_id:       boardId,
+    board_id:       boardId ?? t.boardId ?? null,
+    activity_id:    activityId ?? t.activityId ?? null,
     name:           t.name,
     task_date:      t.date       || null,
     delivery_date:  t.deliveryDate || null,
@@ -172,12 +173,17 @@ function appTaskToDb(t, boardId) {
     series_id:       t.seriesId       ?? null,
     recurrence_rule: t.recurrenceRule ?? null,
     is_exception:    t.isException    ?? false,
+    antecedencia_minima_dias: t.antecedenciaMiniDias ?? null,
+    antecedencia_max_dias:    t.antecedenciaMaxDias  ?? null,
+    antecedencia_rec_dias:    t.antecedenciaRecDias  ?? null,
   };
 }
 
 function dbTaskToApp(t) {
   return {
     id:            t.id,
+    boardId:       t.board_id    ?? null,
+    activityId:    t.activity_id ?? null,
     name:          t.name,
     date:          t.task_date      || '',
     deliveryDate:  t.delivery_date  || '',
@@ -197,6 +203,9 @@ function dbTaskToApp(t) {
     seriesId:       t.series_id       ?? null,
     recurrenceRule: t.recurrence_rule ?? null,
     isException:    t.is_exception    ?? false,
+    antecedenciaMiniDias: t.antecedencia_minima_dias ?? null,
+    antecedenciaMaxDias:  t.antecedencia_max_dias    ?? null,
+    antecedenciaRecDias:  t.antecedencia_rec_dias    ?? null,
   };
 }
 
