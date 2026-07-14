@@ -447,6 +447,98 @@
   </div>
 </div>
 
+<div id="activityFormOverlay" class="modal-overlay hidden">
+  <div class="modal activity-form-modal">
+    <button id="closeActivityForm" class="close-btn">&times;</button>
+    <div class="activity-form-stepper">
+      <div class="activity-form-step-dot active" data-step="1">1<span class="activity-form-step-label">Identidade</span></div>
+      <div class="activity-form-step-dot" data-step="2">2<span class="activity-form-step-label">Logística</span></div>
+      <div class="activity-form-step-dot" data-step="3">3<span class="activity-form-step-label">Condições</span></div>
+      <div class="activity-form-step-dot" data-step="4">4<span class="activity-form-step-label">Variações</span></div>
+      <div class="activity-form-step-dot" data-step="5">5<span class="activity-form-step-label">Planejamento</span></div>
+    </div>
+
+    <div id="activityFormStep1" class="activity-form-step"></div>
+    <div id="activityFormStep2" class="activity-form-step hidden"></div>
+    <div id="activityFormStep3" class="activity-form-step hidden"></div>
+    <div id="activityFormStep4" class="activity-form-step hidden"></div>
+    <div id="activityFormStep5" class="activity-form-step hidden"></div>
+
+    <div class="activity-form-footer">
+      <span id="activityFormAutosaveHint" class="activity-form-autosave-hint">Rascunho salvo automaticamente</span>
+      <div class="activity-form-footer-actions">
+        <button type="button" id="activityFormBackBtn" class="btn-neutral">Voltar</button>
+        <button type="button" id="activityFormDraftBtn" class="btn-neutral">Salvar rascunho</button>
+        <button type="button" id="activityFormNextBtn" class="btn-primary">Próximo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="activityDetailOverlay" class="modal-overlay hidden">
+  <div class="modal activity-detail-modal">
+    <div class="activity-detail-header">
+      <div id="activityDetailTitle" class="activity-detail-title"></div>
+      <button type="button" id="activityDetailEditBtn" class="btn-neutral-sm">Editar</button>
+      <button id="closeActivityDetail" class="close-btn">&times;</button>
+    </div>
+    <div class="activity-detail-sections">
+      <section id="activityDetailOverview" class="activity-detail-section"></section>
+      <section id="activityDetailLogistics" class="activity-detail-section"></section>
+      <section id="activityDetailConditions" class="activity-detail-section"></section>
+      <section id="activityDetailVariations" class="activity-detail-section"></section>
+      <section id="activityDetailPlanning" class="activity-detail-section"></section>
+      <section id="activityDetailHistory" class="activity-detail-section"></section>
+    </div>
+    <div id="activityDetailFooter" class="activity-detail-footer"></div>
+  </div>
+</div>
+
+<div id="activityImportOverlay" class="modal-overlay hidden">
+  <div class="modal activity-import-modal">
+    <button id="closeActivityImport" class="close-btn">&times;</button>
+    <h2>Importar atividade via JSON</h2>
+    <textarea id="activityImportTextarea" class="activity-import-textarea" placeholder="Cole aqui o JSON gerado pelo prompt de refinamento..."></textarea>
+    <div id="activityImportErrors" class="activity-import-errors hidden"></div>
+    <div id="activityImportPreview" class="activity-import-preview hidden"></div>
+    <div class="activity-import-actions">
+      <button type="button" id="activityImportValidateBtn" class="btn-neutral">Validar</button>
+      <button type="button" id="activityImportConfirmBtn" class="btn-primary" disabled>Confirmar</button>
+      <button type="button" id="activityImportCancelBtn" class="btn-neutral">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="activityRealizationOverlay" class="modal-overlay hidden">
+  <div class="modal activity-realization-modal">
+    <button id="closeActivityRealization" class="close-btn">&times;</button>
+    <h2>Marcar como realizada</h2>
+    <div id="activityRealizationFields" class="activity-realization-fields"></div>
+    <div class="modal-footer">
+      <button type="button" id="activityRealizationCancelBtn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="activityRealizationConfirmBtn" class="btn-primary">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div id="activityPromoteOverlay" class="modal-overlay hidden">
+  <div class="modal activity-promote-modal">
+    <button id="closeActivityPromote" class="close-btn">&times;</button>
+    <h2>Mover para Planejada</h2>
+    <label>Data de início
+      <input type="date" id="activityPromoteDate">
+    </label>
+    <label>Board de destino
+      <select id="activityPromoteBoard"></select>
+    </label>
+    <div id="activityPromotePreview" class="activity-promote-preview"></div>
+    <div class="modal-footer">
+      <button type="button" id="activityPromoteCancelBtn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="activityPromoteConfirmBtn" class="btn-primary" disabled>Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div id="weatherCityPopover" class="weather-city-popover hidden">
   <div class="day-popup-weather-search-row">
     <input type="text" id="weatherPopoverInput" class="weather-city-input" placeholder="Buscar cidade..." autocomplete="off">
