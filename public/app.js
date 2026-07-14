@@ -657,7 +657,18 @@ function compare(a, b) {
   if (a.urgent) return (b.urgentRank || 0) - (a.urgentRank || 0);
   return (a.priority || 0) - (b.priority || 0);
 }
-function tasksFor(key, board = currentBoard()) { return board.tasks.filter(t => t.date === key).sort(compare); }
+// Tarefas de um board numa data: tarefas próprias do board + tarefas de checklist de atividades
+// já promovidas para esse board/data (fonte de verdade única em activity.checklistTasks — sem
+// duplicação em board.tasks).
+function getTasksForDateAndBoard(boardId, dateKey) {
+  const board = boards.find(b => b.id === boardId);
+  const ownTasks = (board ? board.tasks : []).filter(t => t.date === dateKey);
+  const promotedTasks = activities
+    .flatMap(a => (a.checklistTasks || []))
+    .filter(t => t.boardId === boardId && t.date === dateKey);
+  return [...ownTasks, ...promotedTasks];
+}
+function tasksFor(key, board = currentBoard()) { return getTasksForDateAndBoard(board.id, key).sort(compare); }
 
 function setPriority(task, newPriority, board = currentBoard()) {
   const dateKey = task.date;
