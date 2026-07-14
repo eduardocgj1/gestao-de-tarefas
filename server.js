@@ -231,6 +231,81 @@ function dbEventToApp(e) {
   };
 }
 
+function appActivityToDb(a) {
+  return {
+    id:                         a.id,
+    name:                       a.name,
+    categoria:                  a.categoria,
+    status:                     a.status,
+    descricao:                  a.descricao               ?? null,
+    foto_capa:                  a.fotoCapa                ?? null,
+    vibes:                      a.vibes                   ?? [],
+    modalidades_duracao:        a.modalidadesDuracao      ?? [],
+    meios_transporte:           a.meiosTransporte         ?? [],
+    nivel_planejamento:         a.nivelPlanejamento       ?? null,
+    antecedencia_minima_dias:   a.antecedenciaMiniDias    ?? null,
+    decisao_ultima_hora:        a.decisaoUltimaHora       ?? false,
+    localidade:                 a.localidade              ?? null,
+    distancia_sp:               a.distanciaSP             ?? null,
+    condicao_climatica_ideal:   a.condicaoClimaticaIdeal  ?? [],
+    temperatura_minima_celsius: a.temperaturaMiniCelsius  ?? null,
+    epoca_ideal:                a.epocaIdeal              ?? [],
+    perfil_grupo:               a.perfilGrupo             ?? [],
+    tamanho_grupo:              a.tamanhoGrupo            ?? null,
+    condicionamento_fisico:     a.condicionamentoFisico   ?? null,
+    evitar_alta_temporada:      a.evitarAltaTemporada     ?? false,
+    repetivel:                  a.repetivel               ?? true,
+    pet_friendly:               a.petFriendly             ?? null,
+    perfis_custo:               a.perfisCusto             ?? {},
+    variacoes:                  a.variacoes               ?? [],
+    notas:                      a.notas                   ?? null,
+    links:                      a.links                   ?? [],
+    data_inicio:                a.dataInicio              ?? null,
+    board_destino_id:           a.boardDestinoId          ?? null,
+    realizacoes:                a.realizacoes             ?? [],
+    created_at:                 a.createdAt               ?? null,
+    updated_at:                 a.updatedAt               ?? null,
+  };
+}
+
+function dbActivityToApp(a) {
+  return {
+    id:                       a.id,
+    name:                     a.name,
+    categoria:                a.categoria,
+    status:                   a.status,
+    descricao:                a.descricao               ?? null,
+    fotoCapa:                 a.foto_capa               ?? null,
+    vibes:                    a.vibes                   ?? [],
+    modalidadesDuracao:       a.modalidades_duracao     ?? [],
+    meiosTransporte:          a.meios_transporte        ?? [],
+    nivelPlanejamento:        a.nivel_planejamento      ?? null,
+    antecedenciaMiniDias:     a.antecedencia_minima_dias ?? null,
+    decisaoUltimaHora:        a.decisao_ultima_hora     ?? false,
+    localidade:               a.localidade              ?? null,
+    distanciaSP:              a.distancia_sp            ?? null,
+    condicaoClimaticaIdeal:   a.condicao_climatica_ideal ?? [],
+    temperaturaMiniCelsius:   a.temperatura_minima_celsius ?? null,
+    epocaIdeal:               a.epoca_ideal             ?? [],
+    perfilGrupo:              a.perfil_grupo            ?? [],
+    tamanhoGrupo:             a.tamanho_grupo           ?? null,
+    condicionamentoFisico:    a.condicionamento_fisico  ?? null,
+    evitarAltaTemporada:      a.evitar_alta_temporada   ?? false,
+    repetivel:                a.repetivel               ?? true,
+    petFriendly:              a.pet_friendly            ?? null,
+    perfisCusto:              a.perfis_custo            ?? {},
+    variacoes:                a.variacoes               ?? [],
+    notas:                    a.notas                   ?? null,
+    links:                    a.links                   ?? [],
+    dataInicio:               a.data_inicio             ?? null,
+    boardDestinoId:           a.board_destino_id        ?? null,
+    realizacoes:              a.realizacoes             ?? [],
+    checklistTasks:           [],  // populado separadamente a partir da tabela tasks
+    createdAt:                a.created_at              ?? null,
+    updatedAt:                a.updated_at              ?? null,
+  };
+}
+
 // ── Servidor HTTP ────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   // GET /api/tasks — carrega estado do Supabase
