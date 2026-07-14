@@ -100,7 +100,7 @@ async function loadState() {
 
 // ── Escrita: sincroniza estado completo no Supabase ─────────
 async function saveState(state) {
-  const { boards = [], calendarEvents = [], people = [], activeBoardId,
+  const { boards = [], activities = [], calendarEvents = [], people = [], activeBoardId,
           pomodoroSettings, pomodoro, exportViews = {} } = state;
 
   // 1. Upsert boards (sem tasks — tasks ficam em tabela separada)
@@ -119,17 +119,48 @@ async function saveState(state) {
     if (error) throw error;
   }
 
-  // 3. Upsert tasks (flatten de todos os boards)
-  const allTasks = boards.flatMap(b => (b.tasks || []).map(t => appTaskToDb(t, b.id)));
+  // 2.5. Upsert activities (precisa acontecer antes do upsert de tasks — tasks.activity_id
+  // referencia activities(id) via FK, então a atividade precisa existir antes da task promovida/checklist)
+  if (activities.length > 0) {
+    const { error } = await supabase.from('activities').upsert(
+      activities.map(appActivityToDb), { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+
+  // 3. Upsert tasks
+  // Tasks de board puro (sem activityId) — tarefas promovidas NÃO estão em board.tasks,
+  // ficam em activity.checklistTasks e são salvas pelo bloco abaixo.
+  const boardTasks = boards.flatMap(b =>
+    (b.tasks || [])
+      .filter(t => !t.activityId)
+      .map(t => appTaskToDb(t, b.id))
+  );
+  // Todas as tasks de checklist (promovidas ou não) — fonte de verdade única em activity.checklistTasks.
+  // Tarefas promovidas têm boardId preenchido; não-promovidas têm boardId null.
+  const allChecklistTasks = activities.flatMap(a =>
+    (a.checklistTasks || []).map(t => appTaskToDb(t, t.boardId || null, a.id))
+  );
+  const allTasks = [...boardTasks, ...allChecklistTasks];
   if (allTasks.length > 0) {
     const { error } = await supabase.from('tasks').upsert(allTasks, { onConflict: 'id' });
     if (error) throw error;
   }
 
-  // 4. Deletar tasks removidas (só se vieram boards no payload)
+  // 4. Deletar tasks removidas (só se vieram boards OU activities no payload — evita wipe
+  // acidental quando um dos dois arrays está vazio por engano/erro, mas o outro tem conteúdo real;
+  // ver histórico de bug de wipe no commit f5e418d)
   const taskIds = allTasks.map(t => t.id);
-  if (boardIds.length > 0 && taskIds.length > 0) {
+  if ((boards.length > 0 || activities.length > 0) && taskIds.length > 0) {
     const { error } = await supabase.from('tasks').delete().not('id', 'in', `(${taskIds.join(',')})`);
+    if (error) throw error;
+  }
+
+  // 4.5. Deletar activities removidas (só se vieram activities no payload — mesmo padrão de
+  // guard usado para boards/tasks/eventos/pessoas; evita wipe acidental)
+  const activityIds = activities.map(a => a.id);
+  if (activityIds.length > 0) {
+    const { error } = await supabase.from('activities').delete().not('id', 'in', `(${activityIds.join(',')})`);
     if (error) throw error;
   }
 
