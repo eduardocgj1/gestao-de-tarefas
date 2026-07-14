@@ -3446,4 +3446,92 @@ document.querySelectorAll('.activity-form-step-dot').forEach(dot => {
   });
 });
 
+// Aplica uma mutação na atividade em edição e persiste — auto-save reaproveitando o debounce de
+// 250ms já existente em save() (mesmo padrão usado por patch() nas tarefas do board).
+function patchActivity(a, fn) {
+  fn(a);
+  a.updatedAt = Date.now();
+  if (typeof window.maybeAdvanceActivityStatus === 'function') window.maybeAdvanceActivityStatus(a);
+  save();
+  if (currentView === 'activities') renderActivities();
+}
+
+function multiSelectChipsHtml(fieldName, options, selected) {
+  return `<div class="chip-select-group" data-field="${fieldName}">
+    ${options.map(o => `<button type="button" class="chip-select-option ${(selected || []).includes(o) ? 'selected' : ''}" data-value="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join('')}
+  </div>`;
+}
+
+function bindMultiSelectChips(container, fieldName, activity) {
+  const group = container.querySelector(`[data-field="${fieldName}"]`);
+  if (!group) return;
+  group.addEventListener('click', e => {
+    const btn = e.target.closest('.chip-select-option');
+    if (!btn) return;
+    const val = btn.dataset.value;
+    patchActivity(activity, x => {
+      if (!x[fieldName]) x[fieldName] = [];
+      const i = x[fieldName].indexOf(val);
+      if (i >= 0) x[fieldName].splice(i, 1); else x[fieldName].push(val);
+    });
+    btn.classList.toggle('selected');
+  });
+}
+
+// ---------- Etapa 1: Identidade ----------
+function activityCategoriaFieldHtml(a) {
+  const isKnown = ACTIVITY_CATEGORIES.includes(a.categoria);
+  const customValue = isKnown ? '' : (a.categoria || '');
+  return `
+    <label>Categoria
+      <select id="af-categoria">
+        ${ACTIVITY_CATEGORIES.map(c => `<option value="${escapeHtml(c)}" ${((isKnown && a.categoria === c) || (!isKnown && c === 'Personalizada')) ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+      </select>
+    </label>
+    <label id="af-categoria-custom-field" class="${isKnown ? 'hidden' : ''}">Categoria personalizada
+      <input type="text" id="af-categoria-custom" list="af-categoria-custom-list" value="${escapeHtml(customValue)}">
+      <datalist id="af-categoria-custom-list">${customCategoriesInUse().map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+    </label>`;
+}
+
+function renderActivityFormStep1(a) {
+  const container = document.getElementById('activityFormStep1');
+  container.innerHTML = `
+    <label>Nome
+      <input type="text" id="af-name" value="${escapeHtml(a.name || '')}" placeholder="Ex.: Ubatuba, cafezinho no Mercadão...">
+    </label>
+    ${activityCategoriaFieldHtml(a)}
+    <label>Vibe</label>
+    ${multiSelectChipsHtml('vibes', VIBES, a.vibes)}
+    <label>Descrição
+      <textarea id="af-descricao" rows="3">${escapeHtml(a.descricao || '')}</textarea>
+    </label>
+    <label>Localidade
+      <input type="text" id="af-localidade" value="${escapeHtml(a.localidade || '')}" placeholder="Ex.: Cantareira, Ubatuba, Mercadão">
+    </label>
+    <label>Foto de capa
+      <input type="file" id="af-foto-capa" accept="image/*">
+    </label>
+    <div id="af-foto-capa-preview" class="activity-cover-preview">${a.fotoCapa ? `<img src="${a.fotoCapa}">` : ''}</div>
+  `;
+
+  document.getElementById('af-name').addEventListener('input', e => patchActivity(a, x => { x.name = e.target.value; }));
+  document.getElementById('af-categoria').addEventListener('change', e => {
+    document.getElementById('af-categoria-custom-field').classList.toggle('hidden', e.target.value !== 'Personalizada');
+    if (e.target.value !== 'Personalizada') patchActivity(a, x => { x.categoria = e.target.value; });
+    else patchActivity(a, x => { x.categoria = document.getElementById('af-categoria-custom').value.trim(); });
+  });
+  document.getElementById('af-categoria-custom').addEventListener('input', e => patchActivity(a, x => { x.categoria = e.target.value.trim(); }));
+  document.getElementById('af-descricao').addEventListener('input', e => patchActivity(a, x => { x.descricao = e.target.value; }));
+  document.getElementById('af-localidade').addEventListener('input', e => patchActivity(a, x => { x.localidade = e.target.value; }));
+  bindMultiSelectChips(container, 'vibes', a);
+  document.getElementById('af-foto-capa').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const dataUrl = await resizeCoverPhotoToBase64(file);
+    patchActivity(a, x => { x.fotoCapa = dataUrl; });
+    document.getElementById('af-foto-capa-preview').innerHTML = `<img src="${dataUrl}">`;
+  });
+}
+
 load();

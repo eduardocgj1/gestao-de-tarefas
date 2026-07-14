@@ -1314,7 +1314,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-21`
 - [x] `fe-23` Implementar a navegação do stepper de 5 etapas (`#activityFormOverlay`): troca de etapa visível, botões "Próximo"/"Voltar", validação mínima de campos obrigatórios por etapa antes de avançar, botão "Salvar rascunho" disponível em qualquer etapa. Ainda sem os campos de cada etapa (tasks seguintes populam o conteúdo).
        Depende de: `fe-22`
-- [ ] `fe-24` Implementar a Etapa 1 — Identidade: campos nome, categoria (+autocomplete de personalizada), vibes (multisseleção), descrição, localidade, e upload de foto de capa (preview local antes do resize/salvamento, que é feito em `fe-25`).
+- [x] `fe-24` Implementar a Etapa 1 — Identidade: campos nome, categoria (+autocomplete de personalizada), vibes (multisseleção), descrição, localidade, e upload de foto de capa (preview local antes do resize/salvamento, que é feito em `fe-25`).
        Depende de: `fe-23`
 - [ ] `fe-25` Implementar `resizeCoverPhotoToBase64(file)`: redimensiona a imagem (máx. 800×600, qualidade JPEG 80%) via `<canvas>` e retorna a data URL base64, usado no upload da Etapa 1 antes de gravar em `activity.fotoCapa`.
        Depende de: `fe-24`
