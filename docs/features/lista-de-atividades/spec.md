@@ -1310,7 +1310,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 - [x] `fe-21` Implementar o fluxo de criação rápida (Fluxo 1): clique em "+ Nova atividade" abre um modal simples (nome + seleção de categoria, com autocomplete de categorias personalizadas já existentes derivado do array `activities` em memória), cria a atividade com `status: 'rascunho'` e demais campos default, chama `save()` e `renderActivities()`.
        Contexto: normalização do texto de categoria personalizada (trim, sem forçar caixa) antes de salvar, conforme "Categoria Personalizada" na spec.
        Depende de: `fe-20`
-- [ ] `fe-22` Implementar abertura/fechamento do modal de detalhes (`#activityDetailOverlay`) ao clicar num card: popula as seções (Visão geral / Logística / Condições / Variações / Planejamento / Histórico) com os dados da atividade, botão "Editar" abre o formulário em etapas (`fe-23`) pré-preenchido.
+- [x] `fe-22` Implementar abertura/fechamento do modal de detalhes (`#activityDetailOverlay`) ao clicar num card: popula as seções (Visão geral / Logística / Condições / Variações / Planejamento / Histórico) com os dados da atividade, botão "Editar" abre o formulário em etapas (`fe-23`) pré-preenchido.
        Depende de: `fe-21`
 - [ ] `fe-23` Implementar a navegação do stepper de 5 etapas (`#activityFormOverlay`): troca de etapa visível, botões "Próximo"/"Voltar", validação mínima de campos obrigatórios por etapa antes de avançar, botão "Salvar rascunho" disponível em qualquer etapa. Ainda sem os campos de cada etapa (tasks seguintes populam o conteúdo).
        Depende de: `fe-22`

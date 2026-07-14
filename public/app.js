@@ -3209,4 +3209,156 @@ document.getElementById('activityQuickCategoria').addEventListener('change', e =
 });
 document.getElementById('activityQuickCreateBtn').addEventListener('click', confirmActivityQuickCreate);
 
+// ---------- modal de detalhes ----------
+function detailRow(label, value) {
+  if (value == null || value === '' || (Array.isArray(value) && !value.length)) return '';
+  const text = Array.isArray(value) ? value.map(escapeHtml).join(', ') : escapeHtml(String(value));
+  return `<div class="activity-detail-row"><span class="activity-detail-row-label">${escapeHtml(label)}</span><span class="activity-detail-row-value">${text}</span></div>`;
+}
+
+function activityDetailOverviewHtml(a) {
+  return `
+    <h3>Visão geral</h3>
+    ${a.fotoCapa ? `<div class="activity-detail-cover" style="background-image:url('${a.fotoCapa}')"></div>` : ''}
+    ${detailRow('Categoria', a.categoria)}
+    ${detailRow('Vibe', a.vibes)}
+    ${detailRow('Descrição', a.descricao)}
+    ${detailRow('Localidade', a.localidade)}
+  `;
+}
+
+function activityDetailLogisticsHtml(a) {
+  const custoRows = PERFIS_CUSTO_TIPOS.map(tipo => {
+    const perfil = (a.perfisCusto || {})[tipo];
+    if (!perfil) return '';
+    const baixa = perfil.baixa_temporada;
+    const alta = perfil.alta_temporada;
+    const parts = [];
+    if (baixa && baixa[0] != null) parts.push(`Baixa: R$ ${baixa[0]}–${baixa[1]}`);
+    if (alta && alta[0] != null) parts.push(`Alta: R$ ${alta[0]}–${alta[1]}`);
+    return parts.length ? detailRow(PERFIS_CUSTO_LABELS[tipo], parts.join(' · ')) : '';
+  }).join('');
+  return `
+    <h3>Logística</h3>
+    ${detailRow('Modalidades de duração', a.modalidadesDuracao)}
+    ${detailRow('Meios de transporte', a.meiosTransporte)}
+    ${custoRows}
+    ${detailRow('Nível de planejamento', a.nivelPlanejamento)}
+    ${detailRow('Antecedência mínima geral', a.antecedenciaMiniDias != null ? `${a.antecedenciaMiniDias} dias` : null)}
+    ${detailRow('Decisão de última hora', a.decisaoUltimaHora ? 'Sim' : null)}
+    ${detailRow('Distância de SP', a.distanciaSP)}
+  `;
+}
+
+function activityDetailConditionsHtml(a) {
+  return `
+    <h3>Condições ideais</h3>
+    ${detailRow('Condição climática ideal', a.condicaoClimaticaIdeal)}
+    ${detailRow('Temperatura mínima ideal', a.temperaturaMiniCelsius != null ? `${a.temperaturaMiniCelsius}°C` : null)}
+    ${detailRow('Época ideal', a.epocaIdeal)}
+    ${detailRow('Perfil de grupo', a.perfilGrupo)}
+    ${detailRow('Tamanho do grupo', a.tamanhoGrupo)}
+    ${detailRow('Condicionamento físico', a.condicionamentoFisico)}
+    ${detailRow('Evitar alta temporada', a.evitarAltaTemporada ? 'Sim' : null)}
+    ${detailRow('Repetível', a.repetivel ? 'Sim' : 'Não')}
+    ${detailRow('Pet-friendly', a.petFriendly === true ? 'Sim' : (a.petFriendly === false ? 'Não' : null))}
+  `;
+}
+
+function activityVariationCardHtml(v) {
+  const rows = ACTIVITY_VARIATION_MERGE_FIELDS
+    .filter(f => v[f] != null && !(Array.isArray(v[f]) && !v[f].length))
+    .map(f => detailRow(f, Array.isArray(v[f]) ? v[f] : String(v[f])))
+    .join('');
+  return `
+  <div class="activity-variation-card" data-id="${v.id}">
+    <div class="activity-variation-card-header">
+      <strong>${escapeHtml(v.nome)}</strong>
+      <span class="activity-variation-card-epocas">${(v.epocasCobertas || []).map(escapeHtml).join(', ')}${v.incluiFeriadosProlongados ? ' + feriados prolongados' : ''}</span>
+    </div>
+    ${rows}
+  </div>`;
+}
+
+function activityDetailVariationsHtml(a) {
+  const variations = a.variacoes || [];
+  return `
+    <h3>Variações sazonais</h3>
+    ${variations.length ? variations.map(activityVariationCardHtml).join('') : '<div class="activity-detail-empty">Nenhuma variação sazonal cadastrada.</div>'}
+  `;
+}
+
+function activityChecklistProgressHtml(a) {
+  const tasks = a.checklistTasks || [];
+  const done = tasks.filter(t => t.completed).length;
+  return tasks.length ? `<div class="activity-checklist-progress">${done} de ${tasks.length} itens concluídos</div>` : '';
+}
+
+function activityDetailPlanningHtml(a) {
+  const links = a.links || [];
+  const linksHtml = links.length
+    ? `<ul class="activity-links-list">${links.map(l => `<li><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.titulo || l.url)}</a></li>`).join('')}</ul>`
+    : '';
+  return `
+    <h3>Planejamento</h3>
+    ${activityChecklistProgressHtml(a)}
+    <div class="activity-detail-checklist" id="activityDetailChecklist"></div>
+    ${detailRow('Data de início', a.dataInicio)}
+    ${detailRow('Board de destino', a.boardDestinoId ? (boards.find(b => b.id === a.boardDestinoId) || {}).name : null)}
+    ${detailRow('Notas', a.notas)}
+    ${linksHtml}
+  `;
+}
+
+function activityDetailHistoryHtml(a) {
+  const realizacoes = a.realizacoes || [];
+  if (!realizacoes.length) return `<h3>Histórico</h3><div class="activity-detail-empty">Ainda não realizada.</div>`;
+  return `
+    <h3>Histórico (Realizada ${realizacoes.length}×)</h3>
+    ${realizacoes.map(r => `
+      <div class="activity-realization-card" data-id="${r.id}">
+        ${detailRow('Data', fmtDateBR(r.data))}
+        ${detailRow('Gasto total', r.gasto_total != null ? `R$ ${r.gasto_total}` : null)}
+        ${detailRow('Perfil vivido', r.perfil_vivido ? PERFIS_CUSTO_LABELS[r.perfil_vivido] : null)}
+        ${detailRow('Com quem', r.com_quem)}
+        ${detailRow('Avaliação', r.avaliacao ? `${'★'.repeat(r.avaliacao)}${'☆'.repeat(5 - r.avaliacao)}` : null)}
+        ${detailRow('Nota', r.nota)}
+      </div>
+    `).join('')}
+  `;
+}
+
+function activityDetailFooterHtml(a) {
+  return `<button type="button" class="btn-neutral activity-delete-btn" data-id="${a.id}">Excluir atividade</button>`;
+}
+
+function openActivityDetail(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  activityDetailId = id;
+  document.getElementById('activityDetailTitle').textContent = a.name;
+  document.getElementById('activityDetailOverview').innerHTML = activityDetailOverviewHtml(a);
+  document.getElementById('activityDetailLogistics').innerHTML = activityDetailLogisticsHtml(a);
+  document.getElementById('activityDetailConditions').innerHTML = activityDetailConditionsHtml(a);
+  document.getElementById('activityDetailVariations').innerHTML = activityDetailVariationsHtml(a);
+  document.getElementById('activityDetailPlanning').innerHTML = activityDetailPlanningHtml(a);
+  document.getElementById('activityDetailHistory').innerHTML = activityDetailHistoryHtml(a);
+  document.getElementById('activityDetailFooter').innerHTML = activityDetailFooterHtml(a);
+  document.getElementById('activityDetailOverlay').classList.remove('hidden');
+}
+function closeActivityDetail() {
+  document.getElementById('activityDetailOverlay').classList.add('hidden');
+  activityDetailId = null;
+}
+
+document.getElementById('activitiesView').addEventListener('click', e => {
+  const card = e.target.closest('.activity-card');
+  if (card) { openActivityDetail(card.dataset.id); return; }
+});
+document.getElementById('closeActivityDetail').addEventListener('click', closeActivityDetail);
+document.getElementById('activityDetailOverlay').addEventListener('click', e => { if (e.target.id === 'activityDetailOverlay') closeActivityDetail(); });
+document.getElementById('activityDetailEditBtn').addEventListener('click', () => {
+  if (activityDetailId) openActivityForm(activityDetailId);
+});
+
 load();
