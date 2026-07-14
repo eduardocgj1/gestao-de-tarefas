@@ -1256,7 +1256,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 - [x] `fe-02` Adicionar o botão `#sidebarActivitiesItem` na sidebar, logo abaixo de `#sidebarCalendarItem` (após linha 32 de `public/index.html`), com a marcação exata definida na spec (ícone `.icon-activities-wrap`/`.icon-activities` + label "Atividades").
        Contexto: mesmo padrão estrutural de `#sidebarCalendarItem` (linhas 29-32).
        Depende de: nenhuma
-- [ ] `fe-03` Adicionar `<main id="activitiesView" class="activities-view hidden"></main>` em `public/index.html`, logo após o fechamento de `#calendarView` (após linha 90).
+- [x] `fe-03` Adicionar `<main id="activitiesView" class="activities-view hidden"></main>` em `public/index.html`, logo após o fechamento de `#calendarView` (após linha 90).
        Contexto: mesmo padrão de `#board` (linha 80) e `#calendarView` (linha 82) — container vazio, preenchido via JS por `renderActivities()`.
        Depende de: `fe-02`
 - [ ] `fe-04` Adicionar `<div class="nav-activities hidden" id="navActivitiesControls">` dentro de `.nav` (após `#navCalendarControls`, linha 74), com: input de busca, botão "Filtros" (dropdown/painel a ser preenchido depois), botão "Importar", botão "+ Nova atividade".
