@@ -3069,9 +3069,66 @@ function activityDraftBannerHtml() {
 
 const ACTIVITY_STATUS_LABELS = { rascunho: 'Rascunho', quero_fazer: 'Quero fazer', planejada: 'Planejada' };
 
-// Placeholder até fe-30 implementar a detecção real da variação sazonal ativa (mês atual +
-// feriados prolongados via holidaysCache). Até lá, o chip de variação ativa nunca aparece.
-function getActiveVariation() { return null; }
+// Mapeamento mês (0-indexado) → época trimestral.
+function epocaForMonth(month) {
+  if (month <= 2) return 'Jan–Mar';
+  if (month <= 5) return 'Abr–Jun';
+  if (month <= 8) return 'Jul–Set';
+  return 'Out–Dez';
+}
+
+function isWeekendDate(date) { const d = date.getDay(); return d === 0 || d === 6; }
+
+// Detecta períodos de "feriado prolongado" a partir do cache de feriados (fe-41): agrupa cada
+// feriado com os fins de semana/feriados adjacentes em um período contínuo de dias não-úteis;
+// períodos com 3+ dias contam como "feriado prolongado". A spec não define um algoritmo exato de
+// clusterização — esta é uma interpretação conservadora (feriado + fins de semana emendados),
+// documentada em "Registro de desenvolvimento".
+function findProlongedHolidayPeriods(holidays) {
+  if (!holidays || !holidays.length) return [];
+  const offDates = new Set(holidays.map(h => h.date));
+  const isOff = d => offDates.has(toKey(d)) || isWeekendDate(d);
+  const periods = [];
+  const seenStarts = new Set();
+  holidays.forEach(h => {
+    const holidayDate = new Date(h.date + 'T00:00:00');
+    let start = new Date(holidayDate);
+    while (isOff(addDays(start, -1))) start = addDays(start, -1);
+    let end = new Date(holidayDate);
+    while (isOff(addDays(end, 1))) end = addDays(end, 1);
+    const lengthDays = Math.round((end - start) / 86400000) + 1;
+    const startKey = toKey(start);
+    if (lengthDays >= 3 && !seenStarts.has(startKey)) {
+      seenStarts.add(startKey);
+      periods.push({ start: startKey, end: toKey(end) });
+    }
+  });
+  return periods;
+}
+
+// Retorna a variação sazonal ativa para uma data de referência (padrão: hoje), ou null se
+// nenhuma cobrir a época atual (fallback: atributos da base). Se `inclui_feriados_prolongados`,
+// a variação também fica ativa a partir da véspera do primeiro dia de um feriado prolongado
+// detectado via holidaysCache (fe-41) — mesmo que a data ainda pertença à época anterior.
+function getActiveVariation(activity, referenceDate = new Date()) {
+  const variations = (activity && activity.variacoes) || [];
+  if (!variations.length) return null;
+
+  if (holidaysCache && holidaysCache.length) {
+    const periods = findProlongedHolidayPeriods(holidaysCache);
+    const refKey = toKey(referenceDate);
+    for (const v of variations) {
+      if (!v.incluiFeriadosProlongados) continue;
+      for (const p of periods) {
+        const vespera = toKey(addDays(new Date(p.start + 'T00:00:00'), -1));
+        if (refKey >= vespera && refKey <= p.end) return v;
+      }
+    }
+  }
+
+  const currentEpoca = epocaForMonth(referenceDate.getMonth());
+  return variations.find(v => (v.epocasCobertas || []).includes(currentEpoca)) || null;
+}
 
 function activityCostSummaryHtml(a) {
   const perfis = a.perfisCusto || {};
@@ -3265,15 +3322,15 @@ function activityDetailConditionsHtml(a) {
   `;
 }
 
-function activityVariationCardHtml(v) {
+function activityVariationCardHtml(v, isActive) {
   const rows = ACTIVITY_VARIATION_MERGE_FIELDS
     .filter(f => v[f] != null && !(Array.isArray(v[f]) && !v[f].length))
     .map(f => detailRow(f, Array.isArray(v[f]) ? v[f] : String(v[f])))
     .join('');
   return `
-  <div class="activity-variation-card" data-id="${v.id}">
+  <div class="activity-variation-card${isActive ? ' active' : ''}" data-id="${v.id}">
     <div class="activity-variation-card-header">
-      <strong>${escapeHtml(v.nome)}</strong>
+      <strong>${escapeHtml(v.nome)}</strong>${isActive ? ' <span class="tag activity-tag-variation">Ativa agora</span>' : ''}
       <span class="activity-variation-card-epocas">${(v.epocasCobertas || []).map(escapeHtml).join(', ')}${v.incluiFeriadosProlongados ? ' + feriados prolongados' : ''}</span>
     </div>
     ${rows}
@@ -3282,9 +3339,10 @@ function activityVariationCardHtml(v) {
 
 function activityDetailVariationsHtml(a) {
   const variations = a.variacoes || [];
+  const active = getActiveVariation(a);
   return `
     <h3>Variações sazonais</h3>
-    ${variations.length ? variations.map(activityVariationCardHtml).join('') : '<div class="activity-detail-empty">Nenhuma variação sazonal cadastrada.</div>'}
+    ${variations.length ? variations.map(v => activityVariationCardHtml(v, active && active.id === v.id)).join('') : '<div class="activity-detail-empty">Nenhuma variação sazonal cadastrada.</div>'}
   `;
 }
 
