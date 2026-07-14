@@ -3410,12 +3410,18 @@ function renderActivityFormStep(step) {
   if (typeof fn === 'function') fn(a);
 }
 
-document.getElementById('activityFormNextBtn').addEventListener('click', () => {
+document.getElementById('activityFormNextBtn').addEventListener('click', async () => {
   const a = currentEditingActivity();
   if (!a) return;
   if (!validateActivityFormStep(activityFormStep, a)) {
     alert('Preencha os campos obrigatórios desta etapa antes de avançar.');
     return;
+  }
+  // Ao avançar da Etapa 1 para a Etapa 2: geocodifica `localidade` via Nominatim para preencher
+  // distância de SP automaticamente. Fluxo nunca é bloqueado — sem localidade ou sem resultado,
+  // o seletor manual da Etapa 2 continua disponível (fe-26).
+  if (activityFormStep === 1 && typeof geocodeAndFillDistancia === 'function') {
+    await geocodeAndFillDistancia(a);
   }
   if (activityFormStep < 5) {
     showActivityFormStep(activityFormStep + 1);
@@ -3559,6 +3565,52 @@ function renderActivityFormStep1(a) {
     patchActivity(a, x => { x.fotoCapa = dataUrl; });
     document.getElementById('af-foto-capa-preview').innerHTML = `<img src="${dataUrl}">`;
   });
+}
+
+// ---------- Nominatim: geocodificação da localidade ----------
+const SP_LAT = -23.5505, SP_LON = -46.6333; // referência: centro de São Paulo
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+function distanciaSPFromKm(km) {
+  if (km < 30) return 'Na cidade';
+  if (km <= 150) return 'Até 150 km';
+  if (km <= 400) return '150–400 km';
+  return '400 km+';
+}
+
+// Geocodifica um texto livre (campo `localidade`) via Nominatim (OpenStreetMap). Retorna
+// { lat, lon } ou null se vazio/sem resultado/erro de rede — nunca lança, sempre fallback silencioso.
+async function geocodeLocalidade(query) {
+  if (!query || !query.trim()) return null;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim() + ', Brasil')}&format=json&limit=1`, {
+      headers: { 'Accept-Language': 'pt-BR' },
+    });
+    if (!res.ok) throw new Error('nominatim request failed');
+    const json = await res.json();
+    if (!json || !json.length) return null;
+    return { lat: parseFloat(json[0].lat), lon: parseFloat(json[0].lon) };
+  } catch (err) {
+    console.error('Falha ao geocodificar localidade via Nominatim:', err);
+    return null;
+  }
+}
+
+// Chamada ao avançar da Etapa 1 para a Etapa 2: se `localidade` estiver preenchida, tenta
+// geocodificar e preencher `distanciaSP` automaticamente. Se vazio ou sem resultado, mantém o
+// seletor manual da Etapa 2 intocado — o fluxo nunca é bloqueado.
+async function geocodeAndFillDistancia(a) {
+  if (!a.localidade || !a.localidade.trim()) return;
+  const coords = await geocodeLocalidade(a.localidade);
+  if (!coords) return;
+  const km = haversineKm(SP_LAT, SP_LON, coords.lat, coords.lon);
+  patchActivity(a, x => { x.distanciaSP = distanciaSPFromKm(km); });
 }
 
 // ---------- Etapa 2: Logística ----------

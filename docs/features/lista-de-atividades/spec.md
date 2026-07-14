@@ -1320,7 +1320,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-24`
 - [x] `fe-26` Implementar a Etapa 2 — Logística: modalidades de duração, meios de transporte, os três perfis de custo (Econômico/Padrão/Conforto × baixa/alta temporada, ranges numéricos), nível de planejamento, antecedência mínima geral, decisão de última hora, e o seletor manual de distância de SP (usado como fallback — a chamada real ao Nominatim é `fe-27`).
        Depende de: `fe-25`
-- [ ] `fe-27` Implementar a integração com Nominatim: `geocodeLocalidade(query)` chamada ao avançar da Etapa 1 para a Etapa 2 usando o campo `localidade`; se retornar resultado, preenche `distanciaSP` automaticamente; se `localidade` estiver vazio ou a busca não retornar nada, mantém/exibe o seletor manual da Etapa 2 sem bloquear o avanço.
+- [x] `fe-27` Implementar a integração com Nominatim: `geocodeLocalidade(query)` chamada ao avançar da Etapa 1 para a Etapa 2 usando o campo `localidade`; se retornar resultado, preenche `distanciaSP` automaticamente; se `localidade` estiver vazio ou a busca não retornar nada, mantém/exibe o seletor manual da Etapa 2 sem bloquear o avanço.
        Depende de: `fe-26`
 - [ ] `fe-28` Implementar a Etapa 3 — Condições ideais: condição climática ideal, temperatura mínima ideal, época ideal do ano, perfil de grupo, tamanho do grupo, condicionamento físico exigido, evitar alta temporada, repetível, pet-friendly.
        Depende de: `fe-27`
