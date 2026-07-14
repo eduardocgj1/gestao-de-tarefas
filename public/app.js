@@ -1151,6 +1151,21 @@ function addTask(dateKey, name) {
   save(); render();
 }
 function findTask(id, board = currentBoard()) { return board.tasks.find(t => t.id === id); }
+
+// Localiza uma tarefa em qualquer lugar do app: nos boards (tarefas normais) ou nos checklists
+// das atividades (promovidas ou não). Superset de findTask() — usado por qualquer fluxo de
+// edição que precise funcionar tanto para tarefas de board quanto de checklist.
+function findTaskAnywhere(id) {
+  for (const b of boards) {
+    const t = b.tasks.find(x => x.id === id);
+    if (t) return { task: t, source: 'board', board: b, activity: null };
+  }
+  for (const a of activities) {
+    const t = (a.checklistTasks || []).find(x => x.id === id);
+    if (t) return { task: t, source: 'checklist', board: null, activity: a };
+  }
+  return null;
+}
 function deleteTask(id, board = currentBoard()) {
   board.tasks = board.tasks.filter(t => t.id !== id);
   save(); refreshCalendarAndBoard();
