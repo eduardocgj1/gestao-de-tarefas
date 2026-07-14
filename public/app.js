@@ -3439,6 +3439,15 @@ document.getElementById('activityDetailOverlay').addEventListener('click', e => 
   }
   const promoteBtn = e.target.closest('.activity-promote-btn');
   if (promoteBtn && !promoteBtn.disabled) { openActivityPromote(promoteBtn.dataset.id); return; }
+  const cancelPlanBtn = e.target.closest('.activity-cancel-plan-btn');
+  if (cancelPlanBtn) {
+    const a = findActivity(cancelPlanBtn.dataset.id);
+    if (a && confirm('Cancelar o planejamento vai remover as datas das tarefas do checklist e tirá-las do board. As tarefas permanecem no checklist da atividade. Deseja continuar?')) {
+      cancelActivityPlan(a);
+      openActivityDetail(a.id);
+    }
+    return;
+  }
 });
 
 document.getElementById('activitiesView').addEventListener('click', e => {
@@ -4313,6 +4322,25 @@ function promoteChecklistToBoard(activity, boardId, dataInicio) {
   activity.status = 'planejada';
   activity.dataInicio = dataInicio;
   activity.boardDestinoId = boardId;
+  activity.updatedAt = Date.now();
+  save();
+  render();
+  renderActivities();
+}
+
+// Cancela o planejamento: tarefas do checklist voltam ao estado pré-promoção (boardId/date
+// nulos, completed zerado) e o status volta para quero_fazer. Nada é deletado da gestão de
+// tarefas — só desassocia do board.
+function cancelActivityPlan(activity) {
+  (activity.checklistTasks || []).forEach(task => {
+    task.boardId = null;
+    task.date = null;
+    task.deliveryDate = null;
+    task.completed = false; // progresso zerado intencionalmente — ver spec "Cancelamento do plano"
+  });
+  activity.status = 'quero_fazer';
+  activity.dataInicio = null;
+  activity.boardDestinoId = null;
   activity.updatedAt = Date.now();
   save();
   render();
