@@ -1958,4 +1958,92 @@ body {
 .activity-variation-card.active { border-color: var(--color-green); background: var(--color-green-soft); }
 .activity-variation-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .activity-variation-card-epocas { font: 600 11px var(--font-sora); color: var(--color-text-tertiary); }
+
+/* ---------- modal de detalhes ---------- */
+.activity-detail-modal { width: 640px; max-width: 92vw; }
+.activity-detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.activity-detail-title { flex: 1; font: 800 18px var(--font-sora); color: var(--color-text); }
+.activity-detail-sections { display: flex; flex-direction: column; gap: 16px; }
+.activity-detail-section h3 { margin: 0 0 8px; font: 700 12px var(--font-sora); color: var(--color-text); text-transform: uppercase; letter-spacing: .04em; }
+.activity-detail-section h4 { margin: 12px 0 6px; font: 700 11px var(--font-sora); color: var(--color-text-secondary); }
+.activity-detail-row { display: flex; gap: 8px; padding: 4px 0; font: 500 12.5px var(--font-sora); }
+.activity-detail-row-label { flex: 0 0 180px; color: var(--color-text-tertiary); font-weight: 700; }
+.activity-detail-row-value { color: var(--color-text); }
+.activity-detail-empty { color: var(--color-text-tertiary); font: 500 12px var(--font-sora); padding: 6px 0; }
+.activity-detail-cover { height: 140px; border-radius: var(--radius-panel); background-size: cover; background-position: center; margin-bottom: 10px; }
+.activity-detail-footer {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-strong);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.activity-realization-card { border: 1px solid var(--color-border); border-radius: var(--radius-btn); padding: 10px 12px; margin-bottom: 8px; }
+
+/* ---------- criação rápida ---------- */
+.activity-quick-create-modal { width: 380px; }
+
+/* ---------- importação de JSON ---------- */
+.activity-import-modal { width: 520px; max-width: 92vw; }
+.activity-import-textarea {
+  width: 100%;
+  min-height: 160px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn);
+  font: 500 12px 'SFMono-Regular', Consolas, monospace;
+  color: var(--color-text);
+  resize: vertical;
+}
+.activity-import-errors {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--color-terracotta-soft);
+  color: var(--color-terracotta);
+  border-radius: var(--radius-btn-sm);
+  font: 500 12px var(--font-sora);
+}
+.activity-import-errors ul { margin: 0; padding-left: 18px; }
+.activity-import-preview {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--color-bg);
+  border-radius: var(--radius-btn);
+}
+.activity-import-preview label { display: block; margin-top: 8px; }
+.activity-import-preview input { width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid var(--color-border); border-radius: var(--radius-btn-sm); }
+.activity-import-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+
+/* ---------- registro de realização ---------- */
+.activity-realization-modal { width: 420px; max-width: 92vw; }
+.realization-stars { display: flex; gap: 4px; margin: 6px 0 10px; }
+.realization-star { border: none; background: none; font-size: 22px; color: var(--color-border); cursor: pointer; line-height: 1; }
+.realization-star.filled { color: var(--color-terracotta); }
+
+/* ---------- dialog de promoção a Planejada ---------- */
+.activity-promote-modal { width: 420px; max-width: 92vw; }
+.activity-promote-preview {
+  margin-top: 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-btn);
+}
+.activity-promote-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  font: 600 12px var(--font-sora);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.activity-promote-preview-row:last-child { border-bottom: none; }
+
+/* ---------- coluna "Sem data" no board ---------- */
+.column-no-date { border-left: 3px solid var(--color-text-tertiary); }
 .export-save-btn:hover { background: var(--color-neutral-btn-hover); }

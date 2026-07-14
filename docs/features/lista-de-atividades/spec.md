@@ -1363,7 +1363,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-43`
 - [x] `fe-45` Estilizar os chips/badges novos: categoria, vibes, modalidades de duração, status (rascunho/quero_fazer/planejada com cores distintas), variação ativa, badge "Realizada N×", reaproveitando a classe `.tag` existente como base.
        Depende de: `fe-44`
-- [ ] `fe-46` Estilizar os modais de importação de JSON, registro de realização e o dialog de promoção a Planejada (incluindo o preview de datas calculadas e o estado desabilitado do botão "Confirmar"), seguindo o padrão visual de `.modal`/`.confirm-modal` já existente.
+- [x] `fe-46` Estilizar os modais de importação de JSON, registro de realização e o dialog de promoção a Planejada (incluindo o preview de datas calculadas e o estado desabilitado do botão "Confirmar"), seguindo o padrão visual de `.modal`/`.confirm-modal` já existente.
        Depende de: `fe-45`
 
 ### Validação final
@@ -1398,6 +1398,8 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 - **fe-32 (auto-save):** já estava integralmente satisfeito por `patchActivity(a, fn)`, introduzida em `fe-24` e usada por todos os campos de todas as 5 etapas (fe-24 a fe-31) — cada mutação chama `save()`, que já reaproveita o debounce de 250ms existente em `save()` (mesmo padrão de `patch()` para tarefas do board). Como a atividade em edição é sempre o mesmo objeto referenciado dentro de `activities[]` desde a criação (`fe-21`), fechar o modal a qualquer momento não perde progresso — não há estado "rascunho do formulário" separado do objeto real. Sem código adicional nesta task, apenas confirmação e marcação como concluída.
 
 - **Endpoint de feriadosapi.com (fe-41):** a spec cita apenas o nome do serviço, sem documentar a URL/formato exato de resposta. Implementado com uma URL best-effort (`https://feriadosapi.com/api/v1/feriados/SP/{ano}`) e parsing tolerante (aceita array direto ou `{ feriados: [...] }`/`{ holidays: [...] }`). Como o requisito já pede fallback silencioso em caso de falha, e o `fetchHolidays()` trata qualquer erro (rede, 404, formato inesperado) definindo `holidaysCache = []` sem lançar exceção, o app funciona normalmente mesmo se essa URL estiver incorreta — só a seção "Próximos feriados" e a ativação de variações por feriado prolongado ficam indisponíveis. **Ação recomendada ao usuário:** validar o endpoint real de feriadosapi.com e ajustar a URL em `fetchHolidays()` (`public/app.js`) se necessário.
+
+- **fe-46 (escopo ampliado):** além dos 3 modais explicitamente pedidos (importação, realização, promoção), a task também incluiu estilos para o modal de detalhes (`.activity-detail-modal` e afins) e o modal de criação rápida (`.activity-quick-create-modal`), que não tinham task de estilo dedicada na lista — sem isso, ficariam usando só o `.modal` genérico (largura 360px fixa, inadequada para o conteúdo de detalhes). Também adicionado um destaque sutil (`border-left`) para a coluna "Sem data" do board (`fe-16`), que não tinha task de estilo própria.
 
 ### Desvios de processo
 
