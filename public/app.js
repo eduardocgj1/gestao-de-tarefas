@@ -1203,6 +1203,38 @@ function addTask(dateKey, name) {
 }
 function findTask(id, board = currentBoard()) { return board.tasks.find(t => t.id === id); }
 
+// Localiza uma tarefa dentro de um board JÁ CONHECIDO: busca primeiro em board.tasks (tarefa
+// normal) e, se não encontrar, nas checklistTasks de qualquer atividade promovida para esse
+// board (tarefa de checklist já promovida — aparece nesse board via getTasksForDateAndBoard(),
+// mas não é duplicada em board.tasks). Superset de findTask(id, board) — usado por qualquer
+// interação de card (checkbox, drag-and-drop, Visão do Dia, abrir modal) que possa envolver
+// uma tarefa promovida renderizada dentro de um board específico.
+function findTaskInBoard(id, board) {
+  if (!board) return null;
+  const own = board.tasks.find(t => t.id === id);
+  if (own) return own;
+  for (const a of activities) {
+    const t = (a.checklistTasks || []).find(x => x.id === id && x.boardId === board.id);
+    if (t) return t;
+  }
+  return null;
+}
+
+// Localiza uma tarefa quando o board de contexto já é conhecido (ex.: openModal chamado a
+// partir da Visão do Dia, que já resolveu o board pelo dataset.boardId): tenta board.tasks
+// primeiro (tarefa normal) e cai para as checklistTasks de atividades promovidas para esse
+// board. Mesma forma de retorno de findTaskAnywhere(), para os dois caminhos serem
+// intercambiáveis em openModal().
+function resolveFoundInBoard(id, board) {
+  const own = board.tasks.find(t => t.id === id);
+  if (own) return { task: own, source: 'board', board, activity: null };
+  for (const a of activities) {
+    const t = (a.checklistTasks || []).find(x => x.id === id && x.boardId === board.id);
+    if (t) return { task: t, source: 'checklist', board, activity: a };
+  }
+  return { task: null, source: null, board, activity: null };
+}
+
 // Localiza uma tarefa em qualquer lugar do app: nos boards (tarefas normais) ou nos checklists
 // das atividades (promovidas ou não). Superset de findTask() — usado por qualquer fluxo de
 // edição que precise funcionar tanto para tarefas de board quanto de checklist.
@@ -1615,7 +1647,7 @@ let editingTaskBoardId = null;
 // usuário ainda edita nome, duração, link, delegação, campos customizados (se já promovida) e
 // pode marcar como concluída.
 function openModal(id, board) {
-  const found = board ? { task: findTask(id, board), source: 'board', board, activity: null } : findTaskAnywhere(id);
+  const found = board ? resolveFoundInBoard(id, board) : findTaskAnywhere(id);
   if (!found || !found.task) return;
   const t = found.task;
   editingId = id;
@@ -1902,7 +1934,8 @@ board.addEventListener('click', e => {
   if (chip) { openEventModal(chip.dataset.eventId); return; }
   if (e.target.classList.contains('chk-done')) {
     const card = e.target.closest('.card');
-    const t = findTask(card.dataset.id);
+    const t = findTaskInBoard(card.dataset.id, currentBoard());
+    if (!t) return;
     setCompleted(t, e.target.checked);
     save(); render();
     if (exportOpen) renderExportModal();
@@ -1954,7 +1987,7 @@ function getDragAfterElement(container, y) {
 function finalizeOrder(col) {
   const dateKey = col.dataset.date;
   const ids = [...col.querySelectorAll('.card')].map(c => c.dataset.id);
-  const ordered = ids.map(id => findTask(id));
+  const ordered = ids.map(id => findTaskInBoard(id, currentBoard())).filter(Boolean);
   ordered.forEach(t => {
     const prevDate = t.date;
     t.date = dateKey;
@@ -2663,7 +2696,7 @@ function applyShutdown() {
   Object.values(shutdownChoices).forEach(choice => {
     if (choice.mode === 'ignore') return;
     const board = boards.find(b => b.id === choice.boardId);
-    const t = board && findTask(choice.taskId, board);
+    const t = board && findTaskInBoard(choice.taskId, board);
     if (!t) return;
     const newDate = (choice.mode === 'custom' && choice.date) ? choice.date : tomorrow;
     const prevDate = t.date;
@@ -2719,7 +2752,7 @@ dayPopupPanelEl.addEventListener('click', e => {
   const adiar = e.target.closest('.adiar-btn');
   if (adiar) {
     const board = boards.find(b => b.id === adiar.dataset.boardId);
-    const t = board && findTask(adiar.dataset.taskId, board);
+    const t = board && findTaskInBoard(adiar.dataset.taskId, board);
     if (t) {
       const prevDate = t.date;
       const tomorrowKey = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
@@ -2799,7 +2832,7 @@ dayPopupPanelEl.addEventListener('change', e => {
   }
   if (e.target.classList.contains('daypopup-chk-done')) {
     const board = boards.find(b => b.id === e.target.dataset.boardId);
-    const t = board && findTask(e.target.dataset.taskId, board);
+    const t = board && findTaskInBoard(e.target.dataset.taskId, board);
     if (t) {
       setCompleted(t, e.target.checked, board);
       save();
