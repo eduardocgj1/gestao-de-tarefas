@@ -559,6 +559,14 @@ function deleteBoard(id) {
   if (!confirm('Excluir este quadro e todas as suas tarefas?')) return;
   boards = boards.filter(b => b.id !== id);
   calendarEvents.forEach(ev => { ev.boardIds = ev.boardIds.filter(bid => bid !== id); });
+  // Tarefas de checklist promovidas para este board voltam ao estado não-promovido
+  // em vez de serem perdidas (checklist é independente do ciclo de vida do board).
+  activities.forEach(a => {
+    (a.checklistTasks || []).forEach(t => {
+      if (t.boardId === id) { t.boardId = null; t.date = null; t.deliveryDate = null; }
+    });
+    if (a.boardDestinoId === id) a.boardDestinoId = null;
+  });
   if (activeBoardId === id) activeBoardId = boards[0].id;
   save();
   setView('board');
@@ -650,7 +658,10 @@ function recolorFieldValue(fieldId, valueId, color) {
   save(); render(); renderFieldsSettings();
 }
 function deleteFieldValue(fieldId, valueId) {
-  const count = currentBoard().tasks.filter(t => t.fieldValues && t.fieldValues[fieldId] === valueId).length;
+  const board = currentBoard();
+  const promotedChecklistTasks = activities.flatMap(a => a.checklistTasks || []).filter(t => t.boardId === board.id);
+  const count = [...board.tasks, ...promotedChecklistTasks]
+    .filter(t => t.fieldValues && t.fieldValues[fieldId] === valueId).length;
   if (count > 0) {
     alert(`Não é possível excluir: em uso em ${count} tarefa(s). Troque a classificação dessas tarefas antes.`);
     return;
@@ -681,9 +692,18 @@ function getTasksForDateAndBoard(boardId, dateKey) {
 }
 function tasksFor(key, board = currentBoard()) { return getTasksForDateAndBoard(board.id, key).sort(compare); }
 
+// Irmãs de uma tarefa na mesma coluna (board+data): tarefas próprias do board +
+// tarefas de checklist já promovidas para esse board/data. Sem board (checklist
+// ainda não promovido), não há coluna para reordenar.
+function siblingTasks(board, dateKey, excludeId) {
+  if (!board || !board.id) return [];
+  return getTasksForDateAndBoard(board.id, dateKey).filter(t => t.id !== excludeId);
+}
+
 function setPriority(task, newPriority, board = currentBoard()) {
   const dateKey = task.date;
-  const normal = board.tasks.filter(t => t.date === dateKey && !t.urgent && !t.completed && t.id !== task.id).sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  const normal = siblingTasks(board, dateKey, task.id).filter(t => !t.urgent && !t.completed)
+    .sort((a, b) => (a.priority || 0) - (b.priority || 0));
   const idx = Math.max(0, Math.min(newPriority - 1, normal.length));
   normal.splice(idx, 0, task);
   normal.forEach((t, i) => (t.priority = i + 1));
@@ -697,7 +717,7 @@ function setCompleted(task, completed, board = currentBoard()) {
     task.completedAt = Date.now();
     task.priority = null;
     if (!task.urgent) {
-      const normal = board.tasks.filter(t => t.date === dateKey && !t.urgent && !t.completed && t.id !== task.id)
+      const normal = siblingTasks(board, dateKey, task.id).filter(t => !t.urgent && !t.completed)
         .sort((a, b) => (a.priority || 0) - (b.priority || 0));
       normal.forEach((t, i) => (t.priority = i + 1));
     }
@@ -705,7 +725,7 @@ function setCompleted(task, completed, board = currentBoard()) {
     task.completed = false;
     task.completedAt = null;
     if (!task.urgent) {
-      const max = board.tasks.filter(t => t.date === dateKey && !t.urgent && !t.completed && t.id !== task.id)
+      const max = siblingTasks(board, dateKey, task.id).filter(t => !t.urgent && !t.completed)
         .reduce((m, t) => Math.max(m, t.priority || 0), 0);
       task.priority = max + 1;
     }
@@ -1245,17 +1265,21 @@ function findTaskAnywhere(id) {
   }
   for (const a of activities) {
     const t = (a.checklistTasks || []).find(x => x.id === id);
-    if (t) return { task: t, source: 'checklist', board: null, activity: a };
+    if (t) {
+      // Tarefa de checklist já promovida (boardId setado) aparece na mesma coluna do
+      // board que suas irmãs — resolve o board real para que setPriority/setCompleted
+      // consigam reordenar corretamente entre tarefas promovidas e normais.
+      const board = t.boardId ? (boards.find(b => b.id === t.boardId) || null) : null;
+      return { task: t, source: 'checklist', board, activity: a };
+    }
   }
   return null;
 }
 
 // Resolve a tarefa/board/atividade da tarefa atualmente aberta no modal de edição (editingId),
 // via findTaskAnywhere() — funciona tanto para tarefas de board quanto de checklist. Para
-// tarefas de checklist (source === 'checklist'), `board` retorna um objeto sintético com
-// `.tasks: []` para que funções que esperam `board.tasks` (ex.: setPriority/setCompleted) não
-// quebrem; elas simplesmente não encontram irmãos para reordenar, o que é o comportamento correto
-// para uma tarefa que ainda não está em nenhuma coluna do board.
+// tarefas de checklist ainda não promovidas (sem board), `board` retorna um objeto sintético
+// com `.id: null` — setPriority/setCompleted tratam isso como "sem coluna para reordenar".
 function resolveEditingContext() {
   const found = findTaskAnywhere(editingId);
   if (!found) return null;
@@ -2907,7 +2931,7 @@ function tasksForExportWeek(boardId, monday) {
   const b = boards.find(x => x.id === boardId);
   if (!b) return [];
   const keys = exportWeekDates(monday);
-  return b.tasks.filter(t => keys.includes(t.date));
+  return keys.flatMap(k => getTasksForDateAndBoard(boardId, k));
 }
 
 function buildExportRows() {
@@ -4219,7 +4243,7 @@ function renderActivityFormStep5(a) {
       const max = document.getElementById('af-checklist-max').value;
       patchActivity(a, x => {
         x.checklistTasks = x.checklistTasks || [];
-        x.checklistTasks.push({
+        const newTask = {
           id: uid(), name, date: null, deliveryDate: null, link: '', duration: 0,
           priority: null, urgent: false, urgentRank: 0,
           delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
@@ -4227,8 +4251,19 @@ function renderActivityFormStep5(a) {
           antecedenciaMiniDias: mini === '' ? null : Number(mini),
           antecedenciaRecDias: rec === '' ? null : Number(rec),
           antecedenciaMaxDias: max === '' ? null : Number(max),
-        });
+        };
+        // Atividade já promovida ao board: item novo é promovido imediatamente, senão
+        // ficaria com boardId/date nulos para sempre (promoteChecklistToBoard só roda
+        // uma vez, na transição de status para 'planejada').
+        if (x.status === 'planejada' && x.boardDestinoId && x.dataInicio) {
+          const date = computeChecklistTaskDate(newTask, x.dataInicio);
+          newTask.boardId = x.boardDestinoId;
+          newTask.date = date;
+          newTask.deliveryDate = date;
+        }
+        x.checklistTasks.push(newTask);
       });
+      render(); // atualiza o board caso o item novo já tenha sido promovido acima
       renderActivityFormStep5(a);
       return;
     }
@@ -4342,16 +4377,21 @@ function fmtDateBRWithDow(dateKey) {
 // Calcula a data de cada tarefa do checklist (data_inicio − antecedenciaMiniDias), com fallback
 // para hoje quando o resultado cair no passado. Usada tanto no preview do dialog quanto na
 // promoção de fato — mantém as duas em sincronia (mesma fórmula).
-function computeChecklistPromotionPreview(a, dataInicio) {
+// Calcula a data de uma tarefa de checklist a partir da data de início da atividade e da
+// antecedência mínima, com fallback para hoje se a data calculada cair no passado.
+function computeChecklistTaskDate(task, dataInicio) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const inicio = new Date(dataInicio + 'T00:00:00');
+  if (task.antecedenciaMiniDias == null) return null;
+  const d = new Date(inicio);
+  d.setDate(d.getDate() - task.antecedenciaMiniDias);
+  return d < today ? toKey(today) : toKey(d);
+}
+
+function computeChecklistPromotionPreview(a, dataInicio) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   return (a.checklistTasks || []).map(t => {
-    let taskDate = null;
-    if (t.antecedenciaMiniDias != null) {
-      const d = new Date(inicio);
-      d.setDate(d.getDate() - t.antecedenciaMiniDias);
-      taskDate = d < today ? toKey(today) : toKey(d);
-    }
+    const taskDate = computeChecklistTaskDate(t, dataInicio);
     return { task: t, date: taskDate, isToday: taskDate === toKey(today) };
   });
 }

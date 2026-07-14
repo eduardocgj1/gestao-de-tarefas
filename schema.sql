@@ -78,6 +78,15 @@ CREATE INDEX IF NOT EXISTS calendar_events_start_date_idx ON calendar_events(sta
 ALTER TABLE tasks
   ALTER COLUMN board_id DROP NOT NULL;
 
+-- A FK original de board_id é ON DELETE CASCADE (linha 17), o que apagaria
+-- permanentemente tarefas de checklist promovidas ao deletar um board.
+-- Trocamos para ON DELETE SET NULL: deletar um board apenas desvincula a
+-- tarefa do board (ela continua existindo no checklist da atividade via activity_id).
+ALTER TABLE tasks
+  DROP CONSTRAINT IF EXISTS tasks_board_id_fkey;
+ALTER TABLE tasks
+  ADD CONSTRAINT tasks_board_id_fkey FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE SET NULL;
+
 -- Tabela de atividades
 CREATE TABLE IF NOT EXISTS activities (
   id                          TEXT PRIMARY KEY,
