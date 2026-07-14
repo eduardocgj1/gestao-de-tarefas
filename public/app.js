@@ -4205,4 +4205,25 @@ function renderActivityFormStep5(a) {
   };
 }
 
+// ---------- Máquina de estados ----------
+function activityMeetsQueroFazerConditions(a) {
+  const hasModalidade = (a.modalidadesDuracao || []).length > 0;
+  const hasCompleteCostRange = PERFIS_CUSTO_TIPOS.some(tipo => {
+    const perfil = (a.perfisCusto || {})[tipo];
+    const baixa = perfil && perfil.baixa_temporada;
+    return baixa && baixa[0] != null && baixa[1] != null;
+  });
+  return hasModalidade && hasCompleteCostRange;
+}
+
+// Avança automaticamente rascunho → quero_fazer assim que as condições mínimas forem atendidas
+// (ao menos 1 modalidade de duração + range completo de ao menos 1 perfil de custo em baixa
+// temporada). Chamada após cada auto-save (patchActivity). Nunca reverte quero_fazer → rascunho
+// manualmente — não existe nenhum controle de UI que force esse retorno; esta função só avança.
+function maybeAdvanceActivityStatus(a) {
+  if (a.status === 'rascunho' && activityMeetsQueroFazerConditions(a)) {
+    a.status = 'quero_fazer';
+  }
+}
+
 load();
