@@ -1359,7 +1359,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-41`
 - [x] `fe-43` Estilizar a view de atividades: grid responsivo de 2-3 colunas agrupado por categoria, cabeçalhos de grupo, cards de atividade (`activityCardHtml`), estado vazio e o banner de rascunhos.
        Depende de: `fe-42`
-- [ ] `fe-44` Estilizar o modal de criação/edição em etapas: indicador de progresso do stepper, transições entre etapas, layout de cada etapa (grids de campos, ranges de custo, editor de variações, checklist reaproveitando `.card`/`.column` do board).
+- [x] `fe-44` Estilizar o modal de criação/edição em etapas: indicador de progresso do stepper, transições entre etapas, layout de cada etapa (grids de campos, ranges de custo, editor de variações, checklist reaproveitando `.card`/`.column` do board).
        Depende de: `fe-43`
 - [ ] `fe-45` Estilizar os chips/badges novos: categoria, vibes, modalidades de duração, status (rascunho/quero_fazer/planejada com cores distintas), variação ativa, badge "Realizada N×", reaproveitando a classe `.tag` existente como base.
        Depende de: `fe-44`

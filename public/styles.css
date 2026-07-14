@@ -1782,4 +1782,154 @@ body {
 @media (max-width: 900px) {
   .activity-group-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 }
+
+/* ---------- modal de criação/edição em etapas ---------- */
+.activity-form-modal { width: 560px; max-width: 92vw; display: flex; flex-direction: column; }
+
+.activity-form-stepper {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 18px;
+}
+.activity-form-step-dot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font: 700 12px var(--font-sora);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  flex: 1;
+  position: relative;
+}
+.activity-form-step-dot::before {
+  content: '';
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.activity-form-step-dot.active { color: var(--color-green); }
+.activity-form-step-dot.active::before { border-color: var(--color-green); background: var(--color-green-soft); }
+.activity-form-step-dot.done::before { border-color: var(--color-green); background: var(--color-green); }
+.activity-form-step-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+
+.activity-form-step { display: flex; flex-direction: column; gap: 4px; }
+.activity-form-step h4 { margin: 14px 0 4px; font: 700 12px var(--font-sora); color: var(--color-text); }
+
+.activity-form-footer {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.activity-form-autosave-hint { font: 500 11px var(--font-sora); color: var(--color-text-tertiary); }
+.activity-form-footer-actions { display: flex; gap: 8px; }
+
+/* seleção múltipla por chips (vibes, modalidades, meios de transporte, épocas etc.) */
+.chip-select-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.chip-select-option {
+  border: 1px solid var(--color-border);
+  background: var(--color-neutral-btn);
+  color: var(--color-text);
+  font: 600 11.5px var(--font-sora);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.chip-select-option:hover { background: var(--color-neutral-btn-hover); }
+.chip-select-option.selected { background: var(--color-green); border-color: var(--color-green); color: #fff; }
+
+/* perfis de custo (ranges baixa/alta temporada) */
+.cost-profile-section { margin-top: 10px; padding: 10px; background: var(--color-bg); border-radius: var(--radius-btn); }
+.cost-profile-section h4 { margin: 0 0 8px; }
+.cost-range-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cost-range-label { flex: 0 0 100px; font: 600 11px var(--font-sora); color: var(--color-text-secondary); }
+.cost-range-row input { width: 80px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-btn-sm); font: 500 12.5px var(--font-sora); }
+
+/* variações sazonais (etapa 4) */
+.activity-variation-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn);
+  margin-bottom: 8px;
+  font: 600 12.5px var(--font-sora);
+}
+.activity-variation-list-actions { display: flex; gap: 6px; }
+.variation-editor {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-bg);
+}
+.variation-field-row { margin-top: 8px; }
+.variation-field-editor { margin-top: 6px; padding-left: 4px; }
+.variation-conflict-error {
+  color: var(--color-terracotta);
+  font: 600 12px var(--font-sora);
+  background: var(--color-terracotta-soft);
+  padding: 8px 10px;
+  border-radius: var(--radius-btn-sm);
+  margin: 8px 0;
+}
+
+/* checklist de planejamento (etapa 5 e modal de detalhes) */
+.activity-checklist-progress { font: 700 11.5px var(--font-sora); color: var(--color-text-secondary); margin: 4px 0 8px; }
+.activity-checklist-list, .activity-detail-checklist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.checklist-task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn-sm);
+  background: var(--color-surface);
+}
+.checklist-task-row.completed .checklist-task-name { text-decoration: line-through; color: var(--color-text-tertiary); }
+.checklist-drag-handle { cursor: grab; color: var(--color-text-tertiary); }
+.checklist-task-name {
+  flex: 1;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: 600 12.5px var(--font-sora);
+  color: var(--color-text);
+}
+.checklist-task-antecedencias { font: 500 10.5px var(--font-sora); color: var(--color-text-tertiary); white-space: nowrap; }
+.checklist-task-remove { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 14px; }
+.checklist-task-remove:hover { color: var(--color-terracotta); }
+.checklist-add-form { display: flex; gap: 6px; margin: 8px 0 14px; flex-wrap: wrap; }
+.checklist-add-form input {
+  padding: 7px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn-sm);
+  font: 500 12.5px var(--font-sora);
+}
+.checklist-add-form input#af-checklist-name, .checklist-add-form input#af-link-url { flex: 1; min-width: 140px; }
+.checklist-add-form input[type="number"] { width: 90px; }
+.checklist-add-form button {
+  border: none;
+  background: var(--color-green);
+  color: #fff;
+  font: 700 12px var(--font-sora);
+  padding: 7px 14px;
+  border-radius: var(--radius-btn-sm);
+  cursor: pointer;
+}
+
+.activity-link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; }
+.af-link-remove { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 14px; }
+.activity-cover-preview img { max-width: 100%; border-radius: var(--radius-btn); margin-top: 8px; }
 .export-save-btn:hover { background: var(--color-neutral-btn-hover); }
