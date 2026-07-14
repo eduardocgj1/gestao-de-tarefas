@@ -3054,8 +3054,26 @@ function searchActivitiesFuzzy(list, query) {
   return fuse.search(q).map(r => r.item);
 }
 
-// Placeholder para os filtros combináveis — estendido em fe-40.
-function applyActivityFilters(list) { return list; }
+// Filtros combináveis (categoria, vibe, status, modalidade de duração, perfil de custo, época do
+// ano) — todos aplicados em conjunto e combináveis com a busca fuzzy (getFilteredActivities()).
+function applyActivityFilters(list) {
+  return list.filter(a => {
+    if (activityFilters.categoria && a.categoria !== activityFilters.categoria) return false;
+    if (activityFilters.vibe && !(a.vibes || []).includes(activityFilters.vibe)) return false;
+    if (activityFilters.status && a.status !== activityFilters.status) return false;
+    if (activityFilters.modalidade && !(a.modalidadesDuracao || []).includes(activityFilters.modalidade)) return false;
+    if (activityFilters.epoca && !(a.epocaIdeal || []).includes(activityFilters.epoca)) return false;
+    if (activityFilters.custoMax != null) {
+      const hasAffordable = PERFIS_CUSTO_TIPOS.some(tipo => {
+        const perfil = (a.perfisCusto || {})[tipo];
+        const baixa = perfil && perfil.baixa_temporada;
+        return baixa && baixa[0] != null && baixa[0] <= activityFilters.custoMax;
+      });
+      if (!hasAffordable) return false;
+    }
+    return true;
+  });
+}
 
 function getFilteredActivities() {
   return applyActivityFilters(searchActivitiesFuzzy(activities, activitySearchQuery));
@@ -4722,5 +4740,78 @@ document.getElementById('activityImportCancelBtn').addEventListener('click', clo
 document.getElementById('activityImportOverlay').addEventListener('click', e => { if (e.target.id === 'activityImportOverlay') closeActivityImport(); });
 document.getElementById('activityImportValidateBtn').addEventListener('click', validateActivityImportFromTextarea);
 document.getElementById('activityImportConfirmBtn').addEventListener('click', confirmActivityImport);
+
+// ---------- painel de filtros ----------
+function renderActivityFiltersPanel() {
+  const panel = document.getElementById('activityFiltersPanel');
+  const categorias = [...new Set(activities.map(a => a.categoria))];
+  panel.innerHTML = `
+    <label>Categoria
+      <select id="filter-categoria">
+        <option value="">Todas</option>
+        ${categorias.map(c => `<option value="${escapeHtml(c)}" ${activityFilters.categoria === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Vibe
+      <select id="filter-vibe">
+        <option value="">Todas</option>
+        ${VIBES.map(v => `<option value="${escapeHtml(v)}" ${activityFilters.vibe === v ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Status
+      <select id="filter-status">
+        <option value="">Todos</option>
+        ${Object.keys(ACTIVITY_STATUS_LABELS).map(s => `<option value="${s}" ${activityFilters.status === s ? 'selected' : ''}>${ACTIVITY_STATUS_LABELS[s]}</option>`).join('')}
+      </select>
+    </label>
+    <label>Modalidade de duração
+      <select id="filter-modalidade">
+        <option value="">Todas</option>
+        ${MODALIDADES_DURACAO.map(m => `<option value="${escapeHtml(m)}" ${activityFilters.modalidade === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Custo máx. (baixa temporada, R$/pessoa)
+      <input type="number" id="filter-custo-max" min="0" value="${activityFilters.custoMax ?? ''}">
+    </label>
+    <label>Época do ano
+      <select id="filter-epoca">
+        <option value="">Todas</option>
+        ${EPOCAS.map(e => `<option value="${escapeHtml(e)}" ${activityFilters.epoca === e ? 'selected' : ''}>${escapeHtml(e)}</option>`).join('')}
+      </select>
+    </label>
+    <button type="button" id="filter-clear-btn" class="btn-neutral-sm">Limpar filtros</button>
+  `;
+
+  // Handlers por propriedade: o painel persiste entre aberturas — evita duplicar bindings.
+  panel.onchange = e => {
+    if (e.target.id === 'filter-categoria') activityFilters.categoria = e.target.value || null;
+    else if (e.target.id === 'filter-vibe') activityFilters.vibe = e.target.value || null;
+    else if (e.target.id === 'filter-status') activityFilters.status = e.target.value || null;
+    else if (e.target.id === 'filter-modalidade') activityFilters.modalidade = e.target.value || null;
+    else if (e.target.id === 'filter-epoca') activityFilters.epoca = e.target.value || null;
+    else return;
+    renderActivities();
+  };
+  panel.oninput = e => {
+    if (e.target.id === 'filter-custo-max') {
+      activityFilters.custoMax = e.target.value === '' ? null : Number(e.target.value);
+      renderActivities();
+    }
+  };
+  panel.onclick = e => {
+    if (e.target.id === 'filter-clear-btn') {
+      activityFilters = { categoria: null, vibe: null, status: null, modalidade: null, custoMax: null, epoca: null };
+      renderActivityFiltersPanel();
+      renderActivities();
+    }
+  };
+}
+
+document.getElementById('activityFiltersBtn').addEventListener('click', () => {
+  const panel = document.getElementById('activityFiltersPanel');
+  const opening = panel.classList.contains('hidden');
+  if (opening) renderActivityFiltersPanel();
+  panel.classList.toggle('hidden');
+});
 
 load();

@@ -1348,7 +1348,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-37`
 - [x] `fe-39` Implementar a busca fuzzy: instanciar `Fuse` sobre `activities` (campos `name`, `categoria`, `vibes`, `notas`, threshold 0.4), atualizado a cada mudança em `activities`; ligar o input de busca de `#navActivitiesControls` para filtrar a cada tecla e refletir em `renderActivities()`.
        Depende de: `fe-38`, `fe-01`
-- [ ] `fe-40` Implementar os filtros combináveis do painel de "Filtros" em `#navActivitiesControls`: categoria, vibe, status, modalidade de duração, perfil de custo (faixa de valores) e época do ano — todos combináveis entre si e com a busca fuzzy, refletidos em `renderActivities()`.
+- [x] `fe-40` Implementar os filtros combináveis do painel de "Filtros" em `#navActivitiesControls`: categoria, vibe, status, modalidade de duração, perfil de custo (faixa de valores) e época do ano — todos combináveis entre si e com a busca fuzzy, refletidos em `renderActivities()`.
        Depende de: `fe-39`
 - [ ] `fe-41` Implementar a integração com feriadosapi.com: `fetchHolidays()` chamada uma vez por sessão ao entrar em `setView('activities')` (`fe-17`), resultado cacheado em `holidaysCache`; exibir seção "Próximos feriados compatíveis" no modal de detalhes filtrando por modalidades de duração da atividade; fallback silencioso ("Não foi possível carregar feriados") sem bloquear o fluxo se a API falhar; conectar o cache em `getActiveVariation()` (`fe-30`) para a regra de "feriados prolongados".
        Depende de: `fe-40`
