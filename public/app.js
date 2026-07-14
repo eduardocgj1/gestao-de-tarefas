@@ -3561,4 +3561,85 @@ function renderActivityFormStep1(a) {
   });
 }
 
+// ---------- Etapa 2: Logística ----------
+const DISTANCIA_SP_OPTIONS = ['Na cidade', 'Até 150 km', '150–400 km', '400 km+'];
+
+function costRangeFieldHtml(tipo, temporada, range) {
+  const min = range && range[0] != null ? range[0] : '';
+  const max = range && range[1] != null ? range[1] : '';
+  return `
+    <div class="cost-range-row" data-tipo="${tipo}" data-temporada="${temporada}">
+      <span class="cost-range-label">${temporada === 'baixa_temporada' ? 'Baixa temporada' : 'Alta temporada'}</span>
+      <input type="number" min="0" class="cost-range-min" placeholder="Mín" value="${min}">
+      <span>–</span>
+      <input type="number" min="0" class="cost-range-max" placeholder="Máx" value="${max}">
+    </div>`;
+}
+
+function costProfileSectionHtml(tipo, perfil) {
+  perfil = perfil || {};
+  return `
+    <div class="cost-profile-section" data-tipo="${tipo}">
+      <h4>${PERFIS_CUSTO_LABELS[tipo]}</h4>
+      ${costRangeFieldHtml(tipo, 'baixa_temporada', perfil.baixa_temporada)}
+      ${costRangeFieldHtml(tipo, 'alta_temporada', perfil.alta_temporada)}
+    </div>`;
+}
+
+function renderActivityFormStep2(a) {
+  const container = document.getElementById('activityFormStep2');
+  container.innerHTML = `
+    <label>Modalidades de duração</label>
+    ${multiSelectChipsHtml('modalidadesDuracao', MODALIDADES_DURACAO, a.modalidadesDuracao)}
+    <label>Meios de transporte</label>
+    ${multiSelectChipsHtml('meiosTransporte', MEIOS_TRANSPORTE, a.meiosTransporte)}
+    <label>Perfis de custo (R$ por pessoa)</label>
+    <div id="af-cost-profiles">
+      ${PERFIS_CUSTO_TIPOS.map(tipo => costProfileSectionHtml(tipo, (a.perfisCusto || {})[tipo])).join('')}
+    </div>
+    <label>Nível de planejamento
+      <select id="af-nivel-planejamento">
+        <option value="">Selecione</option>
+        ${NIVEIS_PLANEJAMENTO.map(n => `<option value="${escapeHtml(n)}" ${a.nivelPlanejamento === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Antecedência mínima (dias)
+      <input type="number" min="0" id="af-antecedencia-minima" value="${a.antecedenciaMiniDias ?? ''}">
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" id="af-decisao-ultima-hora" ${a.decisaoUltimaHora ? 'checked' : ''}> Decisão de última hora possível
+    </label>
+    <label id="af-distancia-field">Distância de SP
+      <select id="af-distancia">
+        <option value="">Não definida</option>
+        ${DISTANCIA_SP_OPTIONS.map(d => `<option value="${escapeHtml(d)}" ${a.distanciaSP === d ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('')}
+      </select>
+    </label>
+  `;
+
+  bindMultiSelectChips(container, 'modalidadesDuracao', a);
+  bindMultiSelectChips(container, 'meiosTransporte', a);
+
+  container.querySelectorAll('.cost-range-row').forEach(row => {
+    const tipo = row.dataset.tipo, temporada = row.dataset.temporada;
+    const commit = () => {
+      const min = row.querySelector('.cost-range-min').value;
+      const max = row.querySelector('.cost-range-max').value;
+      patchActivity(a, x => {
+        x.perfisCusto = x.perfisCusto || {};
+        if (!x.perfisCusto[tipo]) x.perfisCusto[tipo] = {};
+        if (min === '' && max === '') { x.perfisCusto[tipo][temporada] = null; }
+        else x.perfisCusto[tipo][temporada] = [min === '' ? null : Number(min), max === '' ? null : Number(max)];
+      });
+    };
+    row.querySelector('.cost-range-min').addEventListener('input', commit);
+    row.querySelector('.cost-range-max').addEventListener('input', commit);
+  });
+
+  document.getElementById('af-nivel-planejamento').addEventListener('change', e => patchActivity(a, x => { x.nivelPlanejamento = e.target.value || null; }));
+  document.getElementById('af-antecedencia-minima').addEventListener('input', e => patchActivity(a, x => { x.antecedenciaMiniDias = e.target.value === '' ? null : Number(e.target.value); }));
+  document.getElementById('af-decisao-ultima-hora').addEventListener('change', e => patchActivity(a, x => { x.decisaoUltimaHora = e.target.checked; }));
+  document.getElementById('af-distancia').addEventListener('change', e => patchActivity(a, x => { x.distanciaSP = e.target.value || null; }));
+}
+
 load();
