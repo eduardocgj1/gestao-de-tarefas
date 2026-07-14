@@ -1251,7 +1251,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 
 ### Frontend — Estrutura (index.html)
 
-- [ ] `fe-01` Adicionar `<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>` em `public/index.html` imediatamente antes de `<script src="app.js"></script>` (linha 442).
+- [x] `fe-01` Adicionar `<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>` em `public/index.html` imediatamente antes de `<script src="app.js"></script>` (linha 442).
        Depende de: nenhuma
 - [ ] `fe-02` Adicionar o botão `#sidebarActivitiesItem` na sidebar, logo abaixo de `#sidebarCalendarItem` (após linha 32 de `public/index.html`), com a marcação exata definida na spec (ícone `.icon-activities-wrap`/`.icon-activities` + label "Atividades").
        Contexto: mesmo padrão estrutural de `#sidebarCalendarItem` (linhas 29-32).
