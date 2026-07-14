@@ -3361,4 +3361,89 @@ document.getElementById('activityDetailEditBtn').addEventListener('click', () =>
   if (activityDetailId) openActivityForm(activityDetailId);
 });
 
+// ---------- formulário em etapas (stepper) ----------
+function currentEditingActivity() { return findActivity(editingActivityId); }
+
+function openActivityForm(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  editingActivityId = id;
+  activityFormMode = 'edit';
+  document.getElementById('activityDetailOverlay').classList.add('hidden');
+  showActivityFormStep(1);
+  renderActivityFormStep(1);
+  document.getElementById('activityFormOverlay').classList.remove('hidden');
+}
+function closeActivityForm() {
+  document.getElementById('activityFormOverlay').classList.add('hidden');
+  editingActivityId = null;
+  renderActivities();
+}
+
+function showActivityFormStep(step) {
+  activityFormStep = step;
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById(`activityFormStep${i}`).classList.toggle('hidden', i !== step);
+  }
+  document.querySelectorAll('.activity-form-step-dot').forEach(dot => {
+    const dotStep = Number(dot.dataset.step);
+    dot.classList.toggle('active', dotStep === step);
+    dot.classList.toggle('done', dotStep < step);
+  });
+  document.getElementById('activityFormBackBtn').classList.toggle('hidden', step === 1);
+  document.getElementById('activityFormNextBtn').textContent = step === 5 ? 'Concluir' : 'Próximo';
+}
+
+// Validação mínima por etapa antes de avançar. Apenas a Etapa 1 tem campos obrigatórios (nome +
+// categoria) — as demais etapas são inteiramente opcionais (ver seção "Campos por Atividade").
+function validateActivityFormStep(step, a) {
+  if (step === 1) return !!(a.name && a.name.trim() && a.categoria && a.categoria.trim());
+  return true;
+}
+
+// Ponto único de renderização de cada etapa. Cada task fe-24..fe-31 define a função
+// renderActivityFormStepN correspondente; até lá, a etapa fica vazia (esqueleto).
+function renderActivityFormStep(step) {
+  const a = currentEditingActivity();
+  if (!a) return;
+  const fn = window[`renderActivityFormStep${step}`];
+  if (typeof fn === 'function') fn(a);
+}
+
+document.getElementById('activityFormNextBtn').addEventListener('click', () => {
+  const a = currentEditingActivity();
+  if (!a) return;
+  if (!validateActivityFormStep(activityFormStep, a)) {
+    alert('Preencha os campos obrigatórios desta etapa antes de avançar.');
+    return;
+  }
+  if (activityFormStep < 5) {
+    showActivityFormStep(activityFormStep + 1);
+    renderActivityFormStep(activityFormStep);
+  } else {
+    closeActivityForm();
+  }
+});
+document.getElementById('activityFormBackBtn').addEventListener('click', () => {
+  if (activityFormStep > 1) {
+    showActivityFormStep(activityFormStep - 1);
+    renderActivityFormStep(activityFormStep);
+  }
+});
+document.getElementById('activityFormDraftBtn').addEventListener('click', () => {
+  save();
+  const hint = document.getElementById('activityFormAutosaveHint');
+  hint.textContent = 'Rascunho salvo ✓';
+  setTimeout(() => { hint.textContent = 'Rascunho salvo automaticamente'; }, 1500);
+});
+document.getElementById('closeActivityForm').addEventListener('click', closeActivityForm);
+document.getElementById('activityFormOverlay').addEventListener('click', e => { if (e.target.id === 'activityFormOverlay') closeActivityForm(); });
+document.querySelectorAll('.activity-form-step-dot').forEach(dot => {
+  dot.addEventListener('click', () => {
+    const step = Number(dot.dataset.step);
+    showActivityFormStep(step);
+    renderActivityFormStep(step);
+  });
+});
+
 load();
