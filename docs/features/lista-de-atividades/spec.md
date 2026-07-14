@@ -1229,7 +1229,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 
 ### Banco de dados
 
-- [ ] `db-01` Escrever as alterações de schema em `schema.sql`: `ALTER TABLE tasks` (dropar `NOT NULL` de `board_id`, adicionar `activity_id`, `antecedencia_minima_dias`, `antecedencia_max_dias`, `antecedencia_rec_dias`), `CREATE TABLE IF NOT EXISTS activities` completa (todos os campos do modelo técnico) e os índices (`tasks_activity_id_idx`, `activities_status_idx`, `activities_categoria_idx`, `activities_created_at_idx`).
+- [x] `db-01` Escrever as alterações de schema em `schema.sql`: `ALTER TABLE tasks` (dropar `NOT NULL` de `board_id`, adicionar `activity_id`, `antecedencia_minima_dias`, `antecedencia_max_dias`, `antecedencia_rec_dias`), `CREATE TABLE IF NOT EXISTS activities` completa (todos os campos do modelo técnico) e os índices (`tasks_activity_id_idx`, `activities_status_idx`, `activities_categoria_idx`, `activities_created_at_idx`).
        Contexto: seguir exatamente o SQL da seção "Alterações no banco de dados" da spec (`docs/features/lista-de-atividades/spec.md`). Adicionar um comentário no topo do bloco novo em `schema.sql` avisando: `-- ATENÇÃO: rodar este bloco manualmente no SQL Editor do Supabase — não é aplicado automaticamente por este repositório (sem acesso de rede ao painel a partir do ambiente de desenvolvimento).`
        **Esta task NÃO aplica a migration no Supabase.** Isso é uma ação manual do usuário fora do repositório. O commit apenas documenta o SQL. Todas as tasks de `be-*` e `fe-*` que dependem de dados reais só funcionarão em runtime depois que o usuário rodar esse SQL manualmente — isso deve ficar registrado como bloqueio conhecido, não impede a implementação do código.
        Depende de: nenhuma

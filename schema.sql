@@ -64,3 +64,73 @@ CREATE TABLE IF NOT EXISTS app_state (
 CREATE INDEX IF NOT EXISTS tasks_board_id_idx ON tasks(board_id);
 CREATE INDEX IF NOT EXISTS tasks_task_date_idx ON tasks(task_date);
 CREATE INDEX IF NOT EXISTS calendar_events_start_date_idx ON calendar_events(start_date);
+
+-- ============================================================
+-- Feature: Gerenciar Lista de Atividades
+-- Ver docs/features/lista-de-atividades/spec.md
+--
+-- ATENÇÃO: rodar este bloco manualmente no SQL Editor do Supabase —
+-- não é aplicado automaticamente por este repositório (sem acesso de
+-- rede ao painel a partir do ambiente de desenvolvimento).
+-- ============================================================
+
+-- board_id passa a ser nullable (tarefas de checklist existem antes de serem promovidas)
+ALTER TABLE tasks
+  ALTER COLUMN board_id DROP NOT NULL;
+
+-- Tabela de atividades
+CREATE TABLE IF NOT EXISTS activities (
+  id                          TEXT PRIMARY KEY,
+  name                        TEXT NOT NULL,
+  categoria                   TEXT NOT NULL,
+  status                      TEXT NOT NULL DEFAULT 'rascunho',
+  -- Identidade
+  descricao                   TEXT,
+  foto_capa                   TEXT,             -- base64 data URL (ex: "data:image/jpeg;base64,...")
+  vibes                       JSONB NOT NULL DEFAULT '[]',
+  -- Logística
+  modalidades_duracao         JSONB NOT NULL DEFAULT '[]',
+  meios_transporte            JSONB NOT NULL DEFAULT '[]',
+  nivel_planejamento          TEXT,
+  antecedencia_minima_dias    INTEGER,          -- referência geral da atividade
+  decisao_ultima_hora         BOOLEAN DEFAULT FALSE,
+  localidade                  TEXT,             -- texto curto para geocodificação (ex: "Cantareira", "Ubatuba")
+  distancia_sp                TEXT,
+  -- Condições ideais
+  condicao_climatica_ideal    JSONB NOT NULL DEFAULT '[]',
+  temperatura_minima_celsius  INTEGER,
+  epoca_ideal                 JSONB NOT NULL DEFAULT '[]',
+  perfil_grupo                JSONB NOT NULL DEFAULT '[]',
+  tamanho_grupo               TEXT,
+  condicionamento_fisico      TEXT,
+  evitar_alta_temporada       BOOLEAN DEFAULT FALSE,
+  repetivel                   BOOLEAN DEFAULT TRUE,
+  pet_friendly                BOOLEAN,
+  -- Custo
+  perfis_custo                JSONB NOT NULL DEFAULT '{}',
+  -- Variações sazonais
+  variacoes                   JSONB NOT NULL DEFAULT '[]',
+  -- Planejamento
+  notas                       TEXT,
+  links                       JSONB NOT NULL DEFAULT '[]',  -- [{ url, titulo }]
+  data_inicio                 DATE,             -- preenchida ao mover para planejada
+  board_destino_id            TEXT REFERENCES boards(id) ON DELETE SET NULL,
+  -- Realizações
+  realizacoes                 JSONB NOT NULL DEFAULT '[]',
+  -- Metadados
+  created_at                  BIGINT,
+  updated_at                  BIGINT
+);
+
+-- Novos campos em tasks para suporte a checklist de atividades
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS activity_id              TEXT REFERENCES activities(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS antecedencia_minima_dias INTEGER DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS antecedencia_max_dias    INTEGER DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS antecedencia_rec_dias    INTEGER DEFAULT NULL;
+
+-- Índices
+CREATE INDEX IF NOT EXISTS tasks_activity_id_idx     ON tasks(activity_id);
+CREATE INDEX IF NOT EXISTS activities_status_idx     ON activities(status);
+CREATE INDEX IF NOT EXISTS activities_categoria_idx  ON activities(categoria);
+CREATE INDEX IF NOT EXISTS activities_created_at_idx ON activities(created_at);
