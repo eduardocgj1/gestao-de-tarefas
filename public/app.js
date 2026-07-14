@@ -102,6 +102,7 @@ const sidebarEl = document.getElementById('sidebar');
 const sidebarBoardsEl = document.getElementById('sidebarBoards');
 const sidebarAddBoardAreaEl = document.getElementById('sidebarAddBoardArea');
 const sidebarCalendarItemEl = document.getElementById('sidebarCalendarItem');
+const sidebarActivitiesItemEl = document.getElementById('sidebarActivitiesItem');
 const board = document.getElementById('board');
 const weekRangeEl = document.getElementById('weekRange');
 
@@ -495,6 +496,7 @@ function renderSidebar() {
 
   renderSidebarAddBoardArea();
   sidebarCalendarItemEl.classList.toggle('active', currentView === 'calendar');
+  sidebarActivitiesItemEl.classList.toggle('active', currentView === 'activities');
 }
 
 function renderSidebarAddBoardArea() {
@@ -563,24 +565,31 @@ function deleteBoard(id) {
 }
 
 function updateAppTitle() {
-  document.getElementById('appTitle').textContent = currentView === 'calendar' ? 'Calendário' : (currentBoard() ? currentBoard().name : 'Tarefas 2026');
+  const titles = { calendar: 'Calendário', activities: 'Atividades' };
+  document.getElementById('appTitle').textContent = titles[currentView] || (currentBoard() ? currentBoard().name : 'Tarefas 2026');
 }
 
-// ---------- view mode (board vs calendário) ----------
+// ---------- view mode (board vs calendário vs atividades) ----------
 function setView(view) {
   currentView = view;
   const isCalendar = view === 'calendar';
-  document.getElementById('board').classList.toggle('hidden', isCalendar);
+  const isActivities = view === 'activities';
+  const isBoard = view === 'board';
+  document.getElementById('board').classList.toggle('hidden', !isBoard);
   document.getElementById('calendarView').classList.toggle('hidden', !isCalendar);
+  document.getElementById('activitiesView').classList.toggle('hidden', !isActivities);
   document.getElementById('boardLegend').classList.toggle('hidden', !isCalendar);
-  document.getElementById('navBoardControls').classList.toggle('hidden', isCalendar);
+  document.getElementById('navBoardControls').classList.toggle('hidden', !isBoard);
   document.getElementById('navCalendarControls').classList.toggle('hidden', !isCalendar);
-  document.getElementById('exportReportBtn').classList.toggle('hidden', isCalendar);
+  document.getElementById('navActivitiesControls').classList.toggle('hidden', !isActivities);
+  document.getElementById('exportReportBtn').classList.toggle('hidden', !isBoard);
   updateAppTitle();
   renderSidebar();
   if (isCalendar) {
     renderBoardLegend();
     initCalendarIfNeeded();
+  } else if (isActivities) {
+    renderActivities();
   } else {
     render();
   }
@@ -589,6 +598,7 @@ function setView(view) {
 document.getElementById('sidebarCollapseBtn').addEventListener('click', toggleSidebar);
 document.getElementById('sidebarExpandBtn').addEventListener('click', toggleSidebar);
 sidebarCalendarItemEl.addEventListener('click', () => setView('calendar'));
+sidebarActivitiesItemEl.addEventListener('click', () => setView('activities'));
 
 // ---------- fields (custom classifications) ----------
 function findField(fieldId, board = currentBoard()) {
