@@ -3694,4 +3694,51 @@ function renderActivityFormStep2(a) {
   document.getElementById('af-distancia').addEventListener('change', e => patchActivity(a, x => { x.distanciaSP = e.target.value || null; }));
 }
 
+// ---------- Etapa 3: Condições ideais ----------
+const EPOCA_IDEAL_OPTIONS = [...EPOCAS, 'Qualquer'];
+
+function renderActivityFormStep3(a) {
+  const container = document.getElementById('activityFormStep3');
+  container.innerHTML = `
+    <label>Condição climática ideal</label>
+    ${multiSelectChipsHtml('condicaoClimaticaIdeal', CONDICOES_CLIMATICAS, a.condicaoClimaticaIdeal)}
+    <label>Temperatura mínima ideal (°C)
+      <input type="number" id="af-temp-minima" value="${a.temperaturaMiniCelsius ?? ''}">
+    </label>
+    <label>Época ideal do ano</label>
+    ${multiSelectChipsHtml('epocaIdeal', EPOCA_IDEAL_OPTIONS, a.epocaIdeal)}
+    <label>Perfil de grupo</label>
+    ${multiSelectChipsHtml('perfilGrupo', PERFIS_GRUPO, a.perfilGrupo)}
+    <label>Tamanho do grupo
+      <select id="af-tamanho-grupo">
+        <option value="">Não definido</option>
+        ${TAMANHOS_GRUPO.map(t => `<option value="${escapeHtml(t)}" ${a.tamanhoGrupo === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Condicionamento físico exigido
+      <select id="af-condicionamento">
+        ${NIVEIS_CONDICIONAMENTO.map(n => `<option value="${escapeHtml(n)}" ${(a.condicionamentoFisico || 'Não') === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+      </select>
+    </label>
+    <label class="checkbox-row"><input type="checkbox" id="af-evitar-alta" ${a.evitarAltaTemporada ? 'checked' : ''}> Evitar alta temporada</label>
+    <label class="checkbox-row"><input type="checkbox" id="af-repetivel" ${a.repetivel !== false ? 'checked' : ''}> Repetível</label>
+    <label>Pet-friendly
+      <select id="af-pet-friendly">
+        <option value="">Não definido</option>
+        <option value="sim" ${a.petFriendly === true ? 'selected' : ''}>Sim</option>
+        <option value="nao" ${a.petFriendly === false ? 'selected' : ''}>Não</option>
+      </select>
+    </label>
+  `;
+  bindMultiSelectChips(container, 'condicaoClimaticaIdeal', a);
+  bindMultiSelectChips(container, 'epocaIdeal', a);
+  bindMultiSelectChips(container, 'perfilGrupo', a);
+  document.getElementById('af-temp-minima').addEventListener('input', e => patchActivity(a, x => { x.temperaturaMiniCelsius = e.target.value === '' ? null : Number(e.target.value); }));
+  document.getElementById('af-tamanho-grupo').addEventListener('change', e => patchActivity(a, x => { x.tamanhoGrupo = e.target.value || null; }));
+  document.getElementById('af-condicionamento').addEventListener('change', e => patchActivity(a, x => { x.condicionamentoFisico = e.target.value; }));
+  document.getElementById('af-evitar-alta').addEventListener('change', e => patchActivity(a, x => { x.evitarAltaTemporada = e.target.checked; }));
+  document.getElementById('af-repetivel').addEventListener('change', e => patchActivity(a, x => { x.repetivel = e.target.checked; }));
+  document.getElementById('af-pet-friendly').addEventListener('change', e => patchActivity(a, x => { x.petFriendly = e.target.value === '' ? null : e.target.value === 'sim'; }));
+}
+
 load();

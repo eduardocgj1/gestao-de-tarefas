@@ -1322,7 +1322,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-25`
 - [x] `fe-27` Implementar a integração com Nominatim: `geocodeLocalidade(query)` chamada ao avançar da Etapa 1 para a Etapa 2 usando o campo `localidade`; se retornar resultado, preenche `distanciaSP` automaticamente; se `localidade` estiver vazio ou a busca não retornar nada, mantém/exibe o seletor manual da Etapa 2 sem bloquear o avanço.
        Depende de: `fe-26`
-- [ ] `fe-28` Implementar a Etapa 3 — Condições ideais: condição climática ideal, temperatura mínima ideal, época ideal do ano, perfil de grupo, tamanho do grupo, condicionamento físico exigido, evitar alta temporada, repetível, pet-friendly.
+- [x] `fe-28` Implementar a Etapa 3 — Condições ideais: condição climática ideal, temperatura mínima ideal, época ideal do ano, perfil de grupo, tamanho do grupo, condicionamento físico exigido, evitar alta temporada, repetível, pet-friendly.
        Depende de: `fe-27`
 - [ ] `fe-29` Implementar a Etapa 4 — Variações sazonais: CRUD de variação (nome, épocas cobertas + flag "feriados prolongados", subconjunto de campos substituíveis da lista fechada), com bloqueio de salvamento quando duas variações cobrem a mesma época trimestral (mensagem: "Este período já está coberto pela variação '[nome]'. Ajuste as épocas antes de salvar.").
        Contexto: lista fechada de 10 campos substituíveis / 9 invariáveis, conforme tabela da seção "Variações Sazonais" da spec.
