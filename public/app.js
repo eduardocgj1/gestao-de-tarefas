@@ -1069,8 +1069,37 @@ function render() {
   document.getElementById('nextDay').disabled = addDays(weekStart, 1) > YEAR_END;
   document.getElementById('nextWeek').disabled = addDays(weekStart, 7) > YEAR_END;
 
-  board.innerHTML = days.map(d => columnHtml(d)).join('');
+  board.innerHTML = noDateColumnHtml() + days.map(d => columnHtml(d)).join('');
   renderWeatherOnColumns();
+}
+
+// Tarefas sem data (própria do board ou de checklist de atividade promovida sem antecedência
+// mínima definida) — aparecem numa coluna "Sem data" fixa no início do board.
+function tasksWithoutDate(board = currentBoard()) {
+  const ownTasks = (board.tasks || []).filter(t => !t.date);
+  const promotedTasks = activities
+    .flatMap(a => (a.checklistTasks || []))
+    .filter(t => t.boardId === board.id && !t.date);
+  return [...ownTasks, ...promotedTasks];
+}
+
+function noDateColumnHtml() {
+  const items = tasksWithoutDate();
+  if (!items.length) return '';
+  return `
+  <div class="column column-no-date">
+    <div class="col-header" data-date="">
+      <div class="col-header-top">
+        <div class="col-title">Sem data</div>
+      </div>
+      <div class="col-stats">
+        <span>${items.length} tarefa(s) sem data definida</span>
+      </div>
+    </div>
+    <div class="col-body" data-date="">
+      ${items.map(t => cardHtml(t, false, currentBoard())).join('')}
+    </div>
+  </div>`;
 }
 
 function columnHtml(d) {
@@ -1853,7 +1882,11 @@ board.addEventListener('click', e => {
   const weatherBtn = e.target.closest('.col-weather-city-btn');
   if (weatherBtn) { openWeatherPopover(weatherBtn); return; }
   const title = e.target.closest('.col-title');
-  if (title) { openDayPopup(title.closest('.col-header').dataset.date); return; }
+  if (title) {
+    const dateKey = title.closest('.col-header').dataset.date;
+    if (dateKey) openDayPopup(dateKey); // a coluna "Sem data" não tem Visão do Dia associada
+    return;
+  }
   const chip = e.target.closest('.event-chip');
   if (chip) { openEventModal(chip.dataset.eventId); return; }
   if (e.target.classList.contains('chk-done')) {
