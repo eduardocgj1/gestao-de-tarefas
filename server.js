@@ -9,10 +9,60 @@ const PORT = process.env.PORT || 3131;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript' };
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+// ── Fallback de DEV local sem credenciais do Supabase ────────
+// Só para desenvolvimento local sem .env configurado (ex.: este ambiente de implementação, que
+// não tem acesso de rede/credenciais ao painel do Supabase). Em produção (Render) as variáveis
+// SUPABASE_URL/SUPABASE_KEY sempre existem, então este bloco nunca é usado lá — o comportamento
+// real com Supabase não muda. Implementa o mínimo da API encadeável do @supabase/supabase-js
+// usada neste arquivo (from().select(), from().upsert(), from().delete().not()) sobre um objeto
+// JS simples em memória, com o MESMO formato de entrada/saída (linhas em snake_case, como no
+// banco real) — loadState()/saveState() não precisam saber a diferença.
+const memoryDb = { boards: [], tasks: [], calendar_events: [], people: [], app_state: [], activities: [] };
+
+function makeMemorySupabaseClient() {
+  return {
+    from(table) {
+      if (!memoryDb[table]) memoryDb[table] = [];
+      return {
+        select(_cols) {
+          return Promise.resolve({ data: memoryDb[table].map(row => ({ ...row })), error: null });
+        },
+        upsert(payload, opts = {}) {
+          const conflictKey = opts.onConflict || 'id';
+          const items = Array.isArray(payload) ? payload : [payload];
+          items.forEach(item => {
+            const rows = memoryDb[table];
+            const idx = rows.findIndex(r => r[conflictKey] === item[conflictKey]);
+            if (idx >= 0) rows[idx] = { ...item };
+            else rows.push({ ...item });
+          });
+          return Promise.resolve({ error: null });
+        },
+        delete() {
+          return {
+            // Reproduz `.not(column, 'in', '(v1,v2,...)')`: mantém apenas as linhas cujo valor
+            // está no padrão informado (equivalente a deletar as que NÃO estão).
+            not(column, _op, pattern) {
+              const inner = String(pattern).replace(/^\(|\)$/g, '');
+              const allowed = new Set(inner.split(',').filter(Boolean));
+              memoryDb[table] = memoryDb[table].filter(r => allowed.has(String(r[column])));
+              return Promise.resolve({ error: null });
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+const useMemoryFallback = !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY;
+if (useMemoryFallback) {
+  console.warn('[dev] SUPABASE_URL/SUPABASE_KEY ausentes — usando armazenamento em memória (SOMENTE para desenvolvimento local). Os dados NÃO persistem entre reinícios do servidor. Em produção (Render), configure as env vars normalmente.');
+}
+
+const supabase = useMemoryFallback
+  ? makeMemorySupabaseClient()
+  : createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // ── Helpers ─────────────────────────────────────────────────
 function send(res, status, body, type = 'application/json') {

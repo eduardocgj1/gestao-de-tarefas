@@ -1368,6 +1368,8 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 
 ### Validação final
 
+- [x] `fe-47-prep` (task extra, fora do plano original do task-planner) Adicionar fallback de armazenamento em memória em `server.js` para viabilizar teste local sem credenciais reais do Supabase neste ambiente de desenvolvimento (sem acesso de rede ao painel). Ativado automaticamente quando `SUPABASE_URL`/`SUPABASE_KEY` estão ausentes; em produção (Render) essas variáveis sempre existem, então o comportamento real nunca muda lá. Ver comentário extenso em `server.js` acima de `makeMemorySupabaseClient()`.
+       Depende de: `be-04`
 - [ ] `fe-47` Subir o servidor local (`node server.js`) e validar manualmente: navegação para "Atividades" pela sidebar, criação de uma atividade rápida (rascunho), abertura do modal de detalhes, e confirmação de que o estado persiste após reload (`GET /api/tasks`/`POST /api/tasks`). Registrar no PR/nota da spec se a migration do `db-01` já foi aplicada manualmente no Supabase pelo usuário — sem ela, `be-03`/`be-04` falharão em runtime (tabela `activities` inexistente).
        Depende de: todas as tasks anteriores
 
