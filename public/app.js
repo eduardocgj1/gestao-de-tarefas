@@ -590,6 +590,7 @@ function setView(view) {
     initCalendarIfNeeded();
   } else if (isActivities) {
     renderActivities();
+    fetchHolidays();
   } else {
     render();
   }
@@ -3403,6 +3404,8 @@ function activityDetailPlanningHtml(a) {
     ${detailRow('Board de destino', a.boardDestinoId ? (boards.find(b => b.id === a.boardDestinoId) || {}).name : null)}
     ${detailRow('Notas', a.notas)}
     ${linksHtml}
+    <h4>Próximos feriados compatíveis</h4>
+    <div id="activityDetailHolidays"></div>
   `;
 }
 
@@ -3453,6 +3456,7 @@ function openActivityDetail(id) {
   document.getElementById('activityDetailPlanning').innerHTML = activityDetailPlanningHtml(a);
   const checklistEl = document.getElementById('activityDetailChecklist');
   if (checklistEl) checklistEl.innerHTML = (a.checklistTasks || []).map(checklistTaskRowHtml).join('');
+  renderActivityDetailHolidays(a);
   document.getElementById('activityDetailHistory').innerHTML = activityDetailHistoryHtml(a);
   document.getElementById('activityDetailFooter').innerHTML = activityDetailFooterHtml(a);
   document.getElementById('activityDetailOverlay').classList.remove('hidden');
@@ -4813,5 +4817,66 @@ document.getElementById('activityFiltersBtn').addEventListener('click', () => {
   if (opening) renderActivityFiltersPanel();
   panel.classList.toggle('hidden');
 });
+
+// ---------- feriadosapi.com ----------
+// Nota: o endpoint exato de feriadosapi.com não está documentado na spec além de "gratuito, 60
+// req/min, feriados do estado de SP". A URL abaixo é a melhor tentativa com base no nome do
+// serviço; como o fetch tem fallback silencioso em qualquer erro (rede, 404, formato inesperado),
+// o app nunca quebra mesmo que o endpoint precise de ajuste — ver "Registro de desenvolvimento".
+async function fetchHolidays() {
+  if (holidaysCache !== null) return holidaysCache; // uma chamada por sessão (cache em memória)
+  try {
+    const year = new Date().getFullYear();
+    const res = await fetch(`https://feriadosapi.com/api/v1/feriados/SP/${year}`);
+    if (!res.ok) throw new Error('feriadosapi.com request failed');
+    const json = await res.json();
+    const list = Array.isArray(json) ? json : (json.feriados || json.holidays || []);
+    holidaysCache = list.map(h => ({ date: h.date || h.data, name: h.name || h.nome || '' })).filter(h => h.date);
+  } catch (err) {
+    console.error('Falha ao carregar feriados via feriadosapi.com:', err);
+    holidaysCache = [];
+  }
+  if (activityDetailId && !document.getElementById('activityDetailOverlay').classList.contains('hidden')) {
+    const a = findActivity(activityDetailId);
+    if (a) renderActivityDetailHolidays(a);
+  }
+  if (currentView === 'activities') renderActivities(); // atualiza chip de variação ativa por feriado prolongado
+  return holidaysCache;
+}
+
+const ACTIVITY_MODALIDADES_SIMPLES = ['Parada rápida', 'Meio período', 'Dia inteiro', 'Bate volta', 'Final de semana'];
+const ACTIVITY_MODALIDADES_PROLONGADAS = ['Feriado prolongado', 'Semana+'];
+
+// Feriados/períodos futuros compatíveis com as modalidades de duração da atividade: atividades
+// que só fazem sentido como feriado prolongado/viagem longa só veem os períodos de 3+ dias;
+// as demais veem qualquer feriado futuro (simples ou prolongado).
+function upcomingCompatibleHolidays(a) {
+  if (!holidaysCache || !holidaysCache.length) return [];
+  const today = toKey(new Date());
+  const modalidades = a.modalidadesDuracao || [];
+  const wantsProlonged = modalidades.some(m => ACTIVITY_MODALIDADES_PROLONGADAS.includes(m));
+  const wantsSimple = !modalidades.length || modalidades.some(m => ACTIVITY_MODALIDADES_SIMPLES.includes(m));
+  const results = [];
+  const periods = findProlongedHolidayPeriods(holidaysCache);
+  if (wantsProlonged || !modalidades.length) {
+    periods.filter(p => p.end >= today).forEach(p => results.push({ label: `${fmtDateBR(p.start)} – ${fmtDateBR(p.end)} (prolongado)`, start: p.start }));
+  }
+  if (wantsSimple) {
+    holidaysCache.filter(h => h.date >= today).forEach(h => results.push({ label: `${fmtDateBR(h.date)} · ${h.name}`, start: h.date }));
+  }
+  results.sort((x, y) => x.start.localeCompare(y.start));
+  return results.slice(0, 5);
+}
+
+function renderActivityDetailHolidays(a) {
+  const el = document.getElementById('activityDetailHolidays');
+  if (!el) return;
+  if (holidaysCache === null) { el.innerHTML = '<div class="activity-detail-empty">Carregando feriados...</div>'; return; }
+  if (!holidaysCache.length) { el.innerHTML = '<div class="activity-detail-empty">Não foi possível carregar feriados</div>'; return; }
+  const compat = upcomingCompatibleHolidays(a);
+  el.innerHTML = compat.length
+    ? `<ul class="activity-holidays-list">${compat.map(c => `<li>${escapeHtml(c.label)}</li>`).join('')}</ul>`
+    : '<div class="activity-detail-empty">Nenhum feriado compatível encontrado.</div>';
+}
 
 load();
