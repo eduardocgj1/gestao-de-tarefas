@@ -3741,4 +3741,225 @@ function renderActivityFormStep3(a) {
   document.getElementById('af-pet-friendly').addEventListener('change', e => patchActivity(a, x => { x.petFriendly = e.target.value === '' ? null : e.target.value === 'sim'; }));
 }
 
+// ---------- Etapa 4: Variações sazonais ----------
+// Decisão de nomenclatura (ambiguidade da spec): a tabela "campos substituíveis" na spec usa
+// snake_case (ex.: `condicao_climatica_ideal`), mas o resto do app (incluindo os campos-base da
+// própria atividade) usa camelCase — e `variacoes` é armazenado como JSONB opaco, sem mapeamento
+// campo-a-campo em server.js (appActivityToDb/dbActivityToApp só repassam o array como está).
+// Decisão conservadora: manter camelCase dentro de cada objeto de variação, por consistência com
+// o resto do objeto Activity em memória. A importação de JSON (fe-38) faz a tradução
+// snake_case → camelCase ao montar `activity.variacoes`, já que o prompt de refinamento gera
+// snake_case (ver seção "Prompt de Refinamento de Atividade" da spec).
+let activityVariationDraft = null; // variação em edição (clone) ou null quando o editor está fechado
+
+const VARIATION_FIELD_TYPES = {
+  vibes: 'chips:VIBES',
+  condicaoClimaticaIdeal: 'chips:CONDICOES_CLIMATICAS',
+  temperaturaMiniCelsius: 'number',
+  antecedenciaMiniDias: 'number',
+  decisaoUltimaHora: 'boolean',
+  perfisCusto: 'custo',
+  modalidadesDuracao: 'chips:MODALIDADES_DURACAO',
+  meiosTransporte: 'chips:MEIOS_TRANSPORTE',
+  perfilGrupo: 'chips:PERFIS_GRUPO',
+  evitarAltaTemporada: 'boolean',
+  notas: 'text',
+};
+const VARIATION_FIELD_LABELS = {
+  vibes: 'Vibe', condicaoClimaticaIdeal: 'Condição climática ideal', temperaturaMiniCelsius: 'Temperatura mínima (°C)',
+  antecedenciaMiniDias: 'Antecedência mínima (dias)', decisaoUltimaHora: 'Decisão de última hora',
+  perfisCusto: 'Perfis de custo', modalidadesDuracao: 'Modalidades de duração', meiosTransporte: 'Meios de transporte',
+  perfilGrupo: 'Perfil de grupo', evitarAltaTemporada: 'Evitar alta temporada', notas: 'Notas',
+};
+const VARIATION_OPTIONS_BY_NAME = { VIBES, CONDICOES_CLIMATICAS, MODALIDADES_DURACAO, MEIOS_TRANSPORTE, PERFIS_GRUPO };
+
+function variationFieldOverrideRowHtml(field, draft) {
+  const type = VARIATION_FIELD_TYPES[field];
+  const enabled = draft[field] !== undefined;
+  const label = VARIATION_FIELD_LABELS[field];
+  let editorHtml = '';
+  if (type.startsWith('chips:')) {
+    const options = VARIATION_OPTIONS_BY_NAME[type.split(':')[1]];
+    editorHtml = multiSelectChipsHtml(`var-${field}`, options, draft[field] || []);
+  } else if (type === 'boolean') {
+    editorHtml = `<select class="var-field-input" data-field="${field}">
+      <option value="true" ${draft[field] === true ? 'selected' : ''}>Sim</option>
+      <option value="false" ${draft[field] === false ? 'selected' : ''}>Não</option>
+    </select>`;
+  } else if (type === 'number') {
+    editorHtml = `<input type="number" class="var-field-input" data-field="${field}" value="${draft[field] ?? ''}">`;
+  } else if (type === 'text') {
+    editorHtml = `<textarea class="var-field-input" data-field="${field}" rows="2">${escapeHtml(draft[field] || '')}</textarea>`;
+  } else if (type === 'custo') {
+    editorHtml = `<div class="var-cost-profiles">${PERFIS_CUSTO_TIPOS.map(tipo => costProfileSectionHtml(tipo, (draft.perfisCusto || {})[tipo])).join('')}</div>`;
+  }
+  return `
+    <div class="variation-field-row" data-field="${field}">
+      <label class="checkbox-row"><input type="checkbox" class="var-field-toggle" data-field="${field}" ${enabled ? 'checked' : ''}> ${escapeHtml(label)}</label>
+      <div class="variation-field-editor ${enabled ? '' : 'hidden'}">${editorHtml}</div>
+    </div>`;
+}
+
+// Conflito de variações: bloqueia se duas variações cobrem a mesma época trimestral.
+function findVariationConflict(activity, draft) {
+  for (const v of activity.variacoes || []) {
+    if (v.id === draft.id) continue;
+    const overlap = (v.epocasCobertas || []).some(e => (draft.epocasCobertas || []).includes(e));
+    if (overlap) return v;
+  }
+  return null;
+}
+
+function openVariationEditor(variation) {
+  activityVariationDraft = variation
+    ? JSON.parse(JSON.stringify(variation))
+    : { id: uid(), nome: '', epocasCobertas: [], incluiFeriadosProlongados: false };
+  renderVariationEditor();
+}
+function closeVariationEditor(a) {
+  activityVariationDraft = null;
+  renderActivityFormStep4(a);
+}
+
+function renderVariationEditor() {
+  const el = document.getElementById('af-variation-editor');
+  if (!el) return;
+  const d = activityVariationDraft;
+  if (!d) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <h4>${d.nome ? 'Editar variação' : 'Nova variação'}</h4>
+    <label>Nome da variação
+      <input type="text" id="var-nome" value="${escapeHtml(d.nome || '')}">
+    </label>
+    <label>Épocas cobertas</label>
+    ${multiSelectChipsHtml('var-epocas', EPOCAS, d.epocasCobertas)}
+    <label class="checkbox-row"><input type="checkbox" id="var-feriados" ${d.incluiFeriadosProlongados ? 'checked' : ''}> Inclui feriados prolongados</label>
+    <div id="var-conflict-error" class="variation-conflict-error hidden"></div>
+    <div class="variation-fields-list">
+      ${ACTIVITY_VARIATION_MERGE_FIELDS.map(f => variationFieldOverrideRowHtml(f, d)).join('')}
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="var-cancel-btn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="var-save-btn" class="btn-primary">Salvar variação</button>
+    </div>`;
+
+  // Handlers atribuídos por propriedade (não addEventListener): este elemento persiste entre
+  // chamadas de renderVariationEditor() — addEventListener duplicaria os handlers a cada re-render.
+  el.onclick = e => {
+    const chip = e.target.closest('.chip-select-option');
+    if (chip) {
+      const group = chip.closest('.chip-select-group');
+      const field = group.dataset.field;
+      const val = chip.dataset.value;
+      const key = field === 'var-epocas' ? 'epocasCobertas' : field.replace('var-', '');
+      if (!d[key]) d[key] = [];
+      const idx = d[key].indexOf(val);
+      if (idx >= 0) d[key].splice(idx, 1); else d[key].push(val);
+      renderVariationEditor();
+      return;
+    }
+    if (e.target.id === 'var-cancel-btn') { closeVariationEditor(currentEditingActivity()); return; }
+    if (e.target.id === 'var-save-btn') { commitVariationDraft(currentEditingActivity()); return; }
+  };
+  el.onchange = e => {
+    if (e.target.classList.contains('var-field-toggle')) {
+      const field = e.target.dataset.field;
+      const type = VARIATION_FIELD_TYPES[field];
+      if (e.target.checked) {
+        if (type.startsWith('chips:')) d[field] = [];
+        else if (type === 'boolean') d[field] = false;
+        else if (type === 'number') d[field] = null;
+        else if (type === 'text') d[field] = '';
+        else if (type === 'custo') d[field] = {};
+      } else {
+        delete d[field];
+      }
+      renderVariationEditor();
+      return;
+    }
+    if (e.target.id === 'var-feriados') { d.incluiFeriadosProlongados = e.target.checked; return; }
+    if (e.target.classList.contains('var-field-input')) {
+      const field = e.target.dataset.field;
+      const type = VARIATION_FIELD_TYPES[field];
+      if (type === 'boolean') d[field] = e.target.value === 'true';
+      return;
+    }
+  };
+  el.oninput = e => {
+    if (e.target.id === 'var-nome') { d.nome = e.target.value; return; }
+    if (e.target.classList.contains('var-field-input')) {
+      const field = e.target.dataset.field;
+      const type = VARIATION_FIELD_TYPES[field];
+      if (type === 'number') d[field] = e.target.value === '' ? null : Number(e.target.value);
+      else if (type === 'text') d[field] = e.target.value;
+      return;
+    }
+    const row = e.target.closest('.cost-range-row');
+    if (row) {
+      const tipo = row.dataset.tipo, temporada = row.dataset.temporada;
+      const min = row.querySelector('.cost-range-min').value;
+      const max = row.querySelector('.cost-range-max').value;
+      if (!d.perfisCusto) d.perfisCusto = {};
+      if (!d.perfisCusto[tipo]) d.perfisCusto[tipo] = {};
+      d.perfisCusto[tipo][temporada] = (min === '' && max === '') ? null : [min === '' ? null : Number(min), max === '' ? null : Number(max)];
+    }
+  };
+}
+
+function commitVariationDraft(a) {
+  const d = activityVariationDraft;
+  if (!d.nome || !d.nome.trim()) { alert('Informe um nome para a variação.'); return; }
+  const conflict = findVariationConflict(a, d);
+  const errorEl = document.getElementById('var-conflict-error');
+  if (conflict) {
+    errorEl.textContent = `Este período já está coberto pela variação '${conflict.nome}'. Ajuste as épocas antes de salvar.`;
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  patchActivity(a, x => {
+    x.variacoes = x.variacoes || [];
+    const idx = x.variacoes.findIndex(v => v.id === d.id);
+    if (idx >= 0) x.variacoes[idx] = d; else x.variacoes.push(d);
+  });
+  activityVariationDraft = null;
+  renderActivityFormStep4(a);
+}
+
+function removeVariation(a, id) {
+  if (!confirm('Remover esta variação sazonal?')) return;
+  patchActivity(a, x => { x.variacoes = (x.variacoes || []).filter(v => v.id !== id); });
+  renderActivityFormStep4(a);
+}
+
+function variationListItemHtml(v) {
+  return `
+  <div class="activity-variation-list-item" data-id="${v.id}">
+    <span>${escapeHtml(v.nome)} <span class="activity-variation-card-epocas">(${(v.epocasCobertas || []).join(', ')})</span></span>
+    <div class="activity-variation-list-actions">
+      <button type="button" class="btn-neutral-sm var-edit-btn" data-id="${v.id}">Editar</button>
+      <button type="button" class="btn-neutral-sm var-remove-btn" data-id="${v.id}">Remover</button>
+    </div>
+  </div>`;
+}
+
+function renderActivityFormStep4(a) {
+  const container = document.getElementById('activityFormStep4');
+  container.innerHTML = `
+    <label>Variações sazonais (opcional)</label>
+    <div id="af-variations-list">
+      ${(a.variacoes || []).length ? a.variacoes.map(variationListItemHtml).join('') : '<div class="activity-detail-empty">Nenhuma variação cadastrada ainda.</div>'}
+    </div>
+    <button type="button" id="af-add-variation-btn" class="btn-neutral-sm">+ Nova variação</button>
+    <div id="af-variation-editor" class="variation-editor hidden"></div>
+  `;
+  document.getElementById('af-add-variation-btn').addEventListener('click', () => openVariationEditor(null));
+  container.querySelectorAll('.var-edit-btn').forEach(btn => btn.addEventListener('click', () => {
+    const v = (a.variacoes || []).find(x => x.id === btn.dataset.id);
+    if (v) openVariationEditor(v);
+  }));
+  container.querySelectorAll('.var-remove-btn').forEach(btn => btn.addEventListener('click', () => removeVariation(a, btn.dataset.id)));
+  if (activityVariationDraft) renderVariationEditor();
+}
+
 load();

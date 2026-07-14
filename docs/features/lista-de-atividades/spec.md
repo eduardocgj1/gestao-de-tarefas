@@ -1324,7 +1324,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-26`
 - [x] `fe-28` Implementar a Etapa 3 — Condições ideais: condição climática ideal, temperatura mínima ideal, época ideal do ano, perfil de grupo, tamanho do grupo, condicionamento físico exigido, evitar alta temporada, repetível, pet-friendly.
        Depende de: `fe-27`
-- [ ] `fe-29` Implementar a Etapa 4 — Variações sazonais: CRUD de variação (nome, épocas cobertas + flag "feriados prolongados", subconjunto de campos substituíveis da lista fechada), com bloqueio de salvamento quando duas variações cobrem a mesma época trimestral (mensagem: "Este período já está coberto pela variação '[nome]'. Ajuste as épocas antes de salvar.").
+- [x] `fe-29` Implementar a Etapa 4 — Variações sazonais: CRUD de variação (nome, épocas cobertas + flag "feriados prolongados", subconjunto de campos substituíveis da lista fechada), com bloqueio de salvamento quando duas variações cobrem a mesma época trimestral (mensagem: "Este período já está coberto pela variação '[nome]'. Ajuste as épocas antes de salvar.").
        Contexto: lista fechada de 10 campos substituíveis / 9 invariáveis, conforme tabela da seção "Variações Sazonais" da spec.
        Depende de: `fe-28`
 - [ ] `fe-30` Implementar `getActiveVariation(activity, referenceDate = new Date())`: mapeia mês → época trimestral, retorna a variação cujas `epocasCobertas` incluem a época atual; se `inclui_feriados_prolongados: true`, considera a variação ativa a partir da véspera do feriado prolongado (usa `holidaysCache`, populado em `fe-41` — até lá, tratar como indisponível sem quebrar); se nenhuma variação cobrir a época, retorna `null` (fallback para os atributos da base). Integrar no chip "variação ativa" do card (`fe-19`) e no modal de detalhes.
@@ -1388,6 +1388,10 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 ## Registro de desenvolvimento
 
 > Preenchido durante a implementação autônoma das tasks. Registra desvios do plano original, decisões tomadas diante de ambiguidade, e simplificações/cortes de escopo.
+
+### Ambiguidades e decisões
+
+- **Nomenclatura dos campos dentro de `variacoes` (fe-29):** a spec é inconsistente entre si — a seção "Variações Sazonais" (tabela de campos substituíveis) usa snake_case (`condicao_climatica_ideal`, `antecedencia_minima_dias`, `perfis_custo`, etc.), enquanto o restante do objeto `Activity` em memória (e a própria tabela "Campos por Atividade") usa camelCase. Como `variacoes` é armazenado como JSONB opaco em `server.js` (sem mapeamento campo-a-campo — `appActivityToDb`/`dbActivityToApp` apenas repassam o array), a escolha de convenção interna não tem efeito no banco. Decisão conservadora tomada: manter camelCase dentro de cada objeto de variação (`epocasCobertas`, `incluiFeriadosProlongados`, `condicaoClimaticaIdeal`, `temperaturaMiniCelsius`, `antecedenciaMiniDias`, `decisaoUltimaHora`, `perfisCusto`, `modalidadesDuracao`, `meiosTransporte`, `perfilGrupo`, `evitarAltaTemporada`, `notas`), por consistência com o resto do objeto `Activity` já em camelCase — menor risco de bugs por confusão de convenção dentro do mesmo arquivo `app.js`. A importação de JSON (`fe-38`) faz a tradução snake_case → camelCase ao montar `activity.variacoes` a partir do JSON do prompt de refinamento (que usa snake_case).
 
 ### Desvios de processo
 
