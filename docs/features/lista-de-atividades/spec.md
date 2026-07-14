@@ -1361,7 +1361,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-42`
 - [x] `fe-44` Estilizar o modal de criação/edição em etapas: indicador de progresso do stepper, transições entre etapas, layout de cada etapa (grids de campos, ranges de custo, editor de variações, checklist reaproveitando `.card`/`.column` do board).
        Depende de: `fe-43`
-- [ ] `fe-45` Estilizar os chips/badges novos: categoria, vibes, modalidades de duração, status (rascunho/quero_fazer/planejada com cores distintas), variação ativa, badge "Realizada N×", reaproveitando a classe `.tag` existente como base.
+- [x] `fe-45` Estilizar os chips/badges novos: categoria, vibes, modalidades de duração, status (rascunho/quero_fazer/planejada com cores distintas), variação ativa, badge "Realizada N×", reaproveitando a classe `.tag` existente como base.
        Depende de: `fe-44`
 - [ ] `fe-46` Estilizar os modais de importação de JSON, registro de realização e o dialog de promoção a Planejada (incluindo o preview de datas calculadas e o estado desabilitado do botão "Confirmar"), seguindo o padrão visual de `.modal`/`.confirm-modal` já existente.
        Depende de: `fe-45`

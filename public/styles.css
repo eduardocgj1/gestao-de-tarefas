@@ -17,6 +17,7 @@
   --color-terracotta-soft: #FBEEE6;
   --color-terracotta-soft-2: #F7E9DF;
   --color-blue: #3E6FBD;
+  --color-blue-soft: #E8EFF9;
   --color-dark: #262420;
   --color-dark-hover: #3A3630;
   --color-weekend-bg: #4B4840;
@@ -1932,4 +1933,29 @@ body {
 .activity-link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; }
 .af-link-remove { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 14px; }
 .activity-cover-preview img { max-width: 100%; border-radius: var(--radius-btn); margin-top: 8px; }
+
+/* ---------- chips e badges (reaproveitando .tag como base) ---------- */
+.activity-card-chips .tag,
+.activity-detail-row-value .tag,
+.activity-card-chips span.tag {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font: 600 10.5px var(--font-sora);
+}
+.activity-tag-categoria { background: var(--color-neutral-btn); color: var(--color-text-secondary); }
+.activity-tag-vibe { background: var(--color-blue-soft); color: var(--color-blue); }
+.activity-tag-more { background: var(--color-neutral-btn); color: var(--color-text-tertiary); }
+.activity-tag-duracao { background: var(--color-bg); color: var(--color-text-meta); border: 1px solid var(--color-border); }
+.activity-tag-variation { background: var(--color-green-soft); color: var(--color-green); }
+.activity-tag-realized { background: var(--color-terracotta-soft); color: var(--color-terracotta); }
+
+.activity-tag-status { font-weight: 700; }
+.activity-status-rascunho { background: var(--color-neutral-btn); color: var(--color-text-tertiary); }
+.activity-status-quero_fazer { background: var(--color-terracotta-soft); color: var(--color-terracotta); }
+.activity-status-planejada { background: var(--color-green-soft); color: var(--color-green); }
+
+.activity-variation-card { border: 1px solid var(--color-border); border-radius: var(--radius-btn); padding: 10px 12px; margin-bottom: 10px; }
+.activity-variation-card.active { border-color: var(--color-green); background: var(--color-green-soft); }
+.activity-variation-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.activity-variation-card-epocas { font: 600 11px var(--font-sora); color: var(--color-text-tertiary); }
 .export-save-btn:hover { background: var(--color-neutral-btn-hover); }
