@@ -1316,7 +1316,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-22`
 - [x] `fe-24` Implementar a Etapa 1 — Identidade: campos nome, categoria (+autocomplete de personalizada), vibes (multisseleção), descrição, localidade, e upload de foto de capa (preview local antes do resize/salvamento, que é feito em `fe-25`).
        Depende de: `fe-23`
-- [ ] `fe-25` Implementar `resizeCoverPhotoToBase64(file)`: redimensiona a imagem (máx. 800×600, qualidade JPEG 80%) via `<canvas>` e retorna a data URL base64, usado no upload da Etapa 1 antes de gravar em `activity.fotoCapa`.
+- [x] `fe-25` Implementar `resizeCoverPhotoToBase64(file)`: redimensiona a imagem (máx. 800×600, qualidade JPEG 80%) via `<canvas>` e retorna a data URL base64, usado no upload da Etapa 1 antes de gravar em `activity.fotoCapa`.
        Depende de: `fe-24`
 - [ ] `fe-26` Implementar a Etapa 2 — Logística: modalidades de duração, meios de transporte, os três perfis de custo (Econômico/Padrão/Conforto × baixa/alta temporada, ranges numéricos), nível de planejamento, antecedência mínima geral, decisão de última hora, e o seletor manual de distância de SP (usado como fallback — a chamada real ao Nominatim é `fe-27`).
        Depende de: `fe-25`

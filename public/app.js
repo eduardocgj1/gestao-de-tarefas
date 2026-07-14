@@ -3478,6 +3478,33 @@ function bindMultiSelectChips(container, fieldName, activity) {
   });
 }
 
+// Redimensiona a imagem de capa (máx. 800×600, JPEG 80%) via <canvas> e devolve a data URL base64
+// — mantém o campo foto_capa (armazenado direto na tabela activities) abaixo de ~200 KB.
+function resizeCoverPhotoToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const maxW = 800, maxH = 600;
+        let w = img.width, h = img.height;
+        const ratio = Math.min(1, maxW / w, maxH / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ---------- Etapa 1: Identidade ----------
 function activityCategoriaFieldHtml(a) {
   const isKnown = ACTIVITY_CATEGORIES.includes(a.categoria);
