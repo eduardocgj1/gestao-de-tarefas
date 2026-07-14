@@ -3381,6 +3381,7 @@ function activityDetailHistoryHtml(a) {
         ${detailRow('Com quem', r.com_quem)}
         ${detailRow('Avaliação', r.avaliacao ? `${'★'.repeat(r.avaliacao)}${'☆'.repeat(5 - r.avaliacao)}` : null)}
         ${detailRow('Nota', r.nota)}
+        <button type="button" class="btn-neutral-sm activity-realization-edit-btn" data-id="${r.id}">Editar registro</button>
       </div>
     `).join('')}
   `;
@@ -3448,6 +3449,10 @@ document.getElementById('activityDetailOverlay').addEventListener('click', e => 
     }
     return;
   }
+  const realizeBtn = e.target.closest('.activity-realize-btn');
+  if (realizeBtn) { openActivityRealization(realizeBtn.dataset.id, null); return; }
+  const editRealizationBtn = e.target.closest('.activity-realization-edit-btn');
+  if (editRealizationBtn) { openActivityRealization(activityDetailId, editRealizationBtn.dataset.id); return; }
 });
 
 document.getElementById('activitiesView').addEventListener('click', e => {
@@ -4366,5 +4371,98 @@ document.getElementById('activityPromoteConfirmBtn').addEventListener('click', (
   closeActivityPromote();
   openActivityDetail(a.id);
 });
+
+// ---------- registro de realização ----------
+let editingRealizationId = null;
+
+function starsInputHtml(rating) {
+  return [1, 2, 3, 4, 5].map(n => `<button type="button" class="realization-star ${n <= rating ? 'filled' : ''}" data-star="${n}">★</button>`).join('');
+}
+
+function openActivityRealization(activityId, realizationId) {
+  const a = findActivity(activityId);
+  if (!a) return;
+  activityDetailId = activityId;
+  editingRealizationId = realizationId || null;
+  const r = realizationId ? (a.realizacoes || []).find(x => x.id === realizationId) : null;
+  const today = toKey(new Date());
+  document.getElementById('activityRealizationFields').innerHTML = `
+    <label>Data realizada
+      <input type="date" id="real-data" max="${today}" value="${r ? r.data : today}">
+    </label>
+    <label>Gasto total (R$)
+      <input type="number" min="0" id="real-gasto" value="${r && r.gasto_total != null ? r.gasto_total : ''}">
+    </label>
+    <label>Perfil vivido
+      <select id="real-perfil">
+        <option value="">Não definido</option>
+        ${PERFIS_CUSTO_TIPOS.map(tipo => `<option value="${tipo}" ${r && r.perfil_vivido === tipo ? 'selected' : ''}>${PERFIS_CUSTO_LABELS[tipo]}</option>`).join('')}
+      </select>
+    </label>
+    <label>Variação vivida
+      <select id="real-variacao">
+        <option value="">Nenhuma / não se aplica</option>
+        ${(a.variacoes || []).map(v => `<option value="${v.id}" ${r && r.variacao_vivida_id === v.id ? 'selected' : ''}>${escapeHtml(v.nome)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Com quem foi
+      <input type="text" id="real-com-quem" value="${escapeHtml(r ? (r.com_quem || '') : '')}">
+    </label>
+    <label>Avaliação</label>
+    <div id="real-stars" class="realization-stars" data-rating="${r ? (r.avaliacao || 0) : 0}">${starsInputHtml(r ? (r.avaliacao || 0) : 0)}</div>
+    <label>Nota
+      <textarea id="real-nota" rows="2">${escapeHtml(r ? (r.nota || '') : '')}</textarea>
+    </label>
+  `;
+  document.getElementById('activityRealizationOverlay').classList.remove('hidden');
+}
+function closeActivityRealization() {
+  document.getElementById('activityRealizationOverlay').classList.add('hidden');
+  editingRealizationId = null;
+}
+
+document.getElementById('activityRealizationFields').addEventListener('click', e => {
+  const star = e.target.closest('.realization-star');
+  if (!star) return;
+  const n = Number(star.dataset.star);
+  const starsEl = document.getElementById('real-stars');
+  starsEl.dataset.rating = String(n);
+  starsEl.innerHTML = starsInputHtml(n);
+});
+
+// Registra (ou edita) uma realização: adiciona/atualiza `activity.realizacoes` e volta o status
+// para quero_fazer, independentemente do status anterior — permite realizar novamente depois.
+function confirmActivityRealization() {
+  const a = findActivity(activityDetailId);
+  if (!a) return;
+  const data = document.getElementById('real-data').value;
+  const today = toKey(new Date());
+  if (!data || data > today) { alert('A data realizada deve ser hoje ou uma data passada.'); return; }
+  const gastoRaw = document.getElementById('real-gasto').value;
+  const registro = {
+    id: editingRealizationId || uid(),
+    data,
+    gasto_total: gastoRaw === '' ? null : Number(gastoRaw),
+    perfil_vivido: document.getElementById('real-perfil').value || null,
+    variacao_vivida_id: document.getElementById('real-variacao').value || null,
+    com_quem: document.getElementById('real-com-quem').value.trim(),
+    avaliacao: Number(document.getElementById('real-stars').dataset.rating) || 0,
+    nota: document.getElementById('real-nota').value.trim(),
+  };
+  a.realizacoes = a.realizacoes || [];
+  const idx = a.realizacoes.findIndex(x => x.id === registro.id);
+  if (idx >= 0) a.realizacoes[idx] = registro; else a.realizacoes.push(registro);
+  a.status = 'quero_fazer';
+  a.updatedAt = Date.now();
+  save();
+  closeActivityRealization();
+  openActivityDetail(a.id);
+  renderActivities();
+}
+
+document.getElementById('closeActivityRealization').addEventListener('click', closeActivityRealization);
+document.getElementById('activityRealizationCancelBtn').addEventListener('click', closeActivityRealization);
+document.getElementById('activityRealizationOverlay').addEventListener('click', e => { if (e.target.id === 'activityRealizationOverlay') closeActivityRealization(); });
+document.getElementById('activityRealizationConfirmBtn').addEventListener('click', confirmActivityRealization);
 
 load();
