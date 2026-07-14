@@ -3400,6 +3400,8 @@ function openActivityDetail(id) {
   document.getElementById('activityDetailConditions').innerHTML = activityDetailConditionsHtml(a);
   document.getElementById('activityDetailVariations').innerHTML = activityDetailVariationsHtml(a);
   document.getElementById('activityDetailPlanning').innerHTML = activityDetailPlanningHtml(a);
+  const checklistEl = document.getElementById('activityDetailChecklist');
+  if (checklistEl) checklistEl.innerHTML = (a.checklistTasks || []).map(checklistTaskRowHtml).join('');
   document.getElementById('activityDetailHistory').innerHTML = activityDetailHistoryHtml(a);
   document.getElementById('activityDetailFooter').innerHTML = activityDetailFooterHtml(a);
   document.getElementById('activityDetailOverlay').classList.remove('hidden');
@@ -3408,6 +3410,21 @@ function closeActivityDetail() {
   document.getElementById('activityDetailOverlay').classList.add('hidden');
   activityDetailId = null;
 }
+
+document.getElementById('activityDetailOverlay').addEventListener('click', e => {
+  const nameBtn = e.target.closest('.checklist-task-name');
+  if (nameBtn) { openModal(nameBtn.dataset.id); return; }
+  const chk = e.target.closest('.checklist-chk-done');
+  if (chk) {
+    const a = findActivity(activityDetailId);
+    const t = a && (a.checklistTasks || []).find(x => x.id === chk.dataset.id);
+    if (t) {
+      setCompleted(t, chk.checked, { tasks: a.checklistTasks });
+      patchActivity(a, () => {});
+      openActivityDetail(activityDetailId);
+    }
+  }
+});
 
 document.getElementById('activitiesView').addEventListener('click', e => {
   const card = e.target.closest('.activity-card');
@@ -4018,6 +4035,174 @@ function renderActivityFormStep4(a) {
   }));
   container.querySelectorAll('.var-remove-btn').forEach(btn => btn.addEventListener('click', () => removeVariation(a, btn.dataset.id)));
   if (activityVariationDraft) renderVariationEditor();
+}
+
+// ---------- Etapa 5: Planejamento ----------
+function checklistTaskRowHtml(t) {
+  const antecedencias = [
+    t.antecedenciaMiniDias != null ? `mín ${t.antecedenciaMiniDias}d` : '',
+    t.antecedenciaRecDias != null ? `rec ${t.antecedenciaRecDias}d` : '',
+    t.antecedenciaMaxDias != null ? `máx ${t.antecedenciaMaxDias}d` : '',
+  ].filter(Boolean).join(' · ');
+  return `
+  <div class="checklist-task-row${t.completed ? ' completed' : ''}" draggable="true" data-id="${t.id}">
+    <span class="checklist-drag-handle" title="Arraste para reordenar">⠿</span>
+    <input type="checkbox" class="checklist-chk-done" data-id="${t.id}" ${t.completed ? 'checked' : ''}>
+    <button type="button" class="checklist-task-name" data-id="${t.id}">${escapeHtml(t.name)}</button>
+    ${antecedencias ? `<span class="checklist-task-antecedencias">${antecedencias}</span>` : ''}
+    <button type="button" class="checklist-task-remove" data-id="${t.id}" title="Remover">×</button>
+  </div>`;
+}
+
+function linkRowHtml(l, i) {
+  return `
+  <div class="activity-link-row" data-index="${i}">
+    <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.titulo || l.url)}</a>
+    <button type="button" class="af-link-remove" data-index="${i}" title="Remover">×</button>
+  </div>`;
+}
+
+function getDragAfterChecklistRow(container, y) {
+  const els = [...container.querySelectorAll('.checklist-task-row:not(.dragging)')];
+  return els.reduce((closest, el) => {
+    const box = el.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: el };
+    return closest;
+  }, { offset: -Infinity, element: null }).element;
+}
+
+function renderActivityFormStep5(a) {
+  const tasks = a.checklistTasks || [];
+  const done = tasks.filter(t => t.completed).length;
+  const container = document.getElementById('activityFormStep5');
+  container.innerHTML = `
+    <label>Checklist de planejamento</label>
+    ${tasks.length ? `<div class="activity-checklist-progress">${done} de ${tasks.length} itens concluídos</div>` : ''}
+    <div id="af-checklist-list" class="activity-checklist-list">
+      ${tasks.map(checklistTaskRowHtml).join('')}
+    </div>
+    <form id="af-add-checklist-form" class="checklist-add-form">
+      <input type="text" id="af-checklist-name" placeholder="Nova tarefa do checklist" required>
+      <input type="number" id="af-checklist-mini" placeholder="Mín (dias)" min="0">
+      <input type="number" id="af-checklist-rec" placeholder="Rec (dias)" min="0">
+      <input type="number" id="af-checklist-max" placeholder="Máx (dias)" min="0">
+      <button type="submit">Adicionar</button>
+    </form>
+    <label>Notas
+      <textarea id="af-notas" rows="3">${escapeHtml(a.notas || '')}</textarea>
+    </label>
+    <label>Links úteis</label>
+    <div id="af-links-list">${(a.links || []).map(linkRowHtml).join('')}</div>
+    <form id="af-add-link-form" class="checklist-add-form">
+      <input type="url" id="af-link-url" placeholder="https://" required>
+      <input type="text" id="af-link-titulo" placeholder="Título (opcional)">
+      <button type="submit">Adicionar link</button>
+    </form>
+  `;
+
+  // Handlers por propriedade (não addEventListener): #activityFormStep5 é um container
+  // persistente entre re-renders desta função — evita duplicar bindings a cada chamada.
+  container.onsubmit = e => {
+    e.preventDefault();
+    if (e.target.id === 'af-add-checklist-form') {
+      const name = document.getElementById('af-checklist-name').value.trim();
+      if (!name) return;
+      const mini = document.getElementById('af-checklist-mini').value;
+      const rec = document.getElementById('af-checklist-rec').value;
+      const max = document.getElementById('af-checklist-max').value;
+      patchActivity(a, x => {
+        x.checklistTasks = x.checklistTasks || [];
+        x.checklistTasks.push({
+          id: uid(), name, date: null, deliveryDate: null, link: '', duration: 0,
+          priority: null, urgent: false, urgentRank: 0,
+          delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
+          fieldValues: {}, team: [], boardId: null, activityId: a.id,
+          antecedenciaMiniDias: mini === '' ? null : Number(mini),
+          antecedenciaRecDias: rec === '' ? null : Number(rec),
+          antecedenciaMaxDias: max === '' ? null : Number(max),
+        });
+      });
+      renderActivityFormStep5(a);
+      return;
+    }
+    if (e.target.id === 'af-add-link-form') {
+      const url = document.getElementById('af-link-url').value.trim();
+      if (!url) return;
+      const titulo = document.getElementById('af-link-titulo').value.trim();
+      patchActivity(a, x => { x.links = x.links || []; x.links.push({ url, titulo }); });
+      renderActivityFormStep5(a);
+      return;
+    }
+  };
+
+  container.onclick = e => {
+    const nameBtn = e.target.closest('.checklist-task-name');
+    if (nameBtn) { openModal(nameBtn.dataset.id); return; } // reaproveita o modal do board (fe-13)
+    const rmBtn = e.target.closest('.checklist-task-remove');
+    if (rmBtn) {
+      patchActivity(a, x => { x.checklistTasks = (x.checklistTasks || []).filter(t => t.id !== rmBtn.dataset.id); });
+      renderActivityFormStep5(a);
+      return;
+    }
+    const linkRm = e.target.closest('.af-link-remove');
+    if (linkRm) {
+      const idx = Number(linkRm.dataset.index);
+      patchActivity(a, x => { x.links.splice(idx, 1); });
+      renderActivityFormStep5(a);
+      return;
+    }
+  };
+
+  container.onchange = e => {
+    if (e.target.classList.contains('checklist-chk-done')) {
+      const t = (a.checklistTasks || []).find(x => x.id === e.target.dataset.id);
+      if (t) {
+        setCompleted(t, e.target.checked, { tasks: a.checklistTasks });
+        patchActivity(a, () => {});
+        renderActivityFormStep5(a);
+      }
+      return;
+    }
+  };
+  container.oninput = e => {
+    if (e.target.id === 'af-notas') patchActivity(a, x => { x.notas = e.target.value; });
+  };
+
+  // Drag-and-drop para reordenar o checklist — mesmo padrão de getDragAfterElement/finalizeOrder
+  // já usado no board, adaptado para a lista de checklist.
+  container.ondragstart = e => {
+    const row = e.target.closest('.checklist-task-row');
+    if (!row) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', row.dataset.id);
+    setTimeout(() => row.classList.add('dragging'), 0);
+  };
+  container.ondragend = e => {
+    const row = e.target.closest('.checklist-task-row');
+    if (row) row.classList.remove('dragging');
+  };
+  container.ondragover = e => {
+    const list = document.getElementById('af-checklist-list');
+    if (!list) return;
+    e.preventDefault();
+    const dragging = list.querySelector('.dragging');
+    if (!dragging) return;
+    const after = getDragAfterChecklistRow(list, e.clientY);
+    if (after == null) list.appendChild(dragging);
+    else list.insertBefore(dragging, after);
+  };
+  container.ondrop = e => {
+    const list = document.getElementById('af-checklist-list');
+    if (!list) return;
+    e.preventDefault();
+    const ids = [...list.querySelectorAll('.checklist-task-row')].map(r => r.dataset.id);
+    patchActivity(a, x => {
+      const byId = new Map((x.checklistTasks || []).map(t => [t.id, t]));
+      x.checklistTasks = ids.map(id => byId.get(id)).filter(Boolean);
+    });
+    renderActivityFormStep5(a);
+  };
 }
 
 load();
