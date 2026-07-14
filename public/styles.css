@@ -1710,4 +1710,76 @@ body {
   background: var(--color-bg);
 }
 .activity-filters-panel #filter-clear-btn { margin-top: 14px; width: 100%; }
+
+.activities-view {
+  padding: 20px 26px 40px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.activity-draft-banner {
+  background: var(--color-terracotta-soft);
+  color: var(--color-terracotta);
+  font: 700 12.5px var(--font-sora);
+  padding: 10px 16px;
+  border-radius: var(--radius-btn);
+  margin-bottom: 18px;
+}
+
+.activities-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--color-text-tertiary);
+  font: 600 13px var(--font-sora);
+}
+
+.activity-group { margin-bottom: 28px; }
+.activity-group-title {
+  font: 700 14px var(--font-sora);
+  color: var(--color-text);
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.activity-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.activity-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow .15s ease;
+}
+.activity-card:hover { box-shadow: var(--shadow-modal); }
+.activity-card-cover {
+  height: 90px;
+  border-radius: 10px;
+  background-size: cover;
+  background-position: center;
+  margin-bottom: 10px;
+}
+.activity-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.activity-card-name { font: 700 14px var(--font-sora); color: var(--color-text); flex: 1; }
+.activity-card-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.activity-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  font: 600 11px var(--font-sora);
+  color: var(--color-text-meta);
+}
+.activity-card-cost { font: 700 12px var(--font-sora); color: var(--color-green); }
+
+@media (max-width: 900px) {
+  .activity-group-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
 .export-save-btn:hover { background: var(--color-neutral-btn-hover); }

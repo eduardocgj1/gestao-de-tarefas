@@ -1357,7 +1357,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 
 - [x] `fe-42` Estilizar `#sidebarActivitiesItem` (mesmo padrão visual de `.sidebar-calendar-item`) e `#navActivitiesControls` (busca, botão de filtros, botão importar, botão nova atividade), usando os tokens de cor existentes (`--color-*`).
        Depende de: `fe-41`
-- [ ] `fe-43` Estilizar a view de atividades: grid responsivo de 2-3 colunas agrupado por categoria, cabeçalhos de grupo, cards de atividade (`activityCardHtml`), estado vazio e o banner de rascunhos.
+- [x] `fe-43` Estilizar a view de atividades: grid responsivo de 2-3 colunas agrupado por categoria, cabeçalhos de grupo, cards de atividade (`activityCardHtml`), estado vazio e o banner de rascunhos.
        Depende de: `fe-42`
 - [ ] `fe-44` Estilizar o modal de criação/edição em etapas: indicador de progresso do stepper, transições entre etapas, layout de cada etapa (grids de campos, ranges de custo, editor de variações, checklist reaproveitando `.card`/`.column` do board).
        Depende de: `fe-43`
