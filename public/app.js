@@ -3453,6 +3453,8 @@ document.getElementById('activityDetailOverlay').addEventListener('click', e => 
   if (realizeBtn) { openActivityRealization(realizeBtn.dataset.id, null); return; }
   const editRealizationBtn = e.target.closest('.activity-realization-edit-btn');
   if (editRealizationBtn) { openActivityRealization(activityDetailId, editRealizationBtn.dataset.id); return; }
+  const deleteBtn = e.target.closest('.activity-delete-btn');
+  if (deleteBtn) { deleteActivity(deleteBtn.dataset.id); return; }
 });
 
 document.getElementById('activitiesView').addEventListener('click', e => {
@@ -4464,5 +4466,25 @@ document.getElementById('closeActivityRealization').addEventListener('click', cl
 document.getElementById('activityRealizationCancelBtn').addEventListener('click', closeActivityRealization);
 document.getElementById('activityRealizationOverlay').addEventListener('click', e => { if (e.target.id === 'activityRealizationOverlay') closeActivityRealization(); });
 document.getElementById('activityRealizationConfirmBtn').addEventListener('click', confirmActivityRealization);
+
+// ---------- exclusão de atividade ----------
+// Bloqueada quando já houve ao menos 1 realização (ver Fluxo 7 da spec). O delete de `tasks`
+// órfãs (checklist da atividade) acontece no servidor via FK `activity_id ... ON DELETE CASCADE`
+// quando `saveState()` remove a atividade que não veio mais no payload.
+function deleteActivity(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  if ((a.realizacoes || []).length >= 1) {
+    alert('Esta atividade já foi realizada e não pode ser excluída.');
+    return;
+  }
+  const taskCount = (a.checklistTasks || []).length;
+  const msg = `Excluir "${a.name}" vai remover a atividade${taskCount ? ` e ${taskCount === 1 ? 'sua tarefa' : `suas ${taskCount} tarefas`} de checklist` : ''} permanentemente. Esta ação não pode ser desfeita. Deseja continuar?`;
+  if (!confirm(msg)) return;
+  activities = activities.filter(x => x.id !== id);
+  save();
+  closeActivityDetail();
+  renderActivities();
+}
 
 load();
