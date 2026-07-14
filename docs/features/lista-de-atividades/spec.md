@@ -1279,7 +1279,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 - [x] `fe-10` Adicionar as constantes de domínio da feature (arrays/objetos JS): `ACTIVITY_CATEGORIES`, `VIBES`, `MODALIDADES_DURACAO`, `PERFIS_CUSTO_TIPOS`, `MEIOS_TRANSPORTE`, `EPOCAS` (trimestres), `CONDICOES_CLIMATICAS`, `PERFIS_GRUPO`, `TAMANHOS_GRUPO`, `NIVEIS_CONDICIONAMENTO`, `NIVEIS_PLANEJAMENTO` — com os valores exatos das tabelas da spec — e as variáveis globais de estado: `let activities = []`, `editingActivityId`, `activityFormStep`, `activityFormMode`, `holidaysCache = null`, `activityFilters`, `activitySearchQuery`, `activityDetailId`.
        Contexto: adicionar próximo às demais variáveis globais em `public/app.js` (linhas 9-54, ex.: `let boards = []`, `let calendarEvents = []`).
        Depende de: `fe-09`
-- [ ] `fe-11` Estender `load()` para popular `activities = data.activities || []` e `save()` para incluir `activities` no payload do `POST /api/tasks`.
+- [x] `fe-11` Estender `load()` para popular `activities = data.activities || []` e `save()` para incluir `activities` no payload do `POST /api/tasks`.
        Contexto: `load()` em `public/app.js` linhas 166-220 (adicionar próximo à linha 201, junto com `people`/`exportViews`); `save()` linhas 222-227 (incluir `activities` no `JSON.stringify`).
        Depende de: `fe-10`, `be-04`
 - [ ] `fe-12` Implementar `findTaskAnywhere(id)`, que busca a tarefa em `boards[].tasks` (retornando `{ task, source: 'board', board, activity: null }`) e em `activities[].checklistTasks` (retornando `{ task, source: 'checklist', board: null, activity }`), retornando `null` se não encontrada.

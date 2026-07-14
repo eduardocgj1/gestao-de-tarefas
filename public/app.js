@@ -244,6 +244,8 @@ async function load() {
   calendarEvents = data.calendarEvents || [];
   people = data.people || [];
   exportViews = data.exportViews || {};
+  activities = data.activities || [];
+  activities.forEach(a => { if (!a.checklistTasks) a.checklistTasks = []; });
 
   pomodoroSettings = data.pomodoroSettings || { focus: 25, short: 5, long: 15 };
   pomodoro = data.pomodoro || { mode: 'focus', remaining: pomodoroSettings.focus * 60, running: false, cycle: 0, updatedAt: Date.now() };
@@ -267,7 +269,7 @@ let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boards, activeBoardId, pomodoroSettings, pomodoro, calendarEvents, people, exportViews }) });
+    fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boards, activeBoardId, pomodoroSettings, pomodoro, calendarEvents, people, exportViews, activities }) });
   }, 250);
 }
 function savePomodoro() {
