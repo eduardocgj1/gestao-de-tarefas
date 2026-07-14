@@ -1346,7 +1346,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
        Depende de: `fe-36`
 - [x] `fe-38` Implementar o modal de importação de JSON (`#activityImportOverlay`): textarea para colar o JSON gerado pelo prompt, validação em duas camadas (1: campos obrigatórios presentes; 2: tipos corretos por campo, incluindo estrutura de `perfis_custo`, `variacoes` e `checklist_sugerido`), exibição de erros por campo quando inválido, preview editável quando válido, e confirmação que cria a atividade com o status correto (`quero_fazer` se as condições mínimas estiverem presentes no JSON, senão `rascunho`) e converte `checklist_sugerido` em tarefas reais de `checklistTasks`. Foto de capa não é importável via JSON.
        Depende de: `fe-37`
-- [ ] `fe-39` Implementar a busca fuzzy: instanciar `Fuse` sobre `activities` (campos `name`, `categoria`, `vibes`, `notas`, threshold 0.4), atualizado a cada mudança em `activities`; ligar o input de busca de `#navActivitiesControls` para filtrar a cada tecla e refletir em `renderActivities()`.
+- [x] `fe-39` Implementar a busca fuzzy: instanciar `Fuse` sobre `activities` (campos `name`, `categoria`, `vibes`, `notas`, threshold 0.4), atualizado a cada mudança em `activities`; ligar o input de busca de `#navActivitiesControls` para filtrar a cada tecla e refletir em `renderActivities()`.
        Depende de: `fe-38`, `fe-01`
 - [ ] `fe-40` Implementar os filtros combináveis do painel de "Filtros" em `#navActivitiesControls`: categoria, vibe, status, modalidade de duração, perfil de custo (faixa de valores) e época do ano — todos combináveis entre si e com a busca fuzzy, refletidos em `renderActivities()`.
        Depende de: `fe-39`

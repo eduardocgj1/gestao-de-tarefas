@@ -3043,8 +3043,23 @@ document.querySelector('.export-modal').addEventListener('input', e => {
 
 function findActivity(id) { return activities.find(a => a.id === id); }
 
-// Placeholder até fe-39/fe-40 implementarem busca fuzzy + filtros combináveis.
-function getFilteredActivities() { return activities; }
+// Busca fuzzy via Fuse.js (CDN — fe-01) sobre nome, categoria, vibe e notas, threshold 0.4.
+// O índice é reconstruído a cada busca em vez de mantido incrementalmente: para o volume de
+// atividades de uma lista pessoal (dezenas, não milhares), reconstruir é imperceptível e evita
+// ter que invalidar o índice manualmente em cada um dos muitos pontos que mutam `activities`.
+function searchActivitiesFuzzy(list, query) {
+  const q = (query || '').trim();
+  if (!q || typeof Fuse === 'undefined') return list;
+  const fuse = new Fuse(list, { keys: ['name', 'categoria', 'vibes', 'notas'], threshold: 0.4 });
+  return fuse.search(q).map(r => r.item);
+}
+
+// Placeholder para os filtros combináveis — estendido em fe-40.
+function applyActivityFilters(list) { return list; }
+
+function getFilteredActivities() {
+  return applyActivityFilters(searchActivitiesFuzzy(activities, activitySearchQuery));
+}
 
 function groupActivitiesByCategory(list) {
   const groups = new Map();
@@ -3256,6 +3271,11 @@ function confirmActivityQuickCreate() {
   closeActivityQuickCreate();
   renderActivities();
 }
+
+document.getElementById('activitySearchInput').addEventListener('input', e => {
+  activitySearchQuery = e.target.value;
+  renderActivities();
+});
 
 document.getElementById('activityNewBtn').addEventListener('click', openActivityQuickCreate);
 document.getElementById('closeActivityQuickCreate').addEventListener('click', closeActivityQuickCreate);
