@@ -1220,3 +1220,165 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 | Storage de checklist | Tabela `tasks` com `activity_id` + novos campos de antecedência. Não em JSONB da atividade |
 | Foto de capa no JSON de importação | Não importável via JSON (campo visual, não estrutural) |
 | Integração com exportar-atividades | Feature separada, sem conflito de nomenclatura |
+
+---
+
+## Tasks de Implementação
+
+> Convenção de commit: `feat: lista-de-atividades - <task-id> <descrição>` (ver `git log` para exemplos do padrão usado nas features anteriores). Cada task é atômica e deve resultar em um único commit.
+
+### Banco de dados
+
+- [ ] `db-01` Escrever as alterações de schema em `schema.sql`: `ALTER TABLE tasks` (dropar `NOT NULL` de `board_id`, adicionar `activity_id`, `antecedencia_minima_dias`, `antecedencia_max_dias`, `antecedencia_rec_dias`), `CREATE TABLE IF NOT EXISTS activities` completa (todos os campos do modelo técnico) e os índices (`tasks_activity_id_idx`, `activities_status_idx`, `activities_categoria_idx`, `activities_created_at_idx`).
+       Contexto: seguir exatamente o SQL da seção "Alterações no banco de dados" da spec (`docs/features/lista-de-atividades/spec.md`). Adicionar um comentário no topo do bloco novo em `schema.sql` avisando: `-- ATENÇÃO: rodar este bloco manualmente no SQL Editor do Supabase — não é aplicado automaticamente por este repositório (sem acesso de rede ao painel a partir do ambiente de desenvolvimento).`
+       **Esta task NÃO aplica a migration no Supabase.** Isso é uma ação manual do usuário fora do repositório. O commit apenas documenta o SQL. Todas as tasks de `be-*` e `fe-*` que dependem de dados reais só funcionarão em runtime depois que o usuário rodar esse SQL manualmente — isso deve ficar registrado como bloqueio conhecido, não impede a implementação do código.
+       Depende de: nenhuma
+
+### Backend (server.js)
+
+- [ ] `be-01` Estender `appTaskToDb(t, boardId)` para `appTaskToDb(t, boardId, activityId = null)` e `dbTaskToApp(t)`, incluindo `activity_id`/`activityId` e os três campos de antecedência (`antecedencia_minima_dias`/`antecedenciaMiniDias`, `antecedencia_max_dias`/`antecedenciaMaxDias`, `antecedencia_rec_dias`/`antecedenciaRecDias`), conforme os blocos de código já definidos na seção "Mapeamento app ↔ banco" da spec.
+       Contexto: funções atuais em `server.js` linhas 152-201. Manter todos os campos existentes intactos — só estender assinatura e objeto de retorno.
+       Depende de: `db-01`
+- [ ] `be-02` Criar as funções `appActivityToDb(a)` e `dbActivityToApp(a)` em `server.js`, copiando fielmente o mapeamento definido na spec (inclui `checklistTasks: []` como placeholder em `dbActivityToApp`, populado depois em `loadState()`).
+       Contexto: adicionar próximo às demais funções de mapeamento (`appEventToDb`/`dbEventToApp`, linhas 203-223).
+       Depende de: `be-01`
+- [ ] `be-03` Estender `loadState()` para buscar a tabela `activities` em paralelo com as demais, separar tasks em `tasksByBoard` (apenas tasks com `board_id` e sem `activity_id`) e `tasksByActivity` (todas as tasks com `activity_id`, promovidas ou não), popular `checklistTasks` de cada atividade mapeada e incluir `activities` no objeto retornado.
+       Contexto: `loadState()` atual em `server.js` linhas 34-78. Seguir exatamente a lógica da seção "Extensão de `loadState()`" da spec — tasks com `activity_id` E `board_id` (promovidas) vão **apenas** para `tasksByActivity`, nunca duplicadas em `board.tasks`.
+       Depende de: `be-02`
+- [ ] `be-04` Estender `saveState(state)` para receber `activities` no payload, separar `boardTasks` (tasks de board sem `activityId`) de `allChecklistTasks` (tasks de `activity.checklistTasks`, promovidas ou não), fazer upsert conjunto em `tasks`, fazer o delete-guard de tasks órfãs considerando `boards.length > 0 || activities.length > 0`, e fazer upsert/delete de `activities`.
+       Contexto: `saveState()` atual em `server.js` linhas 81-149, especialmente os passos 3-4 (upsert/delete de tasks, linhas 101-113). Seguir exatamente a lógica da seção "Extensão de `saveState()`" da spec, com cuidado para não recriar o bug histórico de wipe acidental (ver commit `f5e418d` no `git log` — o guard de delete precisa considerar corretamente quando `activities` está vazio mas `boards` não, e vice-versa).
+       Depende de: `be-03`
+
+### Frontend — Estrutura (index.html)
+
+- [ ] `fe-01` Adicionar `<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>` em `public/index.html` imediatamente antes de `<script src="app.js"></script>` (linha 442).
+       Depende de: nenhuma
+- [ ] `fe-02` Adicionar o botão `#sidebarActivitiesItem` na sidebar, logo abaixo de `#sidebarCalendarItem` (após linha 32 de `public/index.html`), com a marcação exata definida na spec (ícone `.icon-activities-wrap`/`.icon-activities` + label "Atividades").
+       Contexto: mesmo padrão estrutural de `#sidebarCalendarItem` (linhas 29-32).
+       Depende de: nenhuma
+- [ ] `fe-03` Adicionar `<main id="activitiesView" class="activities-view hidden"></main>` em `public/index.html`, logo após o fechamento de `#calendarView` (após linha 90).
+       Contexto: mesmo padrão de `#board` (linha 80) e `#calendarView` (linha 82) — container vazio, preenchido via JS por `renderActivities()`.
+       Depende de: `fe-02`
+- [ ] `fe-04` Adicionar `<div class="nav-activities hidden" id="navActivitiesControls">` dentro de `.nav` (após `#navCalendarControls`, linha 74), com: input de busca, botão "Filtros" (dropdown/painel a ser preenchido depois), botão "Importar", botão "+ Nova atividade".
+       Contexto: mesmo padrão de `#navBoardControls`/`#navCalendarControls` (linhas 63-74).
+       Depende de: `fe-03`
+- [ ] `fe-05` Adicionar o modal shell de criação/edição em etapas: `#activityFormOverlay` (`.modal-overlay`) contendo `.modal` com stepper de 5 etapas (indicador de progresso + containers vazios `#activityFormStep1` a `#activityFormStep5`), botões "Voltar", "Próximo"/"Salvar", "Salvar rascunho" e botão de fechar.
+       Contexto: mesmo padrão dos modais existentes (`#modalOverlay`, `#eventModalOverlay`, linhas 116-337 de `index.html`). Apenas a estrutura — conteúdo de cada etapa vem em tasks posteriores de lógica.
+       Depende de: `fe-04`
+- [ ] `fe-06` Adicionar o modal shell de detalhes/edição: `#activityDetailOverlay` com seções vazias (Visão geral / Logística / Condições / Variações / Planejamento / Histórico), botão "Editar" no cabeçalho e área de rodapé para o botão condicional "Cancelar planejamento".
+       Depende de: `fe-05`
+- [ ] `fe-07` Adicionar o modal shell de importação de JSON: `#activityImportOverlay` com textarea para colar o JSON, área de preview vazia e botões "Validar", "Confirmar", "Cancelar".
+       Depende de: `fe-06`
+- [ ] `fe-08` Adicionar o modal shell de registro de realização: `#activityRealizationOverlay` com campos de data, gasto total, perfil vivido, variação vivida, com quem foi, avaliação (estrelas + nota).
+       Depende de: `fe-07`
+- [ ] `fe-09` Adicionar o dialog shell de promoção a Planejada: `#activityPromoteOverlay` com campo de data de início, dropdown de board de destino, área de preview das datas calculadas por tarefa, e botão "Confirmar" (desabilitado por padrão via classe/atributo).
+       Depende de: `fe-08`
+
+### Frontend — Lógica (app.js)
+
+- [ ] `fe-10` Adicionar as constantes de domínio da feature (arrays/objetos JS): `ACTIVITY_CATEGORIES`, `VIBES`, `MODALIDADES_DURACAO`, `PERFIS_CUSTO_TIPOS`, `MEIOS_TRANSPORTE`, `EPOCAS` (trimestres), `CONDICOES_CLIMATICAS`, `PERFIS_GRUPO`, `TAMANHOS_GRUPO`, `NIVEIS_CONDICIONAMENTO`, `NIVEIS_PLANEJAMENTO` — com os valores exatos das tabelas da spec — e as variáveis globais de estado: `let activities = []`, `editingActivityId`, `activityFormStep`, `activityFormMode`, `holidaysCache = null`, `activityFilters`, `activitySearchQuery`, `activityDetailId`.
+       Contexto: adicionar próximo às demais variáveis globais em `public/app.js` (linhas 9-54, ex.: `let boards = []`, `let calendarEvents = []`).
+       Depende de: `fe-09`
+- [ ] `fe-11` Estender `load()` para popular `activities = data.activities || []` e `save()` para incluir `activities` no payload do `POST /api/tasks`.
+       Contexto: `load()` em `public/app.js` linhas 166-220 (adicionar próximo à linha 201, junto com `people`/`exportViews`); `save()` linhas 222-227 (incluir `activities` no `JSON.stringify`).
+       Depende de: `fe-10`, `be-04`
+- [ ] `fe-12` Implementar `findTaskAnywhere(id)`, que busca a tarefa em `boards[].tasks` (retornando `{ task, source: 'board', board, activity: null }`) e em `activities[].checklistTasks` (retornando `{ task, source: 'checklist', board: null, activity }`), retornando `null` se não encontrada.
+       Contexto: adicionar próximo a `findTask()` (linha 1106 de `public/app.js`). Copiar a implementação já definida na seção "Edição de tarefas no board" da spec.
+       Depende de: `fe-11`
+- [ ] `fe-13` Refatorar o fluxo de edição de tarefa (`openModal`, `patch`, `closeModal`, `currentEditingTask`, e os demais call-sites de `findTask(editingId, board)` — ex.: linhas ~1294, 1393, 1477, 1551, 1591, 1599, 1691, 1702, 1731, 1783, 2492, 2548, 2628 de `public/app.js`, buscar todos via `grep -n "findTask("`) para usar `findTaskAnywhere(editingId)` quando a tarefa não estiver necessariamente em `currentBoard()`. Quando a tarefa vier de um checklist não promovido (`source === 'checklist'` e `task.boardId == null`), ocultar/desabilitar os campos que dependem de contexto de board (data, prioridade, urgência) no modal — o usuário ainda pode editar nome, duração, link, delegação, campos customizados e marcar como concluída.
+       Contexto: esta é a mudança mais delicada da feature — o modal de edição de tarefa é hoje fortemente acoplado a `editingTaskBoardId`/`boards.find(...)`. Testar cuidadosamente que a edição de tarefas normais do board continua funcionando exatamente como antes (regressão zero) antes de mexer no comportamento de tarefas de checklist.
+       Depende de: `fe-12`
+- [ ] `fe-14` Implementar `getTasksForDateAndBoard(boardId, dateKey)` e integrar na renderização do board: `tasksFor(key, board)` (linha 613) passa a incluir também as tarefas promovidas de `activities[].checklistTasks` cujo `boardId === board.id && date === key`, além das tarefas próprias do board.
+       Contexto: `tasksFor()` é usado por `columnHtml()` (linha 1020) para montar cada coluna. Seguir a lógica de `getTasksForDateAndBoard()` definida na seção "Renderização do board" da spec, mas integrar dentro de `tasksFor()` para não precisar alterar todos os call-sites.
+       Depende de: `fe-13`
+- [ ] `fe-15` Refatorar `cardHtml(t, isMit)` para `cardHtml(t, isMit, board = currentBoard())`, trocando os usos internos de `currentBoard().fields` por `board.fields`, para permitir reaproveitar a mesma função ao renderizar o checklist de uma atividade (que pode não ter board de destino ainda).
+       Contexto: `cardHtml()` em `public/app.js` linhas 1071-1092. Atualizar os call-sites existentes (`columnHtml`, linha 1049) para passar `currentBoard()` explicitamente.
+       Depende de: `fe-14`
+- [ ] `fe-16` Adicionar a coluna "Sem data" no início do board (`render()`/`columnHtml`), exibida apenas quando existir ao menos uma tarefa do board (própria ou promovida) com `date === null`. Deve funcionar tanto para tarefas normais do board quanto para tarefas de checklist promovidas sem `antecedenciaMiniDias`.
+       Contexto: `render()` em `public/app.js` linhas 999-1016 monta `board.innerHTML` a partir de `days.map(columnHtml)`; adicionar a coluna extra antes desse map, com sua própria busca de tarefas via `getTasksForDateAndBoard`/`tasksFor` filtrando `date == null`.
+       Depende de: `fe-15`
+- [ ] `fe-17` Adicionar o listener de clique em `#sidebarActivitiesItem` chamando `setView('activities')`, e estender `setView(view)` para tratar o caso `'activities'`: ocultar `#board`/`#calendarView`, exibir `#activitiesView`, ocultar `#navBoardControls`/`#navCalendarControls`/`#exportReportBtn`, exibir `#navActivitiesControls`, atualizar `#appTitle` para "Atividades", marcar `#sidebarActivitiesItem` com classe `active`, e chamar `renderActivities()` ao entrar na view.
+       Contexto: `setView()` atual em `public/app.js` linhas 523-540; listener de `sidebarCalendarItemEl` na linha 544 é o padrão a seguir.
+       Depende de: `fe-16`, `fe-11`
+- [ ] `fe-18` Implementar o esqueleto de `renderActivities()`: agrupa `activities` por `categoria`, ordena cada grupo por `createdAt` DESC, renderiza um estado vazio quando não há atividades, e monta o container `#activitiesView` com um cabeçalho de grupo por categoria. Ainda sem busca/filtros (virão em tasks posteriores) e sem o conteúdo detalhado do card (task seguinte).
+       Contexto: função análoga a `render()` (board) e a `renderCalendar` (calendário). Seguir a assinatura definida na seção "Função renderActivities()" da spec.
+       Depende de: `fe-17`
+- [ ] `fe-19` Implementar `activityCardHtml(activity)` com o resumo definido na spec: nome, chip de categoria, chips de vibes (máx. 3 + "+N"), chip de status colorido, chip de variação ativa (se houver — depende de `fe-30`, pode ser deixado com placeholder até lá), badge "Realizada N×" (se `realizacoes.length > 0`), custo padrão em baixa temporada formatado ("R$ 350–550 / pessoa"), chips compactos de modalidades de duração. Integrar em `renderActivities()`.
+       Depende de: `fe-18`
+- [ ] `fe-20` Implementar o banner "X atividades aguardando detalhamento" no topo de `#activitiesView`, visível apenas quando houver ao menos uma atividade com `status === 'rascunho'`, com contagem dinâmica.
+       Depende de: `fe-19`
+- [ ] `fe-21` Implementar o fluxo de criação rápida (Fluxo 1): clique em "+ Nova atividade" abre um modal simples (nome + seleção de categoria, com autocomplete de categorias personalizadas já existentes derivado do array `activities` em memória), cria a atividade com `status: 'rascunho'` e demais campos default, chama `save()` e `renderActivities()`.
+       Contexto: normalização do texto de categoria personalizada (trim, sem forçar caixa) antes de salvar, conforme "Categoria Personalizada" na spec.
+       Depende de: `fe-20`
+- [ ] `fe-22` Implementar abertura/fechamento do modal de detalhes (`#activityDetailOverlay`) ao clicar num card: popula as seções (Visão geral / Logística / Condições / Variações / Planejamento / Histórico) com os dados da atividade, botão "Editar" abre o formulário em etapas (`fe-23`) pré-preenchido.
+       Depende de: `fe-21`
+- [ ] `fe-23` Implementar a navegação do stepper de 5 etapas (`#activityFormOverlay`): troca de etapa visível, botões "Próximo"/"Voltar", validação mínima de campos obrigatórios por etapa antes de avançar, botão "Salvar rascunho" disponível em qualquer etapa. Ainda sem os campos de cada etapa (tasks seguintes populam o conteúdo).
+       Depende de: `fe-22`
+- [ ] `fe-24` Implementar a Etapa 1 — Identidade: campos nome, categoria (+autocomplete de personalizada), vibes (multisseleção), descrição, localidade, e upload de foto de capa (preview local antes do resize/salvamento, que é feito em `fe-25`).
+       Depende de: `fe-23`
+- [ ] `fe-25` Implementar `resizeCoverPhotoToBase64(file)`: redimensiona a imagem (máx. 800×600, qualidade JPEG 80%) via `<canvas>` e retorna a data URL base64, usado no upload da Etapa 1 antes de gravar em `activity.fotoCapa`.
+       Depende de: `fe-24`
+- [ ] `fe-26` Implementar a Etapa 2 — Logística: modalidades de duração, meios de transporte, os três perfis de custo (Econômico/Padrão/Conforto × baixa/alta temporada, ranges numéricos), nível de planejamento, antecedência mínima geral, decisão de última hora, e o seletor manual de distância de SP (usado como fallback — a chamada real ao Nominatim é `fe-27`).
+       Depende de: `fe-25`
+- [ ] `fe-27` Implementar a integração com Nominatim: `geocodeLocalidade(query)` chamada ao avançar da Etapa 1 para a Etapa 2 usando o campo `localidade`; se retornar resultado, preenche `distanciaSP` automaticamente; se `localidade` estiver vazio ou a busca não retornar nada, mantém/exibe o seletor manual da Etapa 2 sem bloquear o avanço.
+       Depende de: `fe-26`
+- [ ] `fe-28` Implementar a Etapa 3 — Condições ideais: condição climática ideal, temperatura mínima ideal, época ideal do ano, perfil de grupo, tamanho do grupo, condicionamento físico exigido, evitar alta temporada, repetível, pet-friendly.
+       Depende de: `fe-27`
+- [ ] `fe-29` Implementar a Etapa 4 — Variações sazonais: CRUD de variação (nome, épocas cobertas + flag "feriados prolongados", subconjunto de campos substituíveis da lista fechada), com bloqueio de salvamento quando duas variações cobrem a mesma época trimestral (mensagem: "Este período já está coberto pela variação '[nome]'. Ajuste as épocas antes de salvar.").
+       Contexto: lista fechada de 10 campos substituíveis / 9 invariáveis, conforme tabela da seção "Variações Sazonais" da spec.
+       Depende de: `fe-28`
+- [ ] `fe-30` Implementar `getActiveVariation(activity, referenceDate = new Date())`: mapeia mês → época trimestral, retorna a variação cujas `epocasCobertas` incluem a época atual; se `inclui_feriados_prolongados: true`, considera a variação ativa a partir da véspera do feriado prolongado (usa `holidaysCache`, populado em `fe-41` — até lá, tratar como indisponível sem quebrar); se nenhuma variação cobrir a época, retorna `null` (fallback para os atributos da base). Integrar no chip "variação ativa" do card (`fe-19`) e no modal de detalhes.
+       Depende de: `fe-29`
+- [ ] `fe-31` Implementar a Etapa 5 — Planejamento: UI de checklist (adicionar tarefa com nome + antecedências mínima/máxima/recomendada, editar, reordenar por drag-and-drop, remover), reaproveitando o mesmo modal/card de tarefa do board via `findTaskAnywhere()`/`cardHtml()` (de `fe-13`/`fe-15`) para a interação de cada item; indicador de progresso ("N de M itens concluídos"); campo de notas; editor de lista de links (`{ url, titulo }`).
+       Depende de: `fe-30`
+- [ ] `fe-32` Implementar o auto-save do formulário: debounce de 250ms reaproveitando `save()`, disparado a cada mudança de campo/etapa, gravando diretamente no objeto da atividade dentro de `activities[]` (mesmo padrão de `patch()` usado nas tarefas). Progresso nunca perdido mesmo se o usuário fechar o modal no meio do preenchimento.
+       Depende de: `fe-31`
+- [ ] `fe-33` Implementar a máquina de estados: função que calcula/valida a transição automática `rascunho → quero_fazer` (ao menos 1 modalidade de duração + range completo de ao menos 1 perfil de custo em baixa temporada preenchidos), chamada após auto-save de cada etapa; impedir volta manual de `quero_fazer` para `rascunho`.
+       Contexto: condição definida na seção "Máquina de Estados e Ciclo de Realizações" e em "Condição para sair do Rascunho" da spec.
+       Depende de: `fe-32`
+- [ ] `fe-34` Implementar o dialog de promoção a Planejada (`#activityPromoteOverlay`) e `promoteChecklistToBoard(activity, boardId, dataInicio)`: botão "Mover para Planejada" desabilitado com tooltip quando `checklistTasks` vazio; dialog exige data de início (mín. amanhã) e board de destino; preview das datas calculadas por tarefa no formato `DD/MM (ddd)` / "Hoje" / "Sem data"; ao confirmar, aplica a função de promoção definida na spec (fallback para hoje se data calculada < hoje), muda status para `planejada`, chama `save()`, `render()` e `renderActivities()`.
+       Depende de: `fe-33`
+- [ ] `fe-35` Implementar `cancelActivityPlan(activity)` e o botão "Cancelar planejamento" no rodapé do modal de detalhes (visível apenas quando `status === 'planejada'`): dialog de confirmação com o texto exato da spec; ao confirmar, zera `boardId`/`date`/`completed` de cada tarefa do checklist, volta status para `quero_fazer`, chama `save()`, `render()` e `renderActivities()`.
+       Depende de: `fe-34`
+- [ ] `fe-36` Implementar o registro de realização (`#activityRealizationOverlay`): botão "Marcar como realizada" no card/modal de detalhes abre o formulário (data ≤ hoje, gasto total, perfil vivido, variação vivida — populada a partir de `activity.variacoes` —, com quem foi, avaliação 1-5 + nota); ao confirmar, adiciona o registro em `activity.realizacoes`, volta `status` para `quero_fazer`, exibe badge "Realizada N×"; registros existentes devem ser editáveis individualmente a partir do histórico no modal de detalhes.
+       Depende de: `fe-35`
+- [ ] `fe-37` Implementar a exclusão de atividade: bloqueada com mensagem quando `realizacoes.length >= 1` ("Esta atividade já foi realizada e não pode ser excluída."); quando `realizacoes.length === 0`, exibe confirmação detalhando o que será perdido e, se confirmado, remove a atividade de `activities` (e suas `checklistTasks` associadas), chama `save()` e `renderActivities()`.
+       Depende de: `fe-36`
+- [ ] `fe-38` Implementar o modal de importação de JSON (`#activityImportOverlay`): textarea para colar o JSON gerado pelo prompt, validação em duas camadas (1: campos obrigatórios presentes; 2: tipos corretos por campo, incluindo estrutura de `perfis_custo`, `variacoes` e `checklist_sugerido`), exibição de erros por campo quando inválido, preview editável quando válido, e confirmação que cria a atividade com o status correto (`quero_fazer` se as condições mínimas estiverem presentes no JSON, senão `rascunho`) e converte `checklist_sugerido` em tarefas reais de `checklistTasks`. Foto de capa não é importável via JSON.
+       Depende de: `fe-37`
+- [ ] `fe-39` Implementar a busca fuzzy: instanciar `Fuse` sobre `activities` (campos `name`, `categoria`, `vibes`, `notas`, threshold 0.4), atualizado a cada mudança em `activities`; ligar o input de busca de `#navActivitiesControls` para filtrar a cada tecla e refletir em `renderActivities()`.
+       Depende de: `fe-38`, `fe-01`
+- [ ] `fe-40` Implementar os filtros combináveis do painel de "Filtros" em `#navActivitiesControls`: categoria, vibe, status, modalidade de duração, perfil de custo (faixa de valores) e época do ano — todos combináveis entre si e com a busca fuzzy, refletidos em `renderActivities()`.
+       Depende de: `fe-39`
+- [ ] `fe-41` Implementar a integração com feriadosapi.com: `fetchHolidays()` chamada uma vez por sessão ao entrar em `setView('activities')` (`fe-17`), resultado cacheado em `holidaysCache`; exibir seção "Próximos feriados compatíveis" no modal de detalhes filtrando por modalidades de duração da atividade; fallback silencioso ("Não foi possível carregar feriados") sem bloquear o fluxo se a API falhar; conectar o cache em `getActiveVariation()` (`fe-30`) para a regra de "feriados prolongados".
+       Depende de: `fe-40`
+
+### Frontend — Estilos (styles.css)
+
+- [ ] `fe-42` Estilizar `#sidebarActivitiesItem` (mesmo padrão visual de `.sidebar-calendar-item`) e `#navActivitiesControls` (busca, botão de filtros, botão importar, botão nova atividade), usando os tokens de cor existentes (`--color-*`).
+       Depende de: `fe-41`
+- [ ] `fe-43` Estilizar a view de atividades: grid responsivo de 2-3 colunas agrupado por categoria, cabeçalhos de grupo, cards de atividade (`activityCardHtml`), estado vazio e o banner de rascunhos.
+       Depende de: `fe-42`
+- [ ] `fe-44` Estilizar o modal de criação/edição em etapas: indicador de progresso do stepper, transições entre etapas, layout de cada etapa (grids de campos, ranges de custo, editor de variações, checklist reaproveitando `.card`/`.column` do board).
+       Depende de: `fe-43`
+- [ ] `fe-45` Estilizar os chips/badges novos: categoria, vibes, modalidades de duração, status (rascunho/quero_fazer/planejada com cores distintas), variação ativa, badge "Realizada N×", reaproveitando a classe `.tag` existente como base.
+       Depende de: `fe-44`
+- [ ] `fe-46` Estilizar os modais de importação de JSON, registro de realização e o dialog de promoção a Planejada (incluindo o preview de datas calculadas e o estado desabilitado do botão "Confirmar"), seguindo o padrão visual de `.modal`/`.confirm-modal` já existente.
+       Depende de: `fe-45`
+
+### Validação final
+
+- [ ] `fe-47` Subir o servidor local (`node server.js`) e validar manualmente: navegação para "Atividades" pela sidebar, criação de uma atividade rápida (rascunho), abertura do modal de detalhes, e confirmação de que o estado persiste após reload (`GET /api/tasks`/`POST /api/tasks`). Registrar no PR/nota da spec se a migration do `db-01` já foi aplicada manualmente no Supabase pelo usuário — sem ela, `be-03`/`be-04` falharão em runtime (tabela `activities` inexistente).
+       Depende de: todas as tasks anteriores
+
+---
+
+## Critérios de Conclusão
+
+1. Ao clicar em "Atividades" na sidebar, a view de atividades é exibida com os controles de navbar corretos (busca, filtros, importar, nova atividade), e o board/calendário ficam ocultos.
+2. O usuário consegue criar uma atividade rápida (nome + categoria) que aparece imediatamente como rascunho agrupado por categoria na grade, e o banner "X atividades aguardando detalhamento" reflete a contagem correta.
+3. Ao preencher o formulário detalhado com ao menos uma modalidade de duração e um perfil de custo completo em baixa temporada, o status da atividade muda automaticamente de rascunho para "quero fazer".
+4. Ao mover uma atividade para Planejada informando data de início e board de destino, as tarefas do checklist passam a aparecer no board na data calculada (data de início − antecedência mínima, com fallback para hoje quando cai no passado) e continuam visíveis no checklist da atividade — editar uma tarefa em qualquer um dos dois lugares reflete imediatamente no outro.
+5. Ao cancelar o planejamento de uma atividade planejada, as tarefas somem do board e voltam ao checklist com data e board removidos e progresso zerado, e o status volta para "quero fazer".
+6. Uma atividade com ao menos uma realização registrada não pode ser excluída (ação bloqueada com mensagem explicativa), enquanto uma atividade sem realizações pode ser excluída após confirmação detalhando o que será perdido.
+7. A busca fuzzy e os filtros combináveis (categoria, vibe, status, modalidade de duração, perfil de custo, época do ano) reduzem corretamente, em tempo real, a lista de cards exibidos na view de Atividades.
