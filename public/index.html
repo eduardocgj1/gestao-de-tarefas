@@ -76,6 +76,15 @@
           <span id="monthRange"></span>
           <button id="calendarTodayBtn">Hoje</button>
         </div>
+        <div class="nav-activities hidden" id="navActivitiesControls">
+          <input type="text" id="activitySearchInput" class="activity-search-input" placeholder="🔍 Buscar atividades...">
+          <div class="activity-filters-wrap">
+            <button type="button" id="activityFiltersBtn" class="icon-btn" title="Filtros">Filtros ▾</button>
+            <div id="activityFiltersPanel" class="activity-filters-panel hidden"></div>
+          </div>
+          <button type="button" id="activityImportBtn" class="icon-btn" title="Importar atividade via JSON">Importar</button>
+          <button type="button" id="activityNewBtn" class="btn-brand-sm" title="Nova atividade">+ Nova atividade</button>
+        </div>
       </div>
       <button type="button" id="exportReportBtn" class="export-report-btn" title="Exportar report">Exportar report ↗</button>
       <button id="settingsBtn" class="icon-btn settings-btn" title="Configurações">⚙</button>

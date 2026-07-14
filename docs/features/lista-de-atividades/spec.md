@@ -1259,7 +1259,7 @@ Tarefas do checklist com `antecedenciaMiniDias: null` são promovidas com `date:
 - [x] `fe-03` Adicionar `<main id="activitiesView" class="activities-view hidden"></main>` em `public/index.html`, logo após o fechamento de `#calendarView` (após linha 90).
        Contexto: mesmo padrão de `#board` (linha 80) e `#calendarView` (linha 82) — container vazio, preenchido via JS por `renderActivities()`.
        Depende de: `fe-02`
-- [ ] `fe-04` Adicionar `<div class="nav-activities hidden" id="navActivitiesControls">` dentro de `.nav` (após `#navCalendarControls`, linha 74), com: input de busca, botão "Filtros" (dropdown/painel a ser preenchido depois), botão "Importar", botão "+ Nova atividade".
+- [x] `fe-04` Adicionar `<div class="nav-activities hidden" id="navActivitiesControls">` dentro de `.nav` (após `#navCalendarControls`, linha 74), com: input de busca, botão "Filtros" (dropdown/painel a ser preenchido depois), botão "Importar", botão "+ Nova atividade".
        Contexto: mesmo padrão de `#navBoardControls`/`#navCalendarControls` (linhas 63-74).
        Depende de: `fe-03`
 - [ ] `fe-05` Adicionar o modal shell de criação/edição em etapas: `#activityFormOverlay` (`.modal-overlay`) contendo `.modal` com stepper de 5 etapas (indicador de progresso + containers vazios `#activityFormStep1` a `#activityFormStep5`), botões "Voltar", "Próximo"/"Salvar", "Salvar rascunho" e botão de fechar.
