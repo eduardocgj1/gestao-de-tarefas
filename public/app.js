@@ -3067,11 +3067,50 @@ function activityDraftBannerHtml() {
   return `<div class="activity-draft-banner">⚠️ ${count} atividade${count > 1 ? 's' : ''} aguardando detalhamento</div>`;
 }
 
-// Placeholder até fe-19 implementar o card completo (nome, chips, badges, custo).
+const ACTIVITY_STATUS_LABELS = { rascunho: 'Rascunho', quero_fazer: 'Quero fazer', planejada: 'Planejada' };
+
+// Placeholder até fe-30 implementar a detecção real da variação sazonal ativa (mês atual +
+// feriados prolongados via holidaysCache). Até lá, o chip de variação ativa nunca aparece.
+function getActiveVariation() { return null; }
+
+function activityCostSummaryHtml(a) {
+  const perfis = a.perfisCusto || {};
+  for (const tipo of PERFIS_CUSTO_TIPOS) {
+    const perfil = perfis[tipo];
+    const range = perfil && perfil.baixa_temporada;
+    if (range && range[0] != null && range[1] != null) {
+      return `R$ ${range[0]}–${range[1]} / pessoa`;
+    }
+  }
+  return '';
+}
+
 function activityCardHtml(a) {
+  const vibes = a.vibes || [];
+  const vibeChips = vibes.slice(0, 3).map(v => `<span class="tag activity-tag-vibe">${escapeHtml(v)}</span>`).join('');
+  const vibeMore = vibes.length > 3 ? `<span class="tag activity-tag-more">+${vibes.length - 3}</span>` : '';
+  const activeVariation = getActiveVariation(a);
+  const cost = activityCostSummaryHtml(a);
+  const realCount = (a.realizacoes || []).length;
+  const durChips = (a.modalidadesDuracao || []).map(m => `<span class="tag activity-tag-duracao">${escapeHtml(m)}</span>`).join('');
+
   return `
   <div class="activity-card" data-id="${a.id}">
-    <div class="activity-card-name">${escapeHtml(a.name)}</div>
+    ${a.fotoCapa ? `<div class="activity-card-cover" style="background-image:url('${a.fotoCapa}')"></div>` : ''}
+    <div class="activity-card-top">
+      <div class="activity-card-name">${escapeHtml(a.name)}</div>
+      <span class="tag activity-tag-status activity-status-${a.status}">${ACTIVITY_STATUS_LABELS[a.status] || a.status}</span>
+    </div>
+    <div class="activity-card-chips">
+      <span class="tag activity-tag-categoria">${escapeHtml(a.categoria)}</span>
+      ${vibeChips}${vibeMore}
+      ${activeVariation ? `<span class="tag activity-tag-variation">🕓 ${escapeHtml(activeVariation.nome)}</span>` : ''}
+      ${realCount > 0 ? `<span class="tag activity-tag-realized">Realizada ${realCount}×</span>` : ''}
+    </div>
+    <div class="activity-card-meta">
+      ${cost ? `<span class="activity-card-cost">${cost}</span>` : ''}
+      ${durChips}
+    </div>
   </div>`;
 }
 
