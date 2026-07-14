@@ -4487,4 +4487,220 @@ function deleteActivity(id) {
   renderActivities();
 }
 
+// ---------- importação de JSON (Fluxo 3) ----------
+// Validação em duas camadas: (1) campos obrigatórios presentes; (2) tipos corretos por campo,
+// incluindo a estrutura de perfis_custo, variacoes e checklist_sugerido.
+function validateActivityImportJson(json) {
+  const errors = [];
+  if (!json || typeof json !== 'object' || Array.isArray(json)) {
+    return { valid: false, errors: [{ field: 'JSON', message: 'O conteúdo colado não é um objeto JSON válido.' }] };
+  }
+  if (!json.nome || typeof json.nome !== 'string' || !json.nome.trim()) {
+    errors.push({ field: 'nome', message: 'Campo obrigatório ausente ou inválido (deve ser texto).' });
+  }
+  if (!json.categoria || typeof json.categoria !== 'string' || !json.categoria.trim()) {
+    errors.push({ field: 'categoria', message: 'Campo obrigatório ausente ou inválido (deve ser texto).' });
+  }
+
+  const arrayFields = ['vibes', 'modalidades_duracao', 'meios_transporte', 'condicao_climatica_ideal', 'epoca_ideal', 'perfil_grupo', 'variacoes', 'checklist_sugerido'];
+  arrayFields.forEach(f => {
+    if (json[f] != null && !Array.isArray(json[f])) errors.push({ field: f, message: 'Deve ser uma lista (array).' });
+  });
+
+  if (json.perfis_custo != null) {
+    if (typeof json.perfis_custo !== 'object' || Array.isArray(json.perfis_custo)) {
+      errors.push({ field: 'perfis_custo', message: 'Deve ser um objeto com as chaves economico/padrao/conforto.' });
+    } else {
+      PERFIS_CUSTO_TIPOS.forEach(tipo => {
+        const p = json.perfis_custo[tipo];
+        if (p == null) return;
+        ['baixa_temporada', 'alta_temporada'].forEach(temp => {
+          const range = p[temp];
+          if (range != null && (!Array.isArray(range) || range.length !== 2)) {
+            errors.push({ field: `perfis_custo.${tipo}.${temp}`, message: 'Deve ser um array [min, max].' });
+          }
+        });
+      });
+    }
+  }
+
+  (json.variacoes || []).forEach((v, i) => {
+    if (!v || typeof v !== 'object') { errors.push({ field: `variacoes[${i}]`, message: 'Deve ser um objeto.' }); return; }
+    if (!v.nome) errors.push({ field: `variacoes[${i}].nome`, message: 'Nome da variação é obrigatório.' });
+    if (v.epocas_cobertas != null && !Array.isArray(v.epocas_cobertas)) errors.push({ field: `variacoes[${i}].epocas_cobertas`, message: 'Deve ser uma lista.' });
+  });
+
+  (json.checklist_sugerido || []).forEach((c, i) => {
+    if (!c || typeof c !== 'object') { errors.push({ field: `checklist_sugerido[${i}]`, message: 'Deve ser um objeto.' }); return; }
+    if (!c.name) errors.push({ field: `checklist_sugerido[${i}].name`, message: 'Nome da tarefa é obrigatório.' });
+    ['antecedencia_minima_dias', 'antecedencia_max_dias', 'antecedencia_rec_dias'].forEach(f => {
+      if (c[f] != null && typeof c[f] !== 'number') errors.push({ field: `checklist_sugerido[${i}].${f}`, message: 'Deve ser número ou null.' });
+    });
+  });
+
+  return { valid: errors.length === 0, errors };
+}
+
+// Converte o JSON do prompt de refinamento (snake_case) em um objeto Activity completo
+// (camelCase — ver decisão de nomenclatura em "Registro de desenvolvimento"). Foto de capa não é
+// importável via JSON (campo visual, preenchido só pela Etapa 1 do formulário).
+function importJsonToActivity(json) {
+  const now = Date.now();
+  const perfisCusto = {};
+  PERFIS_CUSTO_TIPOS.forEach(tipo => {
+    const p = json.perfis_custo && json.perfis_custo[tipo];
+    if (p) perfisCusto[tipo] = { baixa_temporada: p.baixa_temporada || null, alta_temporada: p.alta_temporada || null };
+  });
+  const variacoes = (json.variacoes || []).map(v => {
+    const variation = {
+      id: uid(),
+      nome: v.nome || '',
+      epocasCobertas: v.epocas_cobertas || [],
+      incluiFeriadosProlongados: !!v.inclui_feriados_prolongados,
+    };
+    if (v.vibes && v.vibes.length) variation.vibes = v.vibes;
+    if (v.condicao_climatica_ideal && v.condicao_climatica_ideal.length) variation.condicaoClimaticaIdeal = v.condicao_climatica_ideal;
+    if (v.temperatura_minima_celsius != null) variation.temperaturaMiniCelsius = v.temperatura_minima_celsius;
+    if (v.antecedencia_minima_dias != null) variation.antecedenciaMiniDias = v.antecedencia_minima_dias;
+    if (v.decisao_ultima_hora != null) variation.decisaoUltimaHora = v.decisao_ultima_hora;
+    if (v.perfis_custo && Object.keys(v.perfis_custo).length) variation.perfisCusto = v.perfis_custo;
+    if (v.modalidades_duracao && v.modalidades_duracao.length) variation.modalidadesDuracao = v.modalidades_duracao;
+    if (v.meios_transporte && v.meios_transporte.length) variation.meiosTransporte = v.meios_transporte;
+    if (v.perfil_grupo && v.perfil_grupo.length) variation.perfilGrupo = v.perfil_grupo;
+    if (v.evitar_alta_temporada != null) variation.evitarAltaTemporada = v.evitar_alta_temporada;
+    if (v.notas) variation.notas = v.notas;
+    return variation;
+  });
+  const activityId = uid();
+  const checklistTasks = (json.checklist_sugerido || []).map(c => ({
+    id: uid(), name: c.name, date: null, deliveryDate: null, link: '', duration: 0,
+    priority: null, urgent: false, urgentRank: 0,
+    delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: now,
+    fieldValues: {}, team: [], boardId: null, activityId,
+    antecedenciaMiniDias: c.antecedencia_minima_dias ?? null,
+    antecedenciaMaxDias: c.antecedencia_max_dias ?? null,
+    antecedenciaRecDias: c.antecedencia_rec_dias ?? null,
+  }));
+  const activity = {
+    id: activityId,
+    name: json.nome,
+    categoria: json.categoria,
+    status: 'rascunho',
+    descricao: json.descricao ?? null,
+    fotoCapa: null,
+    vibes: json.vibes || [],
+    modalidadesDuracao: json.modalidades_duracao || [],
+    meiosTransporte: json.meios_transporte || [],
+    nivelPlanejamento: json.nivel_planejamento || null,
+    antecedenciaMiniDias: json.antecedencia_minima_dias ?? null,
+    decisaoUltimaHora: !!json.decisao_ultima_hora,
+    localidade: null,
+    distanciaSP: json.distancia_sp || null,
+    condicaoClimaticaIdeal: json.condicao_climatica_ideal || [],
+    temperaturaMiniCelsius: json.temperatura_minima_ideal_celsius ?? null,
+    epocaIdeal: json.epoca_ideal || [],
+    perfilGrupo: json.perfil_grupo || [],
+    tamanhoGrupo: json.tamanho_grupo || null,
+    condicionamentoFisico: json.condicionamento_fisico || null,
+    evitarAltaTemporada: !!json.evitar_alta_temporada,
+    repetivel: json.repetivel !== false,
+    petFriendly: json.pet_friendly ?? null,
+    perfisCusto,
+    variacoes,
+    notas: null,
+    links: [],
+    dataInicio: null,
+    boardDestinoId: null,
+    realizacoes: [],
+    checklistTasks,
+    createdAt: now,
+    updatedAt: now,
+  };
+  // Entra com o status correto (quero_fazer ou rascunho) já a partir das condições mínimas
+  // presentes no JSON — mesma regra da máquina de estados (fe-33).
+  activity.status = activityMeetsQueroFazerConditions(activity) ? 'quero_fazer' : 'rascunho';
+  return activity;
+}
+
+let activityImportParsed = null;
+
+function renderActivityImportErrors(errors) {
+  const el = document.getElementById('activityImportErrors');
+  if (!errors.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `<ul>${errors.map(e => `<li><strong>${escapeHtml(e.field)}</strong>: ${escapeHtml(e.message)}</li>`).join('')}</ul>`;
+}
+
+function renderActivityImportPreview(activity) {
+  const el = document.getElementById('activityImportPreview');
+  if (!activity) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <h4>Preview (revise e edite antes de confirmar)</h4>
+    <label>Nome <input type="text" id="import-preview-name" value="${escapeHtml(activity.name)}"></label>
+    <label>Categoria <input type="text" id="import-preview-categoria" value="${escapeHtml(activity.categoria)}"></label>
+    ${detailRow('Status inicial', ACTIVITY_STATUS_LABELS[activity.status])}
+    ${detailRow('Vibe', activity.vibes)}
+    ${detailRow('Modalidades de duração', activity.modalidadesDuracao)}
+    ${detailRow('Variações sazonais', activity.variacoes.map(v => v.nome))}
+    ${detailRow('Checklist sugerido', activity.checklistTasks.map(t => t.name))}
+  `;
+}
+
+function openActivityImport() {
+  document.getElementById('activityImportTextarea').value = '';
+  activityImportParsed = null;
+  renderActivityImportErrors([]);
+  renderActivityImportPreview(null);
+  document.getElementById('activityImportConfirmBtn').disabled = true;
+  document.getElementById('activityImportOverlay').classList.remove('hidden');
+}
+function closeActivityImport() {
+  document.getElementById('activityImportOverlay').classList.add('hidden');
+}
+
+function validateActivityImportFromTextarea() {
+  const raw = document.getElementById('activityImportTextarea').value.trim();
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch (err) {
+    renderActivityImportErrors([{ field: 'JSON', message: 'JSON inválido: ' + err.message }]);
+    renderActivityImportPreview(null);
+    document.getElementById('activityImportConfirmBtn').disabled = true;
+    return;
+  }
+  const { valid, errors } = validateActivityImportJson(json);
+  renderActivityImportErrors(errors);
+  if (!valid) {
+    activityImportParsed = null;
+    renderActivityImportPreview(null);
+    document.getElementById('activityImportConfirmBtn').disabled = true;
+    return;
+  }
+  activityImportParsed = importJsonToActivity(json);
+  renderActivityImportPreview(activityImportParsed);
+  document.getElementById('activityImportConfirmBtn').disabled = false;
+}
+
+function confirmActivityImport() {
+  if (!activityImportParsed) return;
+  const nameInput = document.getElementById('import-preview-name');
+  const categoriaInput = document.getElementById('import-preview-categoria');
+  if (nameInput && nameInput.value.trim()) activityImportParsed.name = nameInput.value.trim();
+  if (categoriaInput && categoriaInput.value.trim()) activityImportParsed.categoria = categoriaInput.value.trim();
+  activities.push(activityImportParsed);
+  save();
+  activityImportParsed = null;
+  closeActivityImport();
+  renderActivities();
+}
+
+document.getElementById('activityImportBtn').addEventListener('click', openActivityImport);
+document.getElementById('closeActivityImport').addEventListener('click', closeActivityImport);
+document.getElementById('activityImportCancelBtn').addEventListener('click', closeActivityImport);
+document.getElementById('activityImportOverlay').addEventListener('click', e => { if (e.target.id === 'activityImportOverlay') closeActivityImport(); });
+document.getElementById('activityImportValidateBtn').addEventListener('click', validateActivityImportFromTextarea);
+document.getElementById('activityImportConfirmBtn').addEventListener('click', confirmActivityImport);
+
 load();
