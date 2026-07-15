@@ -3457,7 +3457,7 @@ function activityDetailPlanningHtml(a) {
     <h3>Planejamento</h3>
     ${activityChecklistProgressHtml(a)}
     <div class="activity-detail-checklist" id="activityDetailChecklist"></div>
-    ${detailRow('Data de início', a.dataInicio)}
+    ${detailRow('Data de início', a.dataInicio ? fmtDateBR(a.dataInicio) : null)}
     ${detailRow('Board de destino', a.boardDestinoId ? (boards.find(b => b.id === a.boardDestinoId) || {}).name : null)}
     ${detailRow('Notas', a.notas)}
     ${linksHtml}

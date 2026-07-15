@@ -107,6 +107,7 @@ body {
 .sidebar:not(.open) .sidebar-app-name,
 .sidebar:not(.open) .sidebar-board-name,
 .sidebar:not(.open) .sidebar-calendar-label,
+.sidebar:not(.open) .sidebar-activities-label,
 .sidebar:not(.open) .sidebar-section-label,
 .sidebar:not(.open) .sidebar-collapse-btn,
 .sidebar:not(.open) .pomo-header-label,
@@ -676,7 +677,7 @@ body {
 .checkbox-row input { width: auto; margin: 0; }
 
 .close-btn {
-  position: absolute; top: 14px; right: 16px;
+  position: absolute; top: 14px; right: 16px; z-index: 2;
   border: none; background: none; font-size: 20px; color: var(--color-text-tertiary); cursor: pointer;
 }
 .delete-btn {
@@ -1667,6 +1668,16 @@ body {
 }
 
 .nav-activities { display: flex; align-items: center; gap: 8px; }
+/* .nav button (regra genérica dos botões de navegação do board) força width/height/font
+   fixos de botão-ícone quadrado; os controles de Atividades têm texto e precisam de
+   largura automática — mesmo padrão de override já usado por #todayBtn/#calendarTodayBtn. */
+.nav-activities button {
+  width: auto;
+  height: 32px;
+  padding: 0 12px;
+  font: 700 12px var(--font-sora);
+}
+.nav-activities #activityNewBtn { padding: 0 14px; }
 .activity-search-input {
   height: 32px;
   padding: 0 12px;
