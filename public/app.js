@@ -53,10 +53,56 @@ function loadDayDrawerWidth() {
 }
 let dayDrawerWidth = loadDayDrawerWidth();
 
+// ---------- lista de atividades: domínio ----------
+const ACTIVITY_CATEGORIES = [
+  'Explorar a cidade',
+  'Viagem de final de semana',
+  'Viagem longa',
+  'Natureza & aventura',
+  'Hobbies & aprendizado',
+  'Social & cultural',
+  'Descanso intencional',
+  'Personalizada',
+];
+const VIBES = [
+  'Romantico', 'Aventura', 'Relaxamento', 'Cultural', 'Agito social', 'Mochilão',
+  'Natureza & contemplação', 'Gastronômico', 'Fotográfico', 'Desconexão digital', 'Família', 'Solo',
+];
+const MODALIDADES_DURACAO = [
+  'Parada rápida', 'Meio período', 'Dia inteiro', 'Bate volta', 'Final de semana', 'Feriado prolongado', 'Semana+',
+];
+const PERFIS_CUSTO_TIPOS = ['economico', 'padrao', 'conforto'];
+const PERFIS_CUSTO_LABELS = { economico: 'Econômico', padrao: 'Padrão', conforto: 'Conforto' };
+const MEIOS_TRANSPORTE = [
+  'A pé', 'Bicicleta', 'Metro / CPTM', 'Ônibus municipal', 'Ônibus interestadual',
+  'Carro próprio', 'Aplicativo (Uber/99)', 'Aluguel de carro', 'Avião', 'Barco / ferry', 'Van / transfer compartilhado',
+];
+const EPOCAS = ['Jan–Mar', 'Abr–Jun', 'Jul–Set', 'Out–Dez'];
+const CONDICOES_CLIMATICAS = ['Ensolarado', 'Nublado (ok)', 'Chuva (ok)', 'Frio', 'Qualquer'];
+const PERFIS_GRUPO = ['Solo', 'Dupla (casal)', 'Amigos', 'Família', 'Qualquer'];
+const TAMANHOS_GRUPO = ['Solo', 'Dupla', 'Pequeno (3–5)', 'Grande', 'Qualquer'];
+const NIVEIS_CONDICIONAMENTO = ['Não', 'Leve', 'Moderado', 'Intenso'];
+const NIVEIS_PLANEJAMENTO = ['Espontâneo', 'Planejado', 'Requer reserva antecipada'];
+const ACTIVITY_VARIATION_MERGE_FIELDS = [
+  'vibes', 'condicaoClimaticaIdeal', 'temperaturaMiniCelsius', 'antecedenciaMiniDias',
+  'decisaoUltimaHora', 'perfisCusto', 'modalidadesDuracao', 'meiosTransporte',
+  'perfilGrupo', 'evitarAltaTemporada', 'notas',
+];
+
+let activities = [];
+let editingActivityId = null;
+let activityFormStep = 1;
+let activityFormMode = 'create'; // 'create' | 'edit'
+let holidaysCache = null;
+let activityFilters = { categoria: null, vibe: null, status: null, modalidade: null, custoMax: null, epoca: null };
+let activitySearchQuery = '';
+let activityDetailId = null;
+
 const sidebarEl = document.getElementById('sidebar');
 const sidebarBoardsEl = document.getElementById('sidebarBoards');
 const sidebarAddBoardAreaEl = document.getElementById('sidebarAddBoardArea');
 const sidebarCalendarItemEl = document.getElementById('sidebarCalendarItem');
+const sidebarActivitiesItemEl = document.getElementById('sidebarActivitiesItem');
 const board = document.getElementById('board');
 const weekRangeEl = document.getElementById('weekRange');
 
@@ -199,6 +245,8 @@ async function load() {
   calendarEvents = data.calendarEvents || [];
   people = data.people || [];
   exportViews = data.exportViews || {};
+  activities = data.activities || [];
+  activities.forEach(a => { if (!a.checklistTasks) a.checklistTasks = []; });
 
   pomodoroSettings = data.pomodoroSettings || { focus: 25, short: 5, long: 15 };
   pomodoro = data.pomodoro || { mode: 'focus', remaining: pomodoroSettings.focus * 60, running: false, cycle: 0, updatedAt: Date.now() };
@@ -222,7 +270,7 @@ let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boards, activeBoardId, pomodoroSettings, pomodoro, calendarEvents, people, exportViews }) });
+    fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boards, activeBoardId, pomodoroSettings, pomodoro, calendarEvents, people, exportViews, activities }) });
   }, 250);
 }
 function savePomodoro() {
@@ -448,6 +496,7 @@ function renderSidebar() {
 
   renderSidebarAddBoardArea();
   sidebarCalendarItemEl.classList.toggle('active', currentView === 'calendar');
+  sidebarActivitiesItemEl.classList.toggle('active', currentView === 'activities');
 }
 
 function renderSidebarAddBoardArea() {
@@ -510,30 +559,46 @@ function deleteBoard(id) {
   if (!confirm('Excluir este quadro e todas as suas tarefas?')) return;
   boards = boards.filter(b => b.id !== id);
   calendarEvents.forEach(ev => { ev.boardIds = ev.boardIds.filter(bid => bid !== id); });
+  // Tarefas de checklist promovidas para este board voltam ao estado não-promovido
+  // em vez de serem perdidas (checklist é independente do ciclo de vida do board).
+  activities.forEach(a => {
+    (a.checklistTasks || []).forEach(t => {
+      if (t.boardId === id) { t.boardId = null; t.date = null; t.deliveryDate = null; }
+    });
+    if (a.boardDestinoId === id) a.boardDestinoId = null;
+  });
   if (activeBoardId === id) activeBoardId = boards[0].id;
   save();
   setView('board');
 }
 
 function updateAppTitle() {
-  document.getElementById('appTitle').textContent = currentView === 'calendar' ? 'Calendário' : (currentBoard() ? currentBoard().name : 'Tarefas 2026');
+  const titles = { calendar: 'Calendário', activities: 'Atividades' };
+  document.getElementById('appTitle').textContent = titles[currentView] || (currentBoard() ? currentBoard().name : 'Tarefas 2026');
 }
 
-// ---------- view mode (board vs calendário) ----------
+// ---------- view mode (board vs calendário vs atividades) ----------
 function setView(view) {
   currentView = view;
   const isCalendar = view === 'calendar';
-  document.getElementById('board').classList.toggle('hidden', isCalendar);
+  const isActivities = view === 'activities';
+  const isBoard = view === 'board';
+  document.getElementById('board').classList.toggle('hidden', !isBoard);
   document.getElementById('calendarView').classList.toggle('hidden', !isCalendar);
+  document.getElementById('activitiesView').classList.toggle('hidden', !isActivities);
   document.getElementById('boardLegend').classList.toggle('hidden', !isCalendar);
-  document.getElementById('navBoardControls').classList.toggle('hidden', isCalendar);
+  document.getElementById('navBoardControls').classList.toggle('hidden', !isBoard);
   document.getElementById('navCalendarControls').classList.toggle('hidden', !isCalendar);
-  document.getElementById('exportReportBtn').classList.toggle('hidden', isCalendar);
+  document.getElementById('navActivitiesControls').classList.toggle('hidden', !isActivities);
+  document.getElementById('exportReportBtn').classList.toggle('hidden', !isBoard);
   updateAppTitle();
   renderSidebar();
   if (isCalendar) {
     renderBoardLegend();
     initCalendarIfNeeded();
+  } else if (isActivities) {
+    renderActivities();
+    fetchHolidays();
   } else {
     render();
   }
@@ -542,6 +607,7 @@ function setView(view) {
 document.getElementById('sidebarCollapseBtn').addEventListener('click', toggleSidebar);
 document.getElementById('sidebarExpandBtn').addEventListener('click', toggleSidebar);
 sidebarCalendarItemEl.addEventListener('click', () => setView('calendar'));
+sidebarActivitiesItemEl.addEventListener('click', () => setView('activities'));
 
 // ---------- fields (custom classifications) ----------
 function findField(fieldId, board = currentBoard()) {
@@ -592,7 +658,10 @@ function recolorFieldValue(fieldId, valueId, color) {
   save(); render(); renderFieldsSettings();
 }
 function deleteFieldValue(fieldId, valueId) {
-  const count = currentBoard().tasks.filter(t => t.fieldValues && t.fieldValues[fieldId] === valueId).length;
+  const board = currentBoard();
+  const promotedChecklistTasks = activities.flatMap(a => a.checklistTasks || []).filter(t => t.boardId === board.id);
+  const count = [...board.tasks, ...promotedChecklistTasks]
+    .filter(t => t.fieldValues && t.fieldValues[fieldId] === valueId).length;
   if (count > 0) {
     alert(`Não é possível excluir: em uso em ${count} tarefa(s). Troque a classificação dessas tarefas antes.`);
     return;
@@ -610,11 +679,31 @@ function compare(a, b) {
   if (a.urgent) return (b.urgentRank || 0) - (a.urgentRank || 0);
   return (a.priority || 0) - (b.priority || 0);
 }
-function tasksFor(key, board = currentBoard()) { return board.tasks.filter(t => t.date === key).sort(compare); }
+// Tarefas de um board numa data: tarefas próprias do board + tarefas de checklist de atividades
+// já promovidas para esse board/data (fonte de verdade única em activity.checklistTasks — sem
+// duplicação em board.tasks).
+function getTasksForDateAndBoard(boardId, dateKey) {
+  const board = boards.find(b => b.id === boardId);
+  const ownTasks = (board ? board.tasks : []).filter(t => t.date === dateKey);
+  const promotedTasks = activities
+    .flatMap(a => (a.checklistTasks || []))
+    .filter(t => t.boardId === boardId && t.date === dateKey);
+  return [...ownTasks, ...promotedTasks];
+}
+function tasksFor(key, board = currentBoard()) { return getTasksForDateAndBoard(board.id, key).sort(compare); }
+
+// Irmãs de uma tarefa na mesma coluna (board+data): tarefas próprias do board +
+// tarefas de checklist já promovidas para esse board/data. Sem board (checklist
+// ainda não promovido), não há coluna para reordenar.
+function siblingTasks(board, dateKey, excludeId) {
+  if (!board || !board.id) return [];
+  return getTasksForDateAndBoard(board.id, dateKey).filter(t => t.id !== excludeId);
+}
 
 function setPriority(task, newPriority, board = currentBoard()) {
   const dateKey = task.date;
-  const normal = board.tasks.filter(t => t.date === dateKey && !t.urgent && !t.completed && t.id !== task.id).sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  const normal = siblingTasks(board, dateKey, task.id).filter(t => !t.urgent && !t.completed)
+    .sort((a, b) => (a.priority || 0) - (b.priority || 0));
   const idx = Math.max(0, Math.min(newPriority - 1, normal.length));
   normal.splice(idx, 0, task);
   normal.forEach((t, i) => (t.priority = i + 1));
@@ -628,7 +717,7 @@ function setCompleted(task, completed, board = currentBoard()) {
     task.completedAt = Date.now();
     task.priority = null;
     if (!task.urgent) {
-      const normal = board.tasks.filter(t => t.date === dateKey && !t.urgent && !t.completed && t.id !== task.id)
+      const normal = siblingTasks(board, dateKey, task.id).filter(t => !t.urgent && !t.completed)
         .sort((a, b) => (a.priority || 0) - (b.priority || 0));
       normal.forEach((t, i) => (t.priority = i + 1));
     }
@@ -636,7 +725,7 @@ function setCompleted(task, completed, board = currentBoard()) {
     task.completed = false;
     task.completedAt = null;
     if (!task.urgent) {
-      const max = board.tasks.filter(t => t.date === dateKey && !t.urgent && !t.completed && t.id !== task.id)
+      const max = siblingTasks(board, dateKey, task.id).filter(t => !t.urgent && !t.completed)
         .reduce((m, t) => Math.max(m, t.priority || 0), 0);
       task.priority = max + 1;
     }
@@ -1011,8 +1100,37 @@ function render() {
   document.getElementById('nextDay').disabled = addDays(weekStart, 1) > YEAR_END;
   document.getElementById('nextWeek').disabled = addDays(weekStart, 7) > YEAR_END;
 
-  board.innerHTML = days.map(d => columnHtml(d)).join('');
+  board.innerHTML = noDateColumnHtml() + days.map(d => columnHtml(d)).join('');
   renderWeatherOnColumns();
+}
+
+// Tarefas sem data (própria do board ou de checklist de atividade promovida sem antecedência
+// mínima definida) — aparecem numa coluna "Sem data" fixa no início do board.
+function tasksWithoutDate(board = currentBoard()) {
+  const ownTasks = (board.tasks || []).filter(t => !t.date);
+  const promotedTasks = activities
+    .flatMap(a => (a.checklistTasks || []))
+    .filter(t => t.boardId === board.id && !t.date);
+  return [...ownTasks, ...promotedTasks];
+}
+
+function noDateColumnHtml() {
+  const items = tasksWithoutDate();
+  if (!items.length) return '';
+  return `
+  <div class="column column-no-date">
+    <div class="col-header" data-date="">
+      <div class="col-header-top">
+        <div class="col-title">Sem data</div>
+      </div>
+      <div class="col-stats">
+        <span>${items.length} tarefa(s) sem data definida</span>
+      </div>
+    </div>
+    <div class="col-body" data-date="">
+      ${items.map(t => cardHtml(t, false, currentBoard())).join('')}
+    </div>
+  </div>`;
 }
 
 function columnHtml(d) {
@@ -1046,7 +1164,7 @@ function columnHtml(d) {
     </div>
     ${events.length ? `<div class="col-events">${events.map(ev => eventChipHtml(ev, key)).join('')}</div>` : ''}
     <div class="col-body" data-date="${key}">
-      ${orderedItems.map(t => cardHtml(t, mitIds.includes(t.id))).join('')}
+      ${orderedItems.map(t => cardHtml(t, mitIds.includes(t.id), currentBoard())).join('')}
     </div>
     <form class="add-form" data-date="${key}">
       <input type="text" placeholder="+ nova tarefa" required>
@@ -1068,10 +1186,10 @@ function eventChipHtml(ev, key) {
   </div>`;
 }
 
-function cardHtml(t, isMit = false) {
+function cardHtml(t, isMit = false, board = currentBoard()) {
   const cls = ['card', t.urgent ? 'urgent' : 'normal', t.completed ? 'completed' : '', isMit ? 'mit' : ''].join(' ');
-  const fields = currentBoard().fields || [];
-  const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id]) : '').join('');
+  const fields = (board && board.fields) || [];
+  const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id], board) : '').join('');
   return `
   <div class="${cls}" draggable="true" data-id="${t.id}">
     ${t.seriesId ? '<span class="recurring-badge" title="Tarefa recorrente">🔁</span>' : ''}
@@ -1104,6 +1222,81 @@ function addTask(dateKey, name) {
   save(); render();
 }
 function findTask(id, board = currentBoard()) { return board.tasks.find(t => t.id === id); }
+
+// Localiza uma tarefa dentro de um board JÁ CONHECIDO: busca primeiro em board.tasks (tarefa
+// normal) e, se não encontrar, nas checklistTasks de qualquer atividade promovida para esse
+// board (tarefa de checklist já promovida — aparece nesse board via getTasksForDateAndBoard(),
+// mas não é duplicada em board.tasks). Superset de findTask(id, board) — usado por qualquer
+// interação de card (checkbox, drag-and-drop, Visão do Dia, abrir modal) que possa envolver
+// uma tarefa promovida renderizada dentro de um board específico.
+function findTaskInBoard(id, board) {
+  if (!board) return null;
+  const own = board.tasks.find(t => t.id === id);
+  if (own) return own;
+  for (const a of activities) {
+    const t = (a.checklistTasks || []).find(x => x.id === id && x.boardId === board.id);
+    if (t) return t;
+  }
+  return null;
+}
+
+// Localiza uma tarefa quando o board de contexto já é conhecido (ex.: openModal chamado a
+// partir da Visão do Dia, que já resolveu o board pelo dataset.boardId): tenta board.tasks
+// primeiro (tarefa normal) e cai para as checklistTasks de atividades promovidas para esse
+// board. Mesma forma de retorno de findTaskAnywhere(), para os dois caminhos serem
+// intercambiáveis em openModal().
+function resolveFoundInBoard(id, board) {
+  const own = board.tasks.find(t => t.id === id);
+  if (own) return { task: own, source: 'board', board, activity: null };
+  for (const a of activities) {
+    const t = (a.checklistTasks || []).find(x => x.id === id && x.boardId === board.id);
+    if (t) return { task: t, source: 'checklist', board, activity: a };
+  }
+  return { task: null, source: null, board, activity: null };
+}
+
+// Localiza uma tarefa em qualquer lugar do app: nos boards (tarefas normais) ou nos checklists
+// das atividades (promovidas ou não). Superset de findTask() — usado por qualquer fluxo de
+// edição que precise funcionar tanto para tarefas de board quanto de checklist.
+function findTaskAnywhere(id) {
+  for (const b of boards) {
+    const t = b.tasks.find(x => x.id === id);
+    if (t) return { task: t, source: 'board', board: b, activity: null };
+  }
+  for (const a of activities) {
+    const t = (a.checklistTasks || []).find(x => x.id === id);
+    if (t) {
+      // Tarefa de checklist já promovida (boardId setado) aparece na mesma coluna do
+      // board que suas irmãs — resolve o board real para que setPriority/setCompleted
+      // consigam reordenar corretamente entre tarefas promovidas e normais.
+      const board = t.boardId ? (boards.find(b => b.id === t.boardId) || null) : null;
+      return { task: t, source: 'checklist', board, activity: a };
+    }
+  }
+  return null;
+}
+
+// Resolve a tarefa/board/atividade da tarefa atualmente aberta no modal de edição (editingId),
+// via findTaskAnywhere() — funciona tanto para tarefas de board quanto de checklist. Para
+// tarefas de checklist ainda não promovidas (sem board), `board` retorna um objeto sintético
+// com `.id: null` — setPriority/setCompleted tratam isso como "sem coluna para reordenar".
+function resolveEditingContext() {
+  const found = findTaskAnywhere(editingId);
+  if (!found) return null;
+  const board = found.board || { id: null, tasks: [] };
+  return { task: found.task, board, activity: found.activity, source: found.source };
+}
+
+// Remove a tarefa de onde quer que ela esteja (board ou checklist de atividade).
+function removeTaskAnywhere(id) {
+  const found = findTaskAnywhere(id);
+  if (!found) return;
+  if (found.source === 'board') {
+    found.board.tasks = found.board.tasks.filter(t => t.id !== id);
+  } else {
+    found.activity.checklistTasks = (found.activity.checklistTasks || []).filter(t => t.id !== id);
+  }
+}
 function deleteTask(id, board = currentBoard()) {
   board.tasks = board.tasks.filter(t => t.id !== id);
   save(); refreshCalendarAndBoard();
@@ -1290,9 +1483,9 @@ confirmVolumeBtnEl.addEventListener('click', () => {
 // Transforma a tarefa aberta na primeira ocorrência de uma nova série: a instância existente é
 // reaproveitada (mantém id/histórico) e as demais datas do rule viram novas tarefas.
 function commitRecurrenceForEditingTask(rule, dates) {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
+  const ctx = resolveEditingContext();
+  if (!ctx || ctx.source !== 'board') return; // recorrência só existe para tarefas de board
+  const { task: t, board } = ctx;
   const tasks = board.tasks;
   const seriesId = uid();
 
@@ -1389,8 +1582,8 @@ function taskModalMetaHtml(t, board) {
 }
 
 function currentEditingTask() {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  return findTask(editingId, board);
+  const ctx = resolveEditingContext();
+  return ctx ? ctx.task : null;
 }
 
 function renderTeamSection(t) {
@@ -1471,11 +1664,28 @@ teamMembersListEl.addEventListener('click', e => {
 
 let editingTaskBoardId = null;
 
-function openModal(id, board = currentBoard()) {
+// Abre o modal de edição para uma tarefa de board (passando `board` explicitamente, como sempre
+// foi feito) ou para uma tarefa de checklist de atividade (chamando sem `board` — fe-31 usa esse
+// caminho). Quando a tarefa vem de um checklist ainda não promovido (sem boardId), os campos que
+// dependem de contexto de board (data, prioridade, urgência, recorrência) ficam ocultos — o
+// usuário ainda edita nome, duração, link, delegação, campos customizados (se já promovida) e
+// pode marcar como concluída.
+function openModal(id, board) {
+  const found = board ? resolveFoundInBoard(id, board) : findTaskAnywhere(id);
+  if (!found || !found.task) return;
+  const t = found.task;
   editingId = id;
-  editingTaskBoardId = board.id;
-  const t = findTask(id, board);
-  if (t.seriesId && t.recurrenceRule && !t.isException) {
+  editingTaskBoardId = found.board ? found.board.id : (t.boardId || null);
+  const isChecklistUnpromoted = found.source === 'checklist' && !t.boardId;
+
+  document.getElementById('dateField').classList.toggle('hidden', isChecklistUnpromoted);
+  document.getElementById('urgentField').classList.toggle('hidden', isChecklistUnpromoted);
+
+  if (isChecklistUnpromoted) {
+    seriesInfoBarEl.classList.add('hidden');
+    recToggleRow.classList.add('hidden');
+    recurrencePanel.classList.add('hidden');
+  } else if (t.seriesId && t.recurrenceRule && !t.isException) {
     // Instâncias já marcadas isException se comportam como tarefa comum (não perguntam escopo ao
     // editar/excluir) — mostrar a barra de série aqui induziria o usuário a achar que a edição vai
     // perguntar escopo, quando na verdade não vai (ver critério de aceite sobre isException).
@@ -1486,13 +1696,18 @@ function openModal(id, board = currentBoard()) {
   } else {
     seriesInfoBarEl.classList.add('hidden');
     recToggleRow.classList.remove('hidden');
-    resetRecurrencePanel(t.deliveryDate || t.date);
+    resetRecurrencePanel(t.deliveryDate || t.date || toKey(new Date()));
   }
   f.name.value = t.name;
-  f.date.value = t.deliveryDate || t.date;
+  f.date.value = t.deliveryDate || t.date || '';
   f.link.value = t.link || '';
-  renderModalFields(t, board);
-  document.getElementById('taskModalMeta').innerHTML = taskModalMetaHtml(t, board);
+  // Campos customizados: refletem o board de destino quando a tarefa já pertence a um (board
+  // puro, ou checklist já promovido); tarefa de checklist ainda não promovida não tem board.
+  const fieldsBoard = found.board || boards.find(b => b.id === t.boardId) || { fields: [] };
+  renderModalFields(t, fieldsBoard);
+  document.getElementById('taskModalMeta').innerHTML = t.date
+    ? taskModalMetaHtml(t, fieldsBoard)
+    : (found.activity ? `Checklist de <strong>${escapeHtml(found.activity.name)}</strong> · atividade ainda não planejada` : '');
   renderTeamSection(t);
   f.duration.value = t.duration || 0;
   f.delegated.checked = t.delegated;
@@ -1502,7 +1717,7 @@ function openModal(id, board = currentBoard()) {
   f.urgent.checked = t.urgent;
   f.completed.checked = t.completed;
   delegateFields.classList.toggle('hidden', !t.delegated);
-  priorityField.classList.toggle('hidden', t.completed);
+  priorityField.classList.toggle('hidden', isChecklistUnpromoted || t.completed);
   overlay.classList.remove('hidden');
 }
 function closeModal() {
@@ -1516,6 +1731,7 @@ function closeModal() {
   addTeamMemberFormEl.classList.add('hidden');
   if (dayPopupDate) renderDayPopup();
   if (exportOpen) renderExportModal();
+  if (currentView === 'activities') renderActivities();
 }
 
 document.getElementById('closeModal').addEventListener('click', closeModal);
@@ -1547,9 +1763,9 @@ function resolveEditScope(choice) {
   closeEditScopeModal();
   const fn = pendingPatchFn;
   pendingPatchFn = null;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (t && fn) {
+  const ctx = resolveEditingContext();
+  if (ctx && fn) {
+    const { task: t, board } = ctx;
     // "Apenas esta ocorrência" tira a instância da série de fato (fe-14/v1): sem isso, ela
     // continuaria contando como parte ativa da série e seria sobrescrita por um futuro
     // "esta e todas as futuras" aplicado a partir de uma instância anterior, revertendo
@@ -1565,10 +1781,17 @@ cancelEditScopeBtn.addEventListener('click', () => {
   // modal a partir do estado em memória (que não mudou), já que o app não tem "desfazer" de input.
   pendingPatchFn = null;
   closeEditScopeModal();
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  if (editingId) openModal(editingId, board);
+  if (editingId) openModal(editingId);
 });
 confirmEditScopeOverlay.addEventListener('click', e => { if (e.target === confirmEditScopeOverlay) cancelEditScopeBtn.click(); });
+
+// Chamado após qualquer mutação de tarefa (board ou checklist) para persistir e re-renderizar
+// todas as views que podem estar exibindo essa tarefa.
+function finishTaskMutation() {
+  save();
+  refreshCalendarAndBoard();
+  if (currentView === 'activities') renderActivities();
+}
 
 function applyPatchWithScope(t, board, fn, scope) {
   if (scope === 'all') {
@@ -1578,8 +1801,7 @@ function applyPatchWithScope(t, board, fn, scope) {
   } else {
     fn(t, board);
   }
-  save();
-  refreshCalendarAndBoard();
+  finishTaskMutation();
 }
 
 // directPatch: aplica a mutação diretamente na instância aberta, sem passar pela pergunta de
@@ -1587,17 +1809,16 @@ function applyPatchWithScope(t, board, fn, scope) {
 // comportamento ao mover uma instância de série é sempre virar exceção (fe-16), nunca propagar
 // para a série.
 function directPatch(fn) {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
-  fn(t, board);
-  save(); refreshCalendarAndBoard();
+  const ctx = resolveEditingContext();
+  if (!ctx) return;
+  fn(ctx.task, ctx.board);
+  finishTaskMutation();
 }
 
 function patch(fn) {
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
+  const ctx = resolveEditingContext();
+  if (!ctx) return;
+  const { task: t, board } = ctx;
 
   if (t.seriesId && !t.isException && editScopeChoice === null) {
     pendingPatchFn = fn;
@@ -1677,20 +1898,25 @@ function deleteSeriesFromInstance(t, board) {
   refreshCalendarAndBoard();
 }
 
+// Exclui a tarefa aberta no modal de onde quer que ela esteja (board ou checklist de atividade)
+// e re-renderiza tudo que pode estar exibindo essa tarefa.
+function deleteTaskAnywhere(id) {
+  removeTaskAnywhere(id);
+  finishTaskMutation();
+}
+
 deleteScopeOnlyThisBtn.addEventListener('click', () => {
   closeDeleteScopeModal();
   if (!editingId) return;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  deleteTask(editingId, board);
+  deleteTaskAnywhere(editingId);
   closeModal();
 });
 deleteScopeAllFutureBtn.addEventListener('click', () => {
   closeDeleteScopeModal();
   if (!editingId) return;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
-  deleteSeriesFromInstance(t, board);
+  const ctx = resolveEditingContext();
+  if (!ctx || ctx.source !== 'board') return; // séries recorrentes só existem em tarefas de board
+  deleteSeriesFromInstance(ctx.task, ctx.board);
   closeModal();
 });
 cancelDeleteScopeBtn.addEventListener('click', closeDeleteScopeModal);
@@ -1698,14 +1924,14 @@ confirmDeleteScopeOverlay.addEventListener('click', e => { if (e.target === conf
 
 document.getElementById('deleteTask').addEventListener('click', () => {
   if (!editingId) return;
-  const board = boards.find(b => b.id === editingTaskBoardId) || currentBoard();
-  const t = findTask(editingId, board);
-  if (!t) return;
+  const ctx = resolveEditingContext();
+  if (!ctx) return;
+  const { task: t } = ctx;
   if (t.seriesId && !t.isException) {
     openDeleteScopeModal(t);
     return;
   }
-  deleteTask(editingId, board);
+  deleteTaskAnywhere(editingId);
   closeModal();
 });
 
@@ -1723,12 +1949,17 @@ board.addEventListener('click', e => {
   const weatherBtn = e.target.closest('.col-weather-city-btn');
   if (weatherBtn) { openWeatherPopover(weatherBtn); return; }
   const title = e.target.closest('.col-title');
-  if (title) { openDayPopup(title.closest('.col-header').dataset.date); return; }
+  if (title) {
+    const dateKey = title.closest('.col-header').dataset.date;
+    if (dateKey) openDayPopup(dateKey); // a coluna "Sem data" não tem Visão do Dia associada
+    return;
+  }
   const chip = e.target.closest('.event-chip');
   if (chip) { openEventModal(chip.dataset.eventId); return; }
   if (e.target.classList.contains('chk-done')) {
     const card = e.target.closest('.card');
-    const t = findTask(card.dataset.id);
+    const t = findTaskInBoard(card.dataset.id, currentBoard());
+    if (!t) return;
     setCompleted(t, e.target.checked);
     save(); render();
     if (exportOpen) renderExportModal();
@@ -1780,7 +2011,7 @@ function getDragAfterElement(container, y) {
 function finalizeOrder(col) {
   const dateKey = col.dataset.date;
   const ids = [...col.querySelectorAll('.card')].map(c => c.dataset.id);
-  const ordered = ids.map(id => findTask(id));
+  const ordered = ids.map(id => findTaskInBoard(id, currentBoard())).filter(Boolean);
   ordered.forEach(t => {
     const prevDate = t.date;
     t.date = dateKey;
@@ -2489,7 +2720,7 @@ function applyShutdown() {
   Object.values(shutdownChoices).forEach(choice => {
     if (choice.mode === 'ignore') return;
     const board = boards.find(b => b.id === choice.boardId);
-    const t = board && findTask(choice.taskId, board);
+    const t = board && findTaskInBoard(choice.taskId, board);
     if (!t) return;
     const newDate = (choice.mode === 'custom' && choice.date) ? choice.date : tomorrow;
     const prevDate = t.date;
@@ -2545,7 +2776,7 @@ dayPopupPanelEl.addEventListener('click', e => {
   const adiar = e.target.closest('.adiar-btn');
   if (adiar) {
     const board = boards.find(b => b.id === adiar.dataset.boardId);
-    const t = board && findTask(adiar.dataset.taskId, board);
+    const t = board && findTaskInBoard(adiar.dataset.taskId, board);
     if (t) {
       const prevDate = t.date;
       const tomorrowKey = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
@@ -2625,7 +2856,7 @@ dayPopupPanelEl.addEventListener('change', e => {
   }
   if (e.target.classList.contains('daypopup-chk-done')) {
     const board = boards.find(b => b.id === e.target.dataset.boardId);
-    const t = board && findTask(e.target.dataset.taskId, board);
+    const t = board && findTaskInBoard(e.target.dataset.taskId, board);
     if (t) {
       setCompleted(t, e.target.checked, board);
       save();
@@ -2700,7 +2931,7 @@ function tasksForExportWeek(boardId, monday) {
   const b = boards.find(x => x.id === boardId);
   if (!b) return [];
   const keys = exportWeekDates(monday);
-  return b.tasks.filter(t => keys.includes(t.date));
+  return keys.flatMap(k => getTasksForDateAndBoard(boardId, k));
 }
 
 function buildExportRows() {
@@ -2863,5 +3094,2281 @@ document.querySelector('.export-modal').addEventListener('input', e => {
     autoGrowTextarea(e.target);
   }
 });
+
+// ================================================================
+// Lista de Atividades
+// ================================================================
+
+function findActivity(id) { return activities.find(a => a.id === id); }
+
+// Busca fuzzy via Fuse.js (CDN — fe-01) sobre nome, categoria, vibe e notas, threshold 0.4.
+// O índice é reconstruído a cada busca em vez de mantido incrementalmente: para o volume de
+// atividades de uma lista pessoal (dezenas, não milhares), reconstruir é imperceptível e evita
+// ter que invalidar o índice manualmente em cada um dos muitos pontos que mutam `activities`.
+function searchActivitiesFuzzy(list, query) {
+  const q = (query || '').trim();
+  if (!q || typeof Fuse === 'undefined') return list;
+  const fuse = new Fuse(list, { keys: ['name', 'categoria', 'vibes', 'notas'], threshold: 0.4 });
+  return fuse.search(q).map(r => r.item);
+}
+
+// Filtros combináveis (categoria, vibe, status, modalidade de duração, perfil de custo, época do
+// ano) — todos aplicados em conjunto e combináveis com a busca fuzzy (getFilteredActivities()).
+function applyActivityFilters(list) {
+  return list.filter(a => {
+    if (activityFilters.categoria && a.categoria !== activityFilters.categoria) return false;
+    if (activityFilters.vibe && !(a.vibes || []).includes(activityFilters.vibe)) return false;
+    if (activityFilters.status && a.status !== activityFilters.status) return false;
+    if (activityFilters.modalidade && !(a.modalidadesDuracao || []).includes(activityFilters.modalidade)) return false;
+    if (activityFilters.epoca && !(a.epocaIdeal || []).includes(activityFilters.epoca)) return false;
+    if (activityFilters.custoMax != null) {
+      const hasAffordable = PERFIS_CUSTO_TIPOS.some(tipo => {
+        const perfil = (a.perfisCusto || {})[tipo];
+        const baixa = perfil && perfil.baixa_temporada;
+        return baixa && baixa[0] != null && baixa[0] <= activityFilters.custoMax;
+      });
+      if (!hasAffordable) return false;
+    }
+    return true;
+  });
+}
+
+function getFilteredActivities() {
+  return applyActivityFilters(searchActivitiesFuzzy(activities, activitySearchQuery));
+}
+
+function groupActivitiesByStatus(list) {
+  const groups = new Map(Object.keys(ACTIVITY_STATUS_LABELS).map(s => [s, []]));
+  list.forEach(a => {
+    if (!groups.has(a.status)) groups.set(a.status, []);
+    groups.get(a.status).push(a);
+  });
+  groups.forEach(g => g.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+  return groups;
+}
+
+function activitiesEmptyStateHtml() {
+  return `<div class="activities-empty-state">Nenhuma atividade ainda. Clique em "+ Nova atividade" para começar sua lista.</div>`;
+}
+
+function activityDraftBannerHtml() {
+  const count = activities.filter(a => a.status === 'rascunho').length;
+  if (!count) return '';
+  return `<div class="activity-draft-banner">⚠️ ${count} atividade${count > 1 ? 's' : ''} aguardando detalhamento</div>`;
+}
+
+const ACTIVITY_STATUS_LABELS = { rascunho: 'Rascunho', quero_fazer: 'Quero fazer', planejada: 'Planejada', realizada: 'Realizada' };
+let activityDisplayView = 'category'; // 'category' | 'status'
+
+// Mapeamento mês (0-indexado) → época trimestral.
+function epocaForMonth(month) {
+  if (month <= 2) return 'Jan–Mar';
+  if (month <= 5) return 'Abr–Jun';
+  if (month <= 8) return 'Jul–Set';
+  return 'Out–Dez';
+}
+
+function isWeekendDate(date) { const d = date.getDay(); return d === 0 || d === 6; }
+
+// Detecta períodos de "feriado prolongado" a partir do cache de feriados (fe-41): agrupa cada
+// feriado com os fins de semana/feriados adjacentes em um período contínuo de dias não-úteis;
+// períodos com 3+ dias contam como "feriado prolongado". A spec não define um algoritmo exato de
+// clusterização — esta é uma interpretação conservadora (feriado + fins de semana emendados),
+// documentada em "Registro de desenvolvimento".
+function findProlongedHolidayPeriods(holidays) {
+  if (!holidays || !holidays.length) return [];
+  const offDates = new Set(holidays.map(h => h.date));
+  const isOff = d => offDates.has(toKey(d)) || isWeekendDate(d);
+  const periods = [];
+  const seenStarts = new Set();
+  holidays.forEach(h => {
+    const holidayDate = new Date(h.date + 'T00:00:00');
+    let start = new Date(holidayDate);
+    while (isOff(addDays(start, -1))) start = addDays(start, -1);
+    let end = new Date(holidayDate);
+    while (isOff(addDays(end, 1))) end = addDays(end, 1);
+    const lengthDays = Math.round((end - start) / 86400000) + 1;
+    const startKey = toKey(start);
+    if (lengthDays >= 3 && !seenStarts.has(startKey)) {
+      seenStarts.add(startKey);
+      periods.push({ start: startKey, end: toKey(end) });
+    }
+  });
+  return periods;
+}
+
+// Retorna a variação sazonal ativa para uma data de referência (padrão: hoje), ou null se
+// nenhuma cobrir a época atual (fallback: atributos da base). Se `inclui_feriados_prolongados`,
+// a variação também fica ativa a partir da véspera do primeiro dia de um feriado prolongado
+// detectado via holidaysCache (fe-41) — mesmo que a data ainda pertença à época anterior.
+function getActiveVariation(activity, referenceDate = new Date()) {
+  const variations = (activity && activity.variacoes) || [];
+  if (!variations.length) return null;
+
+  if (holidaysCache && holidaysCache.length) {
+    const periods = findProlongedHolidayPeriods(holidaysCache);
+    const refKey = toKey(referenceDate);
+    for (const v of variations) {
+      if (!v.incluiFeriadosProlongados) continue;
+      for (const p of periods) {
+        const vespera = toKey(addDays(new Date(p.start + 'T00:00:00'), -1));
+        if (refKey >= vespera && refKey <= p.end) return v;
+      }
+    }
+  }
+
+  const currentEpoca = epocaForMonth(referenceDate.getMonth());
+  return variations.find(v => (v.epocasCobertas || []).includes(currentEpoca)) || null;
+}
+
+function activityCostSummaryHtml(a) {
+  const perfis = a.perfisCusto || {};
+  for (const tipo of PERFIS_CUSTO_TIPOS) {
+    const perfil = perfis[tipo];
+    const range = perfil && perfil.baixa_temporada;
+    if (range && range[0] != null && range[1] != null) {
+      return `R$ ${range[0]}–${range[1]} / pessoa`;
+    }
+  }
+  return '';
+}
+
+function activityCardHtml(a) {
+  const isStatusView = activityDisplayView === 'status';
+  const isPlanned    = a.status === 'planejada';
+  const isRealized   = a.status === 'realizada';
+
+  // Variação escolhida (para Planejada/Realizada na visão por status)
+  const chosenVar = (isPlanned || isRealized)
+    ? (a.variacoes || []).find(v => v.id === a.variacaoEscolhidaId) || null
+    : null;
+
+  // Vibes: usa os da variação escolhida se existir, senão base da atividade
+  const vibes    = (chosenVar && chosenVar.vibes && chosenVar.vibes.length ? chosenVar.vibes : a.vibes) || [];
+  const vibeChips = vibes.slice(0, 3).map(v => `<span class="tag activity-tag-vibe">${escapeHtml(v)}</span>`).join('');
+  const vibeMore  = vibes.length > 3 ? `<span class="tag activity-tag-more">+${vibes.length - 3}</span>` : '';
+
+  // Custo: usa perfil da variação se existir
+  const costSrc  = (chosenVar && chosenVar.perfisCusto && Object.keys(chosenVar.perfisCusto).length)
+    ? { ...a, perfisCusto: chosenVar.perfisCusto }
+    : a;
+  const cost     = activityCostSummaryHtml(costSrc);
+
+  const realCount  = (a.realizacoes || []).length;
+  const durChips   = (a.modalidadesDuracao || []).map(m => `<span class="tag activity-tag-duracao">${escapeHtml(m)}</span>`).join('');
+  const activeVariation = getActiveVariation(a);
+
+  // Subtítulo: variação escolhida + data de início (só em Planejada/Realizada)
+  const subtitleParts = [
+    chosenVar ? escapeHtml(chosenVar.nome) : null,
+    (isPlanned || isRealized) && a.dataInicio ? fmtDateBR(a.dataInicio) : null,
+  ].filter(Boolean);
+  const subtitle = subtitleParts.length
+    ? `<div class="activity-card-subtitle">${subtitleParts.join(' · ')}</div>`
+    : '';
+
+  // Chip de variação escolhida (visão por status — planejada/realizada)
+  const chosenVarChip = chosenVar && isStatusView
+    ? `<span class="tag activity-tag-variation">${escapeHtml(chosenVar.nome)}</span>`
+    : '';
+
+  // Chip de status (visão por categoria, para o usuário saber onde cada atividade está)
+  const statusChip = !isStatusView
+    ? `<span class="tag activity-tag-status activity-status-${a.status}">${ACTIVITY_STATUS_LABELS[a.status] || a.status}</span>`
+    : '';
+
+  // Chip de variação sazonal ativa (só na visão por categoria, quando não tem variação escolhida)
+  const activeVarChip = !isStatusView && activeVariation && !chosenVar
+    ? `<span class="tag activity-tag-variation">🕓 ${escapeHtml(activeVariation.nome)}</span>`
+    : '';
+
+  return `
+  <div class="activity-card" draggable="true" data-id="${a.id}">
+    ${a.fotoCapa ? `<div class="activity-card-cover" style="background-image:url('${a.fotoCapa}')"></div>` : ''}
+    <div class="activity-card-top">
+      <div>
+        <div class="activity-card-name">${escapeHtml(a.name)}</div>
+        ${subtitle}
+      </div>
+    </div>
+    <div class="activity-card-chips">
+      ${statusChip}
+      ${chosenVarChip}
+      ${vibeChips}${vibeMore}
+      ${activeVarChip}
+      ${realCount > 0 ? `<span class="tag activity-tag-realized">Realizada ${realCount}×</span>` : ''}
+    </div>
+    <div class="activity-card-meta">
+      ${cost ? `<span class="activity-card-cost">${cost}</span>` : ''}
+      ${durChips}
+    </div>
+  </div>`;
+}
+
+function activityColumnHtml(status, list) {
+  return `
+  <section class="activity-column">
+    <div class="activity-column-header">
+      <span class="activity-column-title activity-status-${status}">${ACTIVITY_STATUS_LABELS[status] || status}</span>
+      <span class="activity-column-count">${list.length}</span>
+    </div>
+    <div class="activity-column-body" data-status="${status}">
+      ${list.map(a => activityCardHtml(a)).join('') || '<div class="activity-column-empty">Nenhuma atividade</div>'}
+    </div>
+  </section>`;
+}
+
+// ─── Vista por categoria ────────────────────────────────────
+function groupActivitiesByCategoria(list) {
+  const groups = new Map();
+  list.forEach(a => {
+    if (!groups.has(a.categoria)) groups.set(a.categoria, []);
+    groups.get(a.categoria).push(a);
+  });
+  // Ordena categorias alfabeticamente
+  return new Map([...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+}
+
+function activityCategoryGroupHtml(categoria, list) {
+  return `
+  <section class="activity-column">
+    <div class="activity-column-header">
+      <span class="activity-column-title activity-tag-categoria">${escapeHtml(categoria)}</span>
+      <span class="activity-column-count">${list.length}</span>
+    </div>
+    <div class="activity-column-body" data-categoria="${escapeHtml(categoria)}">
+      ${list.map(a => activityCardHtml(a)).join('')}
+    </div>
+  </section>`;
+}
+
+// Reconstrói o DOM de #activitiesView — análoga a render() (board) e initCalendarIfNeeded() (calendário).
+function renderActivities() {
+  if (currentView !== 'activities') return;
+  const container = document.getElementById('activitiesView');
+  if (!container) return;
+
+  const banner = activityDraftBannerHtml();
+
+  if (!activities.length) {
+    container.innerHTML = banner + activitiesEmptyStateHtml();
+    return;
+  }
+
+  const filtered = getFilteredActivities();
+
+  if (activityDisplayView === 'category') {
+    const groups = groupActivitiesByCategoria(filtered);
+    const columnsHtml = [...groups.entries()].map(([cat, list]) => activityCategoryGroupHtml(cat, list)).join('');
+    container.innerHTML = banner + `<div class="activities-board">${columnsHtml}</div>`;
+  } else {
+    const groups = groupActivitiesByStatus(filtered);
+    const columnsHtml = [...groups.entries()].map(([status, list]) => activityColumnHtml(status, list)).join('');
+    container.innerHTML = banner + `<div class="activities-board">${columnsHtml}</div>`;
+  }
+}
+
+// ---------- criação rápida (Fluxo 1) ----------
+function createBlankActivity(name, categoria) {
+  const now = Date.now();
+  return {
+    id: uid(), name, categoria, status: 'rascunho',
+    descricao: null, fotoCapa: null, vibes: [],
+    modalidadesDuracao: [], meiosTransporte: [], nivelPlanejamento: null,
+    antecedenciaMiniDias: null, decisaoUltimaHora: false, localidade: null, distanciaSP: null,
+    condicaoClimaticaIdeal: [], temperaturaMiniCelsius: null, epocaIdeal: [], perfilGrupo: [],
+    tamanhoGrupo: null, condicionamentoFisico: null, evitarAltaTemporada: false, repetivel: true, petFriendly: null,
+    perfisCusto: {}, variacoes: [], variacaoEscolhidaId: null, notas: null, links: [],
+    dataInicio: null, boardDestinoId: null, realizacoes: [],
+    checklistTasks: [], createdAt: now, updatedAt: now,
+  };
+}
+
+// Categorias personalizadas já em uso (para autocomplete), derivadas do array `activities` em
+// memória — evita fragmentação por erro de digitação (ver seção "Categoria Personalizada" da spec).
+function customCategoriesInUse() {
+  const known = new Set(ACTIVITY_CATEGORIES);
+  const set = new Set();
+  activities.forEach(a => { if (a.categoria && !known.has(a.categoria)) set.add(a.categoria); });
+  return [...set];
+}
+
+let activityAiPanelOpen = false;
+
+function resetActivityAiPanel() {
+  activityAiPanelOpen = false;
+  document.getElementById('activityAiPanel').classList.remove('open');
+  document.getElementById('activityAiToggleBtn').classList.remove('active');
+  document.getElementById('activityAiJsonArea').value = '';
+  document.getElementById('activityAiConfirmBtn').disabled = true;
+  const copyBtn = document.getElementById('activityCopyPromptBtn');
+  if (copyBtn) copyBtn.textContent = '📋 Copiar prompt';
+}
+
+function openActivityQuickCreate() {
+  document.getElementById('activityQuickName').value = '';
+  document.getElementById('activityQuickDesc').value = '';
+  const sel = document.getElementById('activityQuickCategoria');
+  sel.innerHTML = ACTIVITY_CATEGORIES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  sel.value = ACTIVITY_CATEGORIES[0];
+  document.getElementById('activityQuickCategoriaCustomField').classList.add('hidden');
+  document.getElementById('activityQuickCategoriaCustom').value = '';
+  document.getElementById('activityQuickCategoriaCustomList').innerHTML =
+    customCategoriesInUse().map(c => `<option value="${escapeHtml(c)}">`).join('');
+  resetActivityAiPanel();
+  document.getElementById('activityQuickCreateOverlay').classList.remove('hidden');
+  document.getElementById('activityQuickName').focus();
+}
+function closeActivityQuickCreate() {
+  document.getElementById('activityQuickCreateOverlay').classList.add('hidden');
+  resetActivityAiPanel();
+}
+function confirmActivityQuickCreate() {
+  const name = document.getElementById('activityQuickName').value.trim();
+  if (!name) return;
+  const sel = document.getElementById('activityQuickCategoria');
+  let categoria = sel.value;
+  if (categoria === 'Personalizada') {
+    // Normalizado (trim, sem caixa forçada) antes de salvar — ver "Categoria Personalizada" na spec.
+    categoria = document.getElementById('activityQuickCategoriaCustom').value.trim();
+    if (!categoria) return;
+  }
+  activities.push(createBlankActivity(name, categoria));
+  save();
+  closeActivityQuickCreate();
+  renderActivities();
+}
+
+// ── Painel IA no quick-create ────────────────────────────────────────────────
+function toggleActivityAiPanel() {
+  activityAiPanelOpen = !activityAiPanelOpen;
+  document.getElementById('activityAiPanel').classList.toggle('open', activityAiPanelOpen);
+  document.getElementById('activityAiToggleBtn').classList.toggle('active', activityAiPanelOpen);
+}
+
+function buildActivityPrompt() {
+  const nome = document.getElementById('activityQuickName').value.trim();
+  const desc = document.getElementById('activityQuickDesc').value.trim();
+  const lines = [];
+  if (nome) lines.push(`Nome: ${nome}`);
+  if (desc) lines.push(`Descrição: ${desc}`);
+  const userInput = lines.length ? lines.join('\n') : '[sem informação — pergunte ao usuário]';
+  return `Você é um assistente de planejamento pessoal. O usuário vai descrever uma atividade que quer fazer — pode ser só o título, pode ser uma descrição mais detalhada, pode incluir contexto pessoal (com quem vai, ocasião, preferências).
+
+ANTES DE GERAR O JSON:
+- Avalie se você tem informação suficiente para preencher os campos com qualidade.
+- Se o input for ambíguo em algo que impacte campos obrigatórios ou estimativas centrais (categoria, custo, duração), faça perguntas objetivas — no máximo 3, todas numa única mensagem.
+- Se o input for suficiente, vá direto ao JSON sem comentários.
+- Campos opcionais sem informação suficiente devem ser preenchidos com null.
+
+REGRAS DE PREENCHIMENTO:
+- Preencha com base no seu conhecimento sobre a atividade e no contexto fornecido.
+- Inclua variações sazonais apenas quando a experiência mudar significativamente por época.
+- Nas variações, preencha APENAS os campos que diferem da base.
+- Estime custos em R$ por pessoa, considerando São Paulo como cidade de origem.
+- O checklist deve ser prático e específico. Para cada item, estime antecedência mínima, máxima e recomendada em dias antes da data da atividade.
+
+RETORNE SOMENTE O JSON, sem texto antes ou depois.
+
+SCHEMA:
+{
+  "nome": "",
+  "categoria": "",
+  "descricao": "",
+  "vibes": [],
+  "modalidades_duracao": [],
+  "meios_transporte": [],
+  "nivel_planejamento": "",
+  "antecedencia_minima_dias": null,
+  "decisao_ultima_hora": false,
+  "distancia_sp": "",
+  "condicao_climatica_ideal": [],
+  "temperatura_minima_ideal_celsius": null,
+  "epoca_ideal": [],
+  "perfil_grupo": [],
+  "tamanho_grupo": "",
+  "condicionamento_fisico": "",
+  "evitar_alta_temporada": false,
+  "repetivel": true,
+  "pet_friendly": null,
+  "perfis_custo": {
+    "economico": { "baixa_temporada": [min, max], "alta_temporada": [min, max] },
+    "padrao":    { "baixa_temporada": [min, max], "alta_temporada": [min, max] },
+    "conforto":  { "baixa_temporada": [min, max], "alta_temporada": [min, max] }
+  },
+  "variacoes": [
+    {
+      "nome": "",
+      "epocas_cobertas": [],
+      "inclui_feriados_prolongados": false,
+      "vibes": [],
+      "condicao_climatica_ideal": [],
+      "temperatura_minima_celsius": null,
+      "antecedencia_minima_dias": null,
+      "decisao_ultima_hora": null,
+      "perfis_custo": {},
+      "modalidades_duracao": [],
+      "meios_transporte": [],
+      "perfil_grupo": [],
+      "evitar_alta_temporada": null,
+      "notas": ""
+    }
+  ],
+  "checklist_sugerido": [
+    {
+      "name": "",
+      "antecedencia_minima_dias": null,
+      "antecedencia_max_dias": null,
+      "antecedencia_rec_dias": null
+    }
+  ]
+}
+
+--- ATIVIDADE ---
+${userInput}`;
+}
+
+async function copyActivityPrompt() {
+  const prompt = buildActivityPrompt();
+  try {
+    await navigator.clipboard.writeText(prompt);
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = prompt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  const btn = document.getElementById('activityCopyPromptBtn');
+  const original = btn.textContent;
+  btn.textContent = '✓ Prompt copiado!';
+  setTimeout(() => { btn.textContent = original; }, 3000);
+}
+
+function onActivityAiJsonInput() {
+  const val = document.getElementById('activityAiJsonArea').value.trim();
+  let valid = false;
+  try { valid = validateActivityImportJson(JSON.parse(val)).valid; } catch(e) {}
+  document.getElementById('activityAiConfirmBtn').disabled = !valid;
+}
+
+function confirmActivityImportFromQuickCreate() {
+  const raw = document.getElementById('activityAiJsonArea').value.trim();
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch(e) {
+    alert('JSON inválido. Verifique e tente novamente.');
+    return;
+  }
+  const { valid, errors } = validateActivityImportJson(json);
+  if (!valid) {
+    alert('JSON inválido:\n' + errors.map(e => `- ${e.field}: ${e.message}`).join('\n'));
+    return;
+  }
+  const activity = importJsonToActivity(json);
+  activities.push(activity);
+  save();
+  closeActivityQuickCreate();
+  openActivityFormAfterImport(activity.id);
+}
+
+function openActivityFormAfterImport(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  editingActivityId = id;
+  activityFormMode = 'edit';
+  showActivityFormStep(1);
+  renderActivityFormStep(1);
+  document.getElementById('activityFormImportBanner').classList.remove('hidden');
+  document.getElementById('activityFormOverlay').classList.remove('hidden');
+}
+
+document.getElementById('activitySearchInput').addEventListener('input', e => {
+  activitySearchQuery = e.target.value;
+  renderActivities();
+});
+
+document.getElementById('activityNewBtn').addEventListener('click', openActivityQuickCreate);
+document.getElementById('closeActivityQuickCreate').addEventListener('click', closeActivityQuickCreate);
+document.getElementById('activityQuickCancelBtn').addEventListener('click', closeActivityQuickCreate);
+document.getElementById('activityQuickCreateOverlay').addEventListener('click', e => { if (e.target.id === 'activityQuickCreateOverlay') closeActivityQuickCreate(); });
+document.getElementById('activityQuickCategoria').addEventListener('change', e => {
+  document.getElementById('activityQuickCategoriaCustomField').classList.toggle('hidden', e.target.value !== 'Personalizada');
+});
+document.getElementById('activityQuickCreateBtn').addEventListener('click', confirmActivityQuickCreate);
+document.getElementById('activityAiToggleBtn').addEventListener('click', toggleActivityAiPanel);
+document.getElementById('activityCopyPromptBtn').addEventListener('click', copyActivityPrompt);
+document.getElementById('activityAiJsonArea').addEventListener('input', onActivityAiJsonInput);
+document.getElementById('activityAiConfirmBtn').addEventListener('click', confirmActivityImportFromQuickCreate);
+
+// ---------- modal de detalhes ----------
+function detailRow(label, value) {
+  if (value == null || value === '' || (Array.isArray(value) && !value.length)) return '';
+  const text = Array.isArray(value) ? value.map(escapeHtml).join(', ') : escapeHtml(String(value));
+  return `<div class="activity-detail-row"><span class="activity-detail-row-label">${escapeHtml(label)}</span><span class="activity-detail-row-value">${text}</span></div>`;
+}
+
+function activityDetailOverviewHtml(a) {
+  return `
+    <h3>Visão geral</h3>
+    ${a.fotoCapa ? `<div class="activity-detail-cover" style="background-image:url('${a.fotoCapa}')"></div>` : ''}
+    ${detailRow('Categoria', a.categoria)}
+    ${detailRow('Vibe', a.vibes)}
+    ${detailRow('Descrição', a.descricao)}
+    ${detailRow('Localidade', a.localidade)}
+  `;
+}
+
+function activityDetailLogisticsHtml(a) {
+  const custoRows = PERFIS_CUSTO_TIPOS.map(tipo => {
+    const perfil = (a.perfisCusto || {})[tipo];
+    if (!perfil) return '';
+    const baixa = perfil.baixa_temporada;
+    const alta = perfil.alta_temporada;
+    const parts = [];
+    if (baixa && baixa[0] != null) parts.push(`Baixa: R$ ${baixa[0]}–${baixa[1]}`);
+    if (alta && alta[0] != null) parts.push(`Alta: R$ ${alta[0]}–${alta[1]}`);
+    return parts.length ? detailRow(PERFIS_CUSTO_LABELS[tipo], parts.join(' · ')) : '';
+  }).join('');
+  return `
+    <h3>Logística</h3>
+    ${detailRow('Modalidades de duração', a.modalidadesDuracao)}
+    ${detailRow('Meios de transporte', a.meiosTransporte)}
+    ${custoRows}
+    ${detailRow('Nível de planejamento', a.nivelPlanejamento)}
+    ${detailRow('Antecedência mínima geral', a.antecedenciaMiniDias != null ? `${a.antecedenciaMiniDias} dias` : null)}
+    ${detailRow('Decisão de última hora', a.decisaoUltimaHora ? 'Sim' : null)}
+    ${detailRow('Distância de SP', a.distanciaSP)}
+  `;
+}
+
+function activityDetailConditionsHtml(a) {
+  return `
+    <h3>Condições ideais</h3>
+    ${detailRow('Condição climática ideal', a.condicaoClimaticaIdeal)}
+    ${detailRow('Temperatura mínima ideal', a.temperaturaMiniCelsius != null ? `${a.temperaturaMiniCelsius}°C` : null)}
+    ${detailRow('Época ideal', a.epocaIdeal)}
+    ${detailRow('Perfil de grupo', a.perfilGrupo)}
+    ${detailRow('Tamanho do grupo', a.tamanhoGrupo)}
+    ${detailRow('Condicionamento físico', a.condicionamentoFisico)}
+    ${detailRow('Evitar alta temporada', a.evitarAltaTemporada ? 'Sim' : null)}
+    ${detailRow('Repetível', a.repetivel ? 'Sim' : 'Não')}
+    ${detailRow('Pet-friendly', a.petFriendly === true ? 'Sim' : (a.petFriendly === false ? 'Não' : null))}
+  `;
+}
+
+function activityVariationCardHtml(v, isActive, isChosen) {
+  const rows = ACTIVITY_VARIATION_MERGE_FIELDS
+    .filter(f => v[f] != null && !(Array.isArray(v[f]) && !v[f].length))
+    .map(f => detailRow(f, Array.isArray(v[f]) ? v[f] : String(v[f])))
+    .join('');
+  return `
+  <div class="activity-variation-card${isActive ? ' active' : ''}" data-id="${v.id}">
+    <div class="activity-variation-card-header">
+      <strong>${escapeHtml(v.nome)}</strong>
+      ${isChosen ? ' <span class="tag activity-tag-variation">Escolhida ✓</span>' : ''}
+      ${isActive ? ' <span class="tag activity-tag-variation">Ativa agora</span>' : ''}
+      <span class="activity-variation-card-epocas">${(v.epocasCobertas || []).map(escapeHtml).join(', ')}${v.incluiFeriadosProlongados ? ' + feriados prolongados' : ''}</span>
+    </div>
+    ${rows}
+  </div>`;
+}
+
+function activityDetailVariationsHtml(a) {
+  const variations = a.variacoes || [];
+  const active = getActiveVariation(a);
+  return `
+    <h3>Variações sazonais</h3>
+    ${variations.length ? variations.map(v => activityVariationCardHtml(v, active && active.id === v.id, a.variacaoEscolhidaId === v.id)).join('') : '<div class="activity-detail-empty">Nenhuma variação sazonal cadastrada.</div>'}
+  `;
+}
+
+function activityChecklistProgressHtml(a) {
+  const tasks = a.checklistTasks || [];
+  const done = tasks.filter(t => t.completed).length;
+  return tasks.length ? `<div class="activity-checklist-progress">${done} de ${tasks.length} itens concluídos</div>` : '';
+}
+
+function activityDetailPlanningHtml(a) {
+  const links = a.links || [];
+  const linksHtml = links.length
+    ? `<ul class="activity-links-list">${links.map(l => `<li><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.titulo || l.url)}</a></li>`).join('')}</ul>`
+    : '';
+  return `
+    <h3>Planejamento</h3>
+    ${activityChecklistProgressHtml(a)}
+    <div class="activity-detail-checklist" id="activityDetailChecklist"></div>
+    ${detailRow('Data de início', a.dataInicio ? fmtDateBR(a.dataInicio) : null)}
+    ${detailRow('Board de destino', a.boardDestinoId ? (boards.find(b => b.id === a.boardDestinoId) || {}).name : null)}
+    ${detailRow('Notas', a.notas)}
+    ${linksHtml}
+    <h4>Próximos feriados compatíveis</h4>
+    <div id="activityDetailHolidays"></div>
+  `;
+}
+
+function activityDetailHistoryHtml(a) {
+  const realizacoes = a.realizacoes || [];
+  if (!realizacoes.length) return `<h3>Histórico</h3><div class="activity-detail-empty">Ainda não realizada.</div>`;
+  return `
+    <h3>Histórico (Realizada ${realizacoes.length}×)</h3>
+    ${realizacoes.map(r => `
+      <div class="activity-realization-card" data-id="${r.id}">
+        ${detailRow('Data', fmtDateBR(r.data))}
+        ${detailRow('Gasto total', r.gasto_total != null ? `R$ ${r.gasto_total}` : null)}
+        ${detailRow('Perfil vivido', r.perfil_vivido ? PERFIS_CUSTO_LABELS[r.perfil_vivido] : null)}
+        ${detailRow('Com quem', r.com_quem)}
+        ${detailRow('Avaliação', r.avaliacao ? `${'★'.repeat(r.avaliacao)}${'☆'.repeat(5 - r.avaliacao)}` : null)}
+        ${detailRow('Nota', r.nota)}
+        <button type="button" class="btn-neutral-sm activity-realization-edit-btn" data-id="${r.id}">Editar registro</button>
+      </div>
+    `).join('')}
+  `;
+}
+
+function activityDetailFooterHtml(a) {
+  const buttons = [];
+  if (a.status === 'quero_fazer') {
+    const checklistEmpty = !(a.checklistTasks || []).length;
+    buttons.push(`<button type="button" class="btn-primary activity-promote-btn" data-id="${a.id}" ${checklistEmpty ? 'disabled title="Adicione ao menos uma tarefa ao checklist para planejar"' : ''}>Mover para Planejada</button>`);
+  }
+  if (a.status === 'planejada') {
+    buttons.push(`<button type="button" class="btn-neutral activity-cancel-plan-btn" data-id="${a.id}">Cancelar planejamento</button>`);
+  }
+  if (a.status !== 'rascunho' && a.status !== 'realizada') {
+    buttons.push(`<button type="button" class="btn-neutral activity-realize-btn" data-id="${a.id}">Marcar como realizada</button>`);
+  }
+  if (a.status === 'realizada') {
+    buttons.push(`<button type="button" class="btn-neutral activity-realize-btn" data-id="${a.id}" title="Registrar outra realização">Registrar nova visita</button>`);
+  }
+  buttons.push(`<button type="button" class="btn-neutral activity-delete-btn" data-id="${a.id}">Excluir atividade</button>`);
+  return buttons.join('');
+}
+
+function openActivityDetail(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  activityDetailId = id;
+  document.getElementById('activityDetailTitle').textContent = a.name;
+  const statusEl = document.getElementById('activityDetailStatus');
+  statusEl.textContent = ACTIVITY_STATUS_LABELS[a.status] || a.status;
+  statusEl.className = `tag activity-tag-status activity-status-${a.status}`;
+  const realCount = (a.realizacoes || []).length;
+  const realizedBadgeEl = document.getElementById('activityDetailRealizedBadge');
+  realizedBadgeEl.textContent = `Realizada ${realCount}×`;
+  realizedBadgeEl.classList.toggle('hidden', realCount === 0);
+  document.getElementById('activityDetailOverview').innerHTML = activityDetailOverviewHtml(a);
+  document.getElementById('activityDetailLogistics').innerHTML = activityDetailLogisticsHtml(a);
+  document.getElementById('activityDetailConditions').innerHTML = activityDetailConditionsHtml(a);
+  document.getElementById('activityDetailVariations').innerHTML = activityDetailVariationsHtml(a);
+  document.getElementById('activityDetailPlanning').innerHTML = activityDetailPlanningHtml(a);
+  const checklistEl = document.getElementById('activityDetailChecklist');
+  if (checklistEl) checklistEl.innerHTML = (a.checklistTasks || []).map(checklistTaskRowHtml).join('');
+  renderActivityDetailHolidays(a);
+  document.getElementById('activityDetailHistory').innerHTML = activityDetailHistoryHtml(a);
+  document.getElementById('activityDetailFooter').innerHTML = activityDetailFooterHtml(a);
+  document.getElementById('activityDetailOverlay').classList.remove('hidden');
+}
+function closeActivityDetail() {
+  document.getElementById('activityDetailOverlay').classList.add('hidden');
+  activityDetailId = null;
+}
+
+document.getElementById('activityDetailOverlay').addEventListener('click', e => {
+  const nameBtn = e.target.closest('.checklist-task-name');
+  if (nameBtn) { openModal(nameBtn.dataset.id); return; }
+  const chk = e.target.closest('.checklist-chk-done');
+  if (chk) {
+    const a = findActivity(activityDetailId);
+    const t = a && (a.checklistTasks || []).find(x => x.id === chk.dataset.id);
+    if (t) {
+      setCompleted(t, chk.checked, t.boardId ? boards.find(b => b.id === t.boardId) : null);
+      patchActivity(a, () => {});
+      openActivityDetail(activityDetailId);
+    }
+    return;
+  }
+  const promoteBtn = e.target.closest('.activity-promote-btn');
+  if (promoteBtn && !promoteBtn.disabled) { openActivityPromote(promoteBtn.dataset.id); return; }
+  const cancelPlanBtn = e.target.closest('.activity-cancel-plan-btn');
+  if (cancelPlanBtn) {
+    const a = findActivity(cancelPlanBtn.dataset.id);
+    if (a && confirm('Cancelar o planejamento vai remover as datas das tarefas do checklist e tirá-las do board. As tarefas permanecem no checklist da atividade. Deseja continuar?')) {
+      cancelActivityPlan(a);
+      openActivityDetail(a.id);
+    }
+    return;
+  }
+  const realizeBtn = e.target.closest('.activity-realize-btn');
+  if (realizeBtn) { openActivityRealization(realizeBtn.dataset.id, null); return; }
+  const editRealizationBtn = e.target.closest('.activity-realization-edit-btn');
+  if (editRealizationBtn) { openActivityRealization(activityDetailId, editRealizationBtn.dataset.id); return; }
+  const deleteBtn = e.target.closest('.activity-delete-btn');
+  if (deleteBtn) { deleteActivity(deleteBtn.dataset.id); return; }
+});
+
+document.getElementById('activitiesView').addEventListener('click', e => {
+  const card = e.target.closest('.activity-card');
+  if (card) { openActivityDetail(card.dataset.id); return; }
+});
+
+// ---------- kanban de status (drag-and-drop entre colunas) ----------
+// Move a atividade para o status da coluna de destino diretamente — sem exigir checklist,
+// board ou qualquer outro campo preenchido (o kanban é a via rápida de mudança de status;
+// o fluxo de "Mover para Planejada" no detalhe, com data/board, continua existindo à parte).
+function setActivityStatus(a, newStatus) {
+  a.status = newStatus;
+  a.updatedAt = Date.now();
+  save();
+  renderActivities();
+  if (activityDetailId === a.id) openActivityDetail(a.id);
+}
+
+let pendingVariationPickActivityId = null;
+
+function openActivityVariationPicker(activityId) {
+  const a = findActivity(activityId);
+  if (!a) return;
+  pendingVariationPickActivityId = activityId;
+
+  // Nome da atividade no cabeçalho do modal
+  const nameEl = document.getElementById('activityVariationPickerActivityName');
+  if (nameEl) nameEl.textContent = a.name;
+
+  // Opções de variação
+  document.getElementById('activityVariationPickerOptions').innerHTML = (a.variacoes || []).map(v => `
+    <label class="activity-variation-picker-option">
+      <input type="radio" name="activityVariationPick" value="${v.id}">
+      <div>
+        <div style="font:700 13px var(--font-sora);">${escapeHtml(v.nome)}</div>
+        ${v.epocasCobertas && v.epocasCobertas.length ? `<div style="font:500 11.5px var(--font-sora);color:var(--color-text-tertiary);margin-top:2px;">${v.epocasCobertas.map(escapeHtml).join(' · ')}</div>` : ''}
+      </div>
+    </label>`).join('');
+
+  // Data padrão: +14 dias
+  const d = new Date(); d.setDate(d.getDate() + 14);
+  const dateEl = document.getElementById('activityVariationPickerDate');
+  if (dateEl) dateEl.value = d.toISOString().split('T')[0];
+
+  document.getElementById('activityVariationPickerConfirmBtn').disabled = (a.variacoes || []).length > 0;
+  document.getElementById('activityVariationPickerOverlay').classList.remove('hidden');
+}
+function closeActivityVariationPicker() {
+  document.getElementById('activityVariationPickerOverlay').classList.add('hidden');
+  pendingVariationPickActivityId = null;
+}
+document.getElementById('closeActivityVariationPicker').addEventListener('click', closeActivityVariationPicker);
+document.getElementById('activityVariationPickerCancelBtn').addEventListener('click', closeActivityVariationPicker);
+document.getElementById('activityVariationPickerOverlay').addEventListener('click', e => {
+  if (e.target.id === 'activityVariationPickerOverlay') closeActivityVariationPicker();
+});
+document.getElementById('activityVariationPickerOverlay').addEventListener('change', e => {
+  if (e.target.name === 'activityVariationPick') {
+    document.getElementById('activityVariationPickerConfirmBtn').disabled = !e.target.value;
+  }
+});
+document.getElementById('activityVariationPickerConfirmBtn').addEventListener('click', () => {
+  const a = findActivity(pendingVariationPickActivityId);
+  const checked = document.querySelector('input[name="activityVariationPick"]:checked');
+  if (!a) return;
+  if (checked) a.variacaoEscolhidaId = checked.value;
+  const dateEl = document.getElementById('activityVariationPickerDate');
+  if (dateEl && dateEl.value) a.dataInicio = dateEl.value;
+  setActivityStatus(a, 'planejada');
+  closeActivityVariationPicker();
+});
+
+const activitiesView = document.getElementById('activitiesView');
+activitiesView.addEventListener('dragstart', e => {
+  const card = e.target.closest('.activity-card');
+  if (!card) return;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', card.dataset.id);
+  setTimeout(() => card.classList.add('dragging'), 0);
+});
+activitiesView.addEventListener('dragend', e => {
+  const card = e.target.closest('.activity-card');
+  if (card) card.classList.remove('dragging');
+  activitiesView.querySelectorAll('.activity-column-body.drag-over').forEach(el => el.classList.remove('drag-over'));
+});
+activitiesView.addEventListener('dragover', e => {
+  const col = e.target.closest('.activity-column-body');
+  if (!col) return;
+  e.preventDefault();
+  if (!col.classList.contains('drag-over')) {
+    activitiesView.querySelectorAll('.activity-column-body.drag-over').forEach(el => el.classList.remove('drag-over'));
+    col.classList.add('drag-over');
+  }
+});
+activitiesView.addEventListener('drop', e => {
+  const col = e.target.closest('.activity-column-body');
+  if (!col) return;
+  e.preventDefault();
+  col.classList.remove('drag-over');
+  const id = e.dataTransfer.getData('text/plain');
+  const a = findActivity(id);
+  const newStatus = col.dataset.status;
+  if (!a || newStatus === undefined || a.status === newStatus) return;
+  if (newStatus === 'planejada') {
+    // Sempre abre o picker — com variações para escolher, sem variações só pede data
+    openActivityVariationPicker(a.id);
+    return;
+  }
+  if (newStatus === 'realizada') {
+    openActivityRealization(a.id, null);
+    return;
+  }
+  setActivityStatus(a, newStatus);
+});
+
+document.getElementById('closeActivityDetail').addEventListener('click', closeActivityDetail);
+document.getElementById('activityDetailOverlay').addEventListener('click', e => { if (e.target.id === 'activityDetailOverlay') closeActivityDetail(); });
+document.getElementById('activityDetailEditBtn').addEventListener('click', () => {
+  if (activityDetailId) openActivityForm(activityDetailId);
+});
+
+// ---------- formulário em etapas (stepper) ----------
+function currentEditingActivity() { return findActivity(editingActivityId); }
+
+function openActivityForm(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  editingActivityId = id;
+  activityFormMode = 'edit';
+  document.getElementById('activityDetailOverlay').classList.add('hidden');
+  showActivityFormStep(1);
+  renderActivityFormStep(1);
+  document.getElementById('activityFormOverlay').classList.remove('hidden');
+}
+function closeActivityForm() {
+  document.getElementById('activityFormOverlay').classList.add('hidden');
+  document.getElementById('activityFormImportBanner').classList.add('hidden');
+  editingActivityId = null;
+  renderActivities();
+}
+
+function showActivityFormStep(step) {
+  activityFormStep = step;
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById(`activityFormStep${i}`).classList.toggle('hidden', i !== step);
+  }
+  document.querySelectorAll('.activity-form-step-dot').forEach(dot => {
+    const dotStep = Number(dot.dataset.step);
+    dot.classList.toggle('active', dotStep === step);
+    dot.classList.toggle('done', dotStep < step);
+  });
+  document.getElementById('activityFormBackBtn').classList.toggle('hidden', step === 1);
+  document.getElementById('activityFormNextBtn').textContent = step === 5 ? 'Concluir' : 'Próximo';
+}
+
+// Validação mínima por etapa antes de avançar. Apenas a Etapa 1 tem campos obrigatórios (nome +
+// categoria) — as demais etapas são inteiramente opcionais (ver seção "Campos por Atividade").
+function validateActivityFormStep(step, a) {
+  if (step === 1) return !!(a.name && a.name.trim() && a.categoria && a.categoria.trim());
+  return true;
+}
+
+// Ponto único de renderização de cada etapa. Cada task fe-24..fe-31 define a função
+// renderActivityFormStepN correspondente; até lá, a etapa fica vazia (esqueleto).
+function renderActivityFormStep(step) {
+  const a = currentEditingActivity();
+  if (!a) return;
+  const fn = window[`renderActivityFormStep${step}`];
+  if (typeof fn === 'function') fn(a);
+}
+
+document.getElementById('activityFormNextBtn').addEventListener('click', async () => {
+  const a = currentEditingActivity();
+  if (!a) return;
+  if (!validateActivityFormStep(activityFormStep, a)) {
+    alert('Preencha os campos obrigatórios desta etapa antes de avançar.');
+    return;
+  }
+  // Ao avançar da Etapa 1 para a Etapa 2: geocodifica `localidade` via Nominatim para preencher
+  // distância de SP automaticamente. Fluxo nunca é bloqueado — sem localidade ou sem resultado,
+  // o seletor manual da Etapa 2 continua disponível (fe-26).
+  if (activityFormStep === 1 && typeof geocodeAndFillDistancia === 'function') {
+    await geocodeAndFillDistancia(a);
+  }
+  if (activityFormStep < 5) {
+    showActivityFormStep(activityFormStep + 1);
+    renderActivityFormStep(activityFormStep);
+  } else {
+    closeActivityForm();
+  }
+});
+document.getElementById('activityFormBackBtn').addEventListener('click', () => {
+  if (activityFormStep > 1) {
+    showActivityFormStep(activityFormStep - 1);
+    renderActivityFormStep(activityFormStep);
+  }
+});
+document.getElementById('activityFormDraftBtn').addEventListener('click', () => {
+  save();
+  const hint = document.getElementById('activityFormAutosaveHint');
+  hint.textContent = 'Rascunho salvo ✓';
+  setTimeout(() => { hint.textContent = 'Rascunho salvo automaticamente'; }, 1500);
+});
+document.getElementById('closeActivityForm').addEventListener('click', closeActivityForm);
+document.getElementById('activityFormOverlay').addEventListener('click', e => { if (e.target.id === 'activityFormOverlay') closeActivityForm(); });
+document.querySelectorAll('.activity-form-step-dot').forEach(dot => {
+  dot.addEventListener('click', () => {
+    const step = Number(dot.dataset.step);
+    showActivityFormStep(step);
+    renderActivityFormStep(step);
+  });
+});
+
+// Aplica uma mutação na atividade em edição e persiste — auto-save reaproveitando o debounce de
+// 250ms já existente em save() (mesmo padrão usado por patch() nas tarefas do board).
+function patchActivity(a, fn) {
+  fn(a);
+  a.updatedAt = Date.now();
+  if (typeof window.maybeAdvanceActivityStatus === 'function') window.maybeAdvanceActivityStatus(a);
+  save();
+  if (currentView === 'activities') renderActivities();
+}
+
+function multiSelectChipsHtml(fieldName, options, selected) {
+  return `<div class="chip-select-group" data-field="${fieldName}">
+    ${options.map(o => `<button type="button" class="chip-select-option ${(selected || []).includes(o) ? 'selected' : ''}" data-value="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join('')}
+  </div>`;
+}
+
+function bindMultiSelectChips(container, fieldName, activity) {
+  const group = container.querySelector(`[data-field="${fieldName}"]`);
+  if (!group) return;
+  group.addEventListener('click', e => {
+    const btn = e.target.closest('.chip-select-option');
+    if (!btn) return;
+    const val = btn.dataset.value;
+    patchActivity(activity, x => {
+      if (!x[fieldName]) x[fieldName] = [];
+      const i = x[fieldName].indexOf(val);
+      if (i >= 0) x[fieldName].splice(i, 1); else x[fieldName].push(val);
+    });
+    btn.classList.toggle('selected');
+  });
+}
+
+// Redimensiona a imagem de capa (máx. 800×600, JPEG 80%) via <canvas> e devolve a data URL base64
+// — mantém o campo foto_capa (armazenado direto na tabela activities) abaixo de ~200 KB.
+function resizeCoverPhotoToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const maxW = 800, maxH = 600;
+        let w = img.width, h = img.height;
+        const ratio = Math.min(1, maxW / w, maxH / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ---------- Etapa 1: Identidade ----------
+function activityCategoriaFieldHtml(a) {
+  const isKnown = ACTIVITY_CATEGORIES.includes(a.categoria);
+  const customValue = isKnown ? '' : (a.categoria || '');
+  return `
+    <label>Categoria
+      <select id="af-categoria">
+        ${ACTIVITY_CATEGORIES.map(c => `<option value="${escapeHtml(c)}" ${((isKnown && a.categoria === c) || (!isKnown && c === 'Personalizada')) ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+      </select>
+    </label>
+    <label id="af-categoria-custom-field" class="${isKnown ? 'hidden' : ''}">Categoria personalizada
+      <input type="text" id="af-categoria-custom" list="af-categoria-custom-list" value="${escapeHtml(customValue)}">
+      <datalist id="af-categoria-custom-list">${customCategoriesInUse().map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+    </label>`;
+}
+
+function renderActivityFormStep1(a) {
+  const container = document.getElementById('activityFormStep1');
+  container.innerHTML = `
+    <label>Nome
+      <input type="text" id="af-name" value="${escapeHtml(a.name || '')}" placeholder="Ex.: Ubatuba, cafezinho no Mercadão...">
+    </label>
+    ${activityCategoriaFieldHtml(a)}
+    <label>Vibe</label>
+    ${multiSelectChipsHtml('vibes', VIBES, a.vibes)}
+    <label>Descrição
+      <textarea id="af-descricao" rows="3">${escapeHtml(a.descricao || '')}</textarea>
+    </label>
+    <label>Localidade
+      <input type="text" id="af-localidade" value="${escapeHtml(a.localidade || '')}" placeholder="Ex.: Cantareira, Ubatuba, Mercadão">
+    </label>
+    <label>Foto de capa
+      <input type="file" id="af-foto-capa" accept="image/*">
+    </label>
+    <div id="af-foto-capa-preview" class="activity-cover-preview">${a.fotoCapa ? `<img src="${a.fotoCapa}">` : ''}</div>
+  `;
+
+  document.getElementById('af-name').addEventListener('input', e => patchActivity(a, x => { x.name = e.target.value; }));
+  document.getElementById('af-categoria').addEventListener('change', e => {
+    document.getElementById('af-categoria-custom-field').classList.toggle('hidden', e.target.value !== 'Personalizada');
+    if (e.target.value !== 'Personalizada') patchActivity(a, x => { x.categoria = e.target.value; });
+    else patchActivity(a, x => { x.categoria = document.getElementById('af-categoria-custom').value.trim(); });
+  });
+  document.getElementById('af-categoria-custom').addEventListener('input', e => patchActivity(a, x => { x.categoria = e.target.value.trim(); }));
+  document.getElementById('af-descricao').addEventListener('input', e => patchActivity(a, x => { x.descricao = e.target.value; }));
+  document.getElementById('af-localidade').addEventListener('input', e => patchActivity(a, x => { x.localidade = e.target.value; }));
+  bindMultiSelectChips(container, 'vibes', a);
+  document.getElementById('af-foto-capa').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const dataUrl = await resizeCoverPhotoToBase64(file);
+    patchActivity(a, x => { x.fotoCapa = dataUrl; });
+    document.getElementById('af-foto-capa-preview').innerHTML = `<img src="${dataUrl}">`;
+  });
+}
+
+// ---------- Nominatim: geocodificação da localidade ----------
+const SP_LAT = -23.5505, SP_LON = -46.6333; // referência: centro de São Paulo
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+function distanciaSPFromKm(km) {
+  if (km < 30) return 'Na cidade';
+  if (km <= 150) return 'Até 150 km';
+  if (km <= 400) return '150–400 km';
+  return '400 km+';
+}
+
+// Geocodifica um texto livre (campo `localidade`) via Nominatim (OpenStreetMap). Retorna
+// { lat, lon } ou null se vazio/sem resultado/erro de rede — nunca lança, sempre fallback silencioso.
+async function geocodeLocalidade(query) {
+  if (!query || !query.trim()) return null;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim() + ', Brasil')}&format=json&limit=1`, {
+      headers: { 'Accept-Language': 'pt-BR' },
+    });
+    if (!res.ok) throw new Error('nominatim request failed');
+    const json = await res.json();
+    if (!json || !json.length) return null;
+    return { lat: parseFloat(json[0].lat), lon: parseFloat(json[0].lon) };
+  } catch (err) {
+    console.error('Falha ao geocodificar localidade via Nominatim:', err);
+    return null;
+  }
+}
+
+// Chamada ao avançar da Etapa 1 para a Etapa 2: se `localidade` estiver preenchida, tenta
+// geocodificar e preencher `distanciaSP` automaticamente. Se vazio ou sem resultado, mantém o
+// seletor manual da Etapa 2 intocado — o fluxo nunca é bloqueado.
+async function geocodeAndFillDistancia(a) {
+  if (!a.localidade || !a.localidade.trim()) return;
+  const coords = await geocodeLocalidade(a.localidade);
+  if (!coords) return;
+  const km = haversineKm(SP_LAT, SP_LON, coords.lat, coords.lon);
+  patchActivity(a, x => { x.distanciaSP = distanciaSPFromKm(km); });
+}
+
+// ---------- Etapa 2: Logística ----------
+const DISTANCIA_SP_OPTIONS = ['Na cidade', 'Até 150 km', '150–400 km', '400 km+'];
+
+function costRangeFieldHtml(tipo, temporada, range) {
+  const min = range && range[0] != null ? range[0] : '';
+  const max = range && range[1] != null ? range[1] : '';
+  return `
+    <div class="cost-range-row" data-tipo="${tipo}" data-temporada="${temporada}">
+      <span class="cost-range-label">${temporada === 'baixa_temporada' ? 'Baixa temporada' : 'Alta temporada'}</span>
+      <input type="number" min="0" class="cost-range-min" placeholder="Mín" value="${min}">
+      <span>–</span>
+      <input type="number" min="0" class="cost-range-max" placeholder="Máx" value="${max}">
+    </div>`;
+}
+
+function costProfileSectionHtml(tipo, perfil) {
+  perfil = perfil || {};
+  return `
+    <div class="cost-profile-section" data-tipo="${tipo}">
+      <h4>${PERFIS_CUSTO_LABELS[tipo]}</h4>
+      ${costRangeFieldHtml(tipo, 'baixa_temporada', perfil.baixa_temporada)}
+      ${costRangeFieldHtml(tipo, 'alta_temporada', perfil.alta_temporada)}
+    </div>`;
+}
+
+function renderActivityFormStep2(a) {
+  const container = document.getElementById('activityFormStep2');
+  container.innerHTML = `
+    <label>Modalidades de duração</label>
+    ${multiSelectChipsHtml('modalidadesDuracao', MODALIDADES_DURACAO, a.modalidadesDuracao)}
+    <label>Meios de transporte</label>
+    ${multiSelectChipsHtml('meiosTransporte', MEIOS_TRANSPORTE, a.meiosTransporte)}
+    <label>Perfis de custo (R$ por pessoa)</label>
+    <div id="af-cost-profiles">
+      ${PERFIS_CUSTO_TIPOS.map(tipo => costProfileSectionHtml(tipo, (a.perfisCusto || {})[tipo])).join('')}
+    </div>
+    <label>Nível de planejamento
+      <select id="af-nivel-planejamento">
+        <option value="">Selecione</option>
+        ${NIVEIS_PLANEJAMENTO.map(n => `<option value="${escapeHtml(n)}" ${a.nivelPlanejamento === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Antecedência mínima (dias)
+      <input type="number" min="0" id="af-antecedencia-minima" value="${a.antecedenciaMiniDias ?? ''}">
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" id="af-decisao-ultima-hora" ${a.decisaoUltimaHora ? 'checked' : ''}> Decisão de última hora possível
+    </label>
+    <label id="af-distancia-field">Distância de SP
+      <select id="af-distancia">
+        <option value="">Não definida</option>
+        ${DISTANCIA_SP_OPTIONS.map(d => `<option value="${escapeHtml(d)}" ${a.distanciaSP === d ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('')}
+      </select>
+    </label>
+  `;
+
+  bindMultiSelectChips(container, 'modalidadesDuracao', a);
+  bindMultiSelectChips(container, 'meiosTransporte', a);
+
+  container.querySelectorAll('.cost-range-row').forEach(row => {
+    const tipo = row.dataset.tipo, temporada = row.dataset.temporada;
+    const commit = () => {
+      const min = row.querySelector('.cost-range-min').value;
+      const max = row.querySelector('.cost-range-max').value;
+      patchActivity(a, x => {
+        x.perfisCusto = x.perfisCusto || {};
+        if (!x.perfisCusto[tipo]) x.perfisCusto[tipo] = {};
+        if (min === '' && max === '') { x.perfisCusto[tipo][temporada] = null; }
+        else x.perfisCusto[tipo][temporada] = [min === '' ? null : Number(min), max === '' ? null : Number(max)];
+      });
+    };
+    row.querySelector('.cost-range-min').addEventListener('input', commit);
+    row.querySelector('.cost-range-max').addEventListener('input', commit);
+  });
+
+  document.getElementById('af-nivel-planejamento').addEventListener('change', e => patchActivity(a, x => { x.nivelPlanejamento = e.target.value || null; }));
+  document.getElementById('af-antecedencia-minima').addEventListener('input', e => patchActivity(a, x => { x.antecedenciaMiniDias = e.target.value === '' ? null : Number(e.target.value); }));
+  document.getElementById('af-decisao-ultima-hora').addEventListener('change', e => patchActivity(a, x => { x.decisaoUltimaHora = e.target.checked; }));
+  document.getElementById('af-distancia').addEventListener('change', e => patchActivity(a, x => { x.distanciaSP = e.target.value || null; }));
+}
+
+// ---------- Etapa 3: Condições ideais ----------
+const EPOCA_IDEAL_OPTIONS = [...EPOCAS, 'Qualquer'];
+
+function renderActivityFormStep3(a) {
+  const container = document.getElementById('activityFormStep3');
+  container.innerHTML = `
+    <label>Condição climática ideal</label>
+    ${multiSelectChipsHtml('condicaoClimaticaIdeal', CONDICOES_CLIMATICAS, a.condicaoClimaticaIdeal)}
+    <label>Temperatura mínima ideal (°C)
+      <input type="number" id="af-temp-minima" value="${a.temperaturaMiniCelsius ?? ''}">
+    </label>
+    <label>Época ideal do ano</label>
+    ${multiSelectChipsHtml('epocaIdeal', EPOCA_IDEAL_OPTIONS, a.epocaIdeal)}
+    <label>Perfil de grupo</label>
+    ${multiSelectChipsHtml('perfilGrupo', PERFIS_GRUPO, a.perfilGrupo)}
+    <label>Tamanho do grupo
+      <select id="af-tamanho-grupo">
+        <option value="">Não definido</option>
+        ${TAMANHOS_GRUPO.map(t => `<option value="${escapeHtml(t)}" ${a.tamanhoGrupo === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Condicionamento físico exigido
+      <select id="af-condicionamento">
+        ${NIVEIS_CONDICIONAMENTO.map(n => `<option value="${escapeHtml(n)}" ${(a.condicionamentoFisico || 'Não') === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+      </select>
+    </label>
+    <label class="checkbox-row"><input type="checkbox" id="af-evitar-alta" ${a.evitarAltaTemporada ? 'checked' : ''}> Evitar alta temporada</label>
+    <label class="checkbox-row"><input type="checkbox" id="af-repetivel" ${a.repetivel !== false ? 'checked' : ''}> Repetível</label>
+    <label>Pet-friendly
+      <select id="af-pet-friendly">
+        <option value="">Não definido</option>
+        <option value="sim" ${a.petFriendly === true ? 'selected' : ''}>Sim</option>
+        <option value="nao" ${a.petFriendly === false ? 'selected' : ''}>Não</option>
+      </select>
+    </label>
+  `;
+  bindMultiSelectChips(container, 'condicaoClimaticaIdeal', a);
+  bindMultiSelectChips(container, 'epocaIdeal', a);
+  bindMultiSelectChips(container, 'perfilGrupo', a);
+  document.getElementById('af-temp-minima').addEventListener('input', e => patchActivity(a, x => { x.temperaturaMiniCelsius = e.target.value === '' ? null : Number(e.target.value); }));
+  document.getElementById('af-tamanho-grupo').addEventListener('change', e => patchActivity(a, x => { x.tamanhoGrupo = e.target.value || null; }));
+  document.getElementById('af-condicionamento').addEventListener('change', e => patchActivity(a, x => { x.condicionamentoFisico = e.target.value; }));
+  document.getElementById('af-evitar-alta').addEventListener('change', e => patchActivity(a, x => { x.evitarAltaTemporada = e.target.checked; }));
+  document.getElementById('af-repetivel').addEventListener('change', e => patchActivity(a, x => { x.repetivel = e.target.checked; }));
+  document.getElementById('af-pet-friendly').addEventListener('change', e => patchActivity(a, x => { x.petFriendly = e.target.value === '' ? null : e.target.value === 'sim'; }));
+}
+
+// ---------- Etapa 4: Variações sazonais ----------
+// Decisão de nomenclatura (ambiguidade da spec): a tabela "campos substituíveis" na spec usa
+// snake_case (ex.: `condicao_climatica_ideal`), mas o resto do app (incluindo os campos-base da
+// própria atividade) usa camelCase — e `variacoes` é armazenado como JSONB opaco, sem mapeamento
+// campo-a-campo em server.js (appActivityToDb/dbActivityToApp só repassam o array como está).
+// Decisão conservadora: manter camelCase dentro de cada objeto de variação, por consistência com
+// o resto do objeto Activity em memória. A importação de JSON (fe-38) faz a tradução
+// snake_case → camelCase ao montar `activity.variacoes`, já que o prompt de refinamento gera
+// snake_case (ver seção "Prompt de Refinamento de Atividade" da spec).
+let activityVariationDraft = null; // variação em edição (clone) ou null quando o editor está fechado
+
+const VARIATION_FIELD_TYPES = {
+  vibes: 'chips:VIBES',
+  condicaoClimaticaIdeal: 'chips:CONDICOES_CLIMATICAS',
+  temperaturaMiniCelsius: 'number',
+  antecedenciaMiniDias: 'number',
+  decisaoUltimaHora: 'boolean',
+  perfisCusto: 'custo',
+  modalidadesDuracao: 'chips:MODALIDADES_DURACAO',
+  meiosTransporte: 'chips:MEIOS_TRANSPORTE',
+  perfilGrupo: 'chips:PERFIS_GRUPO',
+  evitarAltaTemporada: 'boolean',
+  notas: 'text',
+};
+const VARIATION_FIELD_LABELS = {
+  vibes: 'Vibe', condicaoClimaticaIdeal: 'Condição climática ideal', temperaturaMiniCelsius: 'Temperatura mínima (°C)',
+  antecedenciaMiniDias: 'Antecedência mínima (dias)', decisaoUltimaHora: 'Decisão de última hora',
+  perfisCusto: 'Perfis de custo', modalidadesDuracao: 'Modalidades de duração', meiosTransporte: 'Meios de transporte',
+  perfilGrupo: 'Perfil de grupo', evitarAltaTemporada: 'Evitar alta temporada', notas: 'Notas',
+};
+const VARIATION_OPTIONS_BY_NAME = { VIBES, CONDICOES_CLIMATICAS, MODALIDADES_DURACAO, MEIOS_TRANSPORTE, PERFIS_GRUPO };
+
+function variationFieldOverrideRowHtml(field, draft) {
+  const type = VARIATION_FIELD_TYPES[field];
+  const enabled = draft[field] !== undefined;
+  const label = VARIATION_FIELD_LABELS[field];
+  let editorHtml = '';
+  if (type.startsWith('chips:')) {
+    const options = VARIATION_OPTIONS_BY_NAME[type.split(':')[1]];
+    editorHtml = multiSelectChipsHtml(`var-${field}`, options, draft[field] || []);
+  } else if (type === 'boolean') {
+    editorHtml = `<select class="var-field-input" data-field="${field}">
+      <option value="true" ${draft[field] === true ? 'selected' : ''}>Sim</option>
+      <option value="false" ${draft[field] === false ? 'selected' : ''}>Não</option>
+    </select>`;
+  } else if (type === 'number') {
+    editorHtml = `<input type="number" class="var-field-input" data-field="${field}" value="${draft[field] ?? ''}">`;
+  } else if (type === 'text') {
+    editorHtml = `<textarea class="var-field-input" data-field="${field}" rows="2">${escapeHtml(draft[field] || '')}</textarea>`;
+  } else if (type === 'custo') {
+    editorHtml = `<div class="var-cost-profiles">${PERFIS_CUSTO_TIPOS.map(tipo => costProfileSectionHtml(tipo, (draft.perfisCusto || {})[tipo])).join('')}</div>`;
+  }
+  return `
+    <div class="variation-field-row" data-field="${field}">
+      <label class="checkbox-row"><input type="checkbox" class="var-field-toggle" data-field="${field}" ${enabled ? 'checked' : ''}> ${escapeHtml(label)}</label>
+      <div class="variation-field-editor ${enabled ? '' : 'hidden'}">${editorHtml}</div>
+    </div>`;
+}
+
+// Conflito de variações: bloqueia se duas variações cobrem a mesma época trimestral.
+function findVariationConflict(activity, draft) {
+  for (const v of activity.variacoes || []) {
+    if (v.id === draft.id) continue;
+    const overlap = (v.epocasCobertas || []).some(e => (draft.epocasCobertas || []).includes(e));
+    if (overlap) return v;
+  }
+  return null;
+}
+
+function openVariationEditor(variation) {
+  activityVariationDraft = variation
+    ? JSON.parse(JSON.stringify(variation))
+    : { id: uid(), nome: '', epocasCobertas: [], incluiFeriadosProlongados: false };
+  renderVariationEditor();
+}
+function closeVariationEditor(a) {
+  activityVariationDraft = null;
+  renderActivityFormStep4(a);
+}
+
+function renderVariationEditor() {
+  const el = document.getElementById('af-variation-editor');
+  if (!el) return;
+  const d = activityVariationDraft;
+  if (!d) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <h4>${d.nome ? 'Editar variação' : 'Nova variação'}</h4>
+    <label>Nome da variação
+      <input type="text" id="var-nome" value="${escapeHtml(d.nome || '')}">
+    </label>
+    <label>Épocas cobertas</label>
+    ${multiSelectChipsHtml('var-epocas', EPOCAS, d.epocasCobertas)}
+    <label class="checkbox-row"><input type="checkbox" id="var-feriados" ${d.incluiFeriadosProlongados ? 'checked' : ''}> Inclui feriados prolongados</label>
+    <div id="var-conflict-error" class="variation-conflict-error hidden"></div>
+    <div class="variation-fields-list">
+      ${ACTIVITY_VARIATION_MERGE_FIELDS.map(f => variationFieldOverrideRowHtml(f, d)).join('')}
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="var-cancel-btn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="var-save-btn" class="btn-primary">Salvar variação</button>
+    </div>`;
+
+  // Handlers atribuídos por propriedade (não addEventListener): este elemento persiste entre
+  // chamadas de renderVariationEditor() — addEventListener duplicaria os handlers a cada re-render.
+  el.onclick = e => {
+    const chip = e.target.closest('.chip-select-option');
+    if (chip) {
+      const group = chip.closest('.chip-select-group');
+      const field = group.dataset.field;
+      const val = chip.dataset.value;
+      const key = field === 'var-epocas' ? 'epocasCobertas' : field.replace('var-', '');
+      if (!d[key]) d[key] = [];
+      const idx = d[key].indexOf(val);
+      if (idx >= 0) d[key].splice(idx, 1); else d[key].push(val);
+      renderVariationEditor();
+      return;
+    }
+    if (e.target.id === 'var-cancel-btn') { closeVariationEditor(currentEditingActivity()); return; }
+    if (e.target.id === 'var-save-btn') { commitVariationDraft(currentEditingActivity()); return; }
+  };
+  el.onchange = e => {
+    if (e.target.classList.contains('var-field-toggle')) {
+      const field = e.target.dataset.field;
+      const type = VARIATION_FIELD_TYPES[field];
+      if (e.target.checked) {
+        if (type.startsWith('chips:')) d[field] = [];
+        else if (type === 'boolean') d[field] = false;
+        else if (type === 'number') d[field] = null;
+        else if (type === 'text') d[field] = '';
+        else if (type === 'custo') d[field] = {};
+      } else {
+        delete d[field];
+      }
+      renderVariationEditor();
+      return;
+    }
+    if (e.target.id === 'var-feriados') { d.incluiFeriadosProlongados = e.target.checked; return; }
+    if (e.target.classList.contains('var-field-input')) {
+      const field = e.target.dataset.field;
+      const type = VARIATION_FIELD_TYPES[field];
+      if (type === 'boolean') d[field] = e.target.value === 'true';
+      return;
+    }
+  };
+  el.oninput = e => {
+    if (e.target.id === 'var-nome') { d.nome = e.target.value; return; }
+    if (e.target.classList.contains('var-field-input')) {
+      const field = e.target.dataset.field;
+      const type = VARIATION_FIELD_TYPES[field];
+      if (type === 'number') d[field] = e.target.value === '' ? null : Number(e.target.value);
+      else if (type === 'text') d[field] = e.target.value;
+      return;
+    }
+    const row = e.target.closest('.cost-range-row');
+    if (row) {
+      const tipo = row.dataset.tipo, temporada = row.dataset.temporada;
+      const min = row.querySelector('.cost-range-min').value;
+      const max = row.querySelector('.cost-range-max').value;
+      if (!d.perfisCusto) d.perfisCusto = {};
+      if (!d.perfisCusto[tipo]) d.perfisCusto[tipo] = {};
+      d.perfisCusto[tipo][temporada] = (min === '' && max === '') ? null : [min === '' ? null : Number(min), max === '' ? null : Number(max)];
+    }
+  };
+}
+
+function commitVariationDraft(a) {
+  const d = activityVariationDraft;
+  if (!d.nome || !d.nome.trim()) { alert('Informe um nome para a variação.'); return; }
+  const conflict = findVariationConflict(a, d);
+  const errorEl = document.getElementById('var-conflict-error');
+  if (conflict) {
+    errorEl.textContent = `Este período já está coberto pela variação '${conflict.nome}'. Ajuste as épocas antes de salvar.`;
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  patchActivity(a, x => {
+    x.variacoes = x.variacoes || [];
+    const idx = x.variacoes.findIndex(v => v.id === d.id);
+    if (idx >= 0) x.variacoes[idx] = d; else x.variacoes.push(d);
+  });
+  activityVariationDraft = null;
+  renderActivityFormStep4(a);
+}
+
+function removeVariation(a, id) {
+  if (!confirm('Remover esta variação sazonal?')) return;
+  patchActivity(a, x => { x.variacoes = (x.variacoes || []).filter(v => v.id !== id); });
+  renderActivityFormStep4(a);
+}
+
+function variationListItemHtml(v) {
+  return `
+  <div class="activity-variation-list-item" data-id="${v.id}">
+    <span>${escapeHtml(v.nome)} <span class="activity-variation-card-epocas">(${(v.epocasCobertas || []).join(', ')})</span></span>
+    <div class="activity-variation-list-actions">
+      <button type="button" class="btn-neutral-sm var-edit-btn" data-id="${v.id}">Editar</button>
+      <button type="button" class="btn-neutral-sm var-remove-btn" data-id="${v.id}">Remover</button>
+    </div>
+  </div>`;
+}
+
+function renderActivityFormStep4(a) {
+  const container = document.getElementById('activityFormStep4');
+  container.innerHTML = `
+    <label>Variações sazonais (opcional)</label>
+    <div id="af-variations-list">
+      ${(a.variacoes || []).length ? a.variacoes.map(variationListItemHtml).join('') : '<div class="activity-detail-empty">Nenhuma variação cadastrada ainda.</div>'}
+    </div>
+    <button type="button" id="af-add-variation-btn" class="btn-neutral-sm">+ Nova variação</button>
+    <div id="af-variation-editor" class="variation-editor hidden"></div>
+  `;
+  document.getElementById('af-add-variation-btn').addEventListener('click', () => openVariationEditor(null));
+  container.querySelectorAll('.var-edit-btn').forEach(btn => btn.addEventListener('click', () => {
+    const v = (a.variacoes || []).find(x => x.id === btn.dataset.id);
+    if (v) openVariationEditor(v);
+  }));
+  container.querySelectorAll('.var-remove-btn').forEach(btn => btn.addEventListener('click', () => removeVariation(a, btn.dataset.id)));
+  if (activityVariationDraft) renderVariationEditor();
+}
+
+// ---------- Etapa 5: Planejamento ----------
+function checklistTaskRowHtml(t) {
+  const antecedencias = [
+    t.antecedenciaMiniDias != null ? `mín ${t.antecedenciaMiniDias}d` : '',
+    t.antecedenciaRecDias != null ? `rec ${t.antecedenciaRecDias}d` : '',
+    t.antecedenciaMaxDias != null ? `máx ${t.antecedenciaMaxDias}d` : '',
+  ].filter(Boolean).join(' · ');
+  return `
+  <div class="checklist-task-row${t.completed ? ' completed' : ''}" draggable="true" data-id="${t.id}">
+    <span class="checklist-drag-handle" title="Arraste para reordenar">⠿</span>
+    <input type="checkbox" class="checklist-chk-done" data-id="${t.id}" ${t.completed ? 'checked' : ''}>
+    <button type="button" class="checklist-task-name" data-id="${t.id}">${escapeHtml(t.name)}</button>
+    ${antecedencias ? `<span class="checklist-task-antecedencias">${antecedencias}</span>` : ''}
+    <button type="button" class="checklist-task-remove" data-id="${t.id}" title="Remover">×</button>
+  </div>`;
+}
+
+function linkRowHtml(l, i) {
+  return `
+  <div class="activity-link-row" data-index="${i}">
+    <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.titulo || l.url)}</a>
+    <button type="button" class="af-link-remove" data-index="${i}" title="Remover">×</button>
+  </div>`;
+}
+
+function getDragAfterChecklistRow(container, y) {
+  const els = [...container.querySelectorAll('.checklist-task-row:not(.dragging)')];
+  return els.reduce((closest, el) => {
+    const box = el.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: el };
+    return closest;
+  }, { offset: -Infinity, element: null }).element;
+}
+
+function renderActivityFormStep5(a) {
+  const tasks = a.checklistTasks || [];
+  const done = tasks.filter(t => t.completed).length;
+  const container = document.getElementById('activityFormStep5');
+  container.innerHTML = `
+    <label>Checklist de planejamento</label>
+    ${tasks.length ? `<div class="activity-checklist-progress">${done} de ${tasks.length} itens concluídos</div>` : ''}
+    <div id="af-checklist-list" class="activity-checklist-list">
+      ${tasks.map(checklistTaskRowHtml).join('')}
+    </div>
+    <form id="af-add-checklist-form" class="checklist-add-form">
+      <input type="text" id="af-checklist-name" placeholder="Nova tarefa do checklist" required>
+      <input type="number" id="af-checklist-mini" placeholder="Mín (dias)" min="0">
+      <input type="number" id="af-checklist-rec" placeholder="Rec (dias)" min="0">
+      <input type="number" id="af-checklist-max" placeholder="Máx (dias)" min="0">
+      <button type="submit">Adicionar</button>
+    </form>
+    <label>Notas
+      <textarea id="af-notas" rows="3">${escapeHtml(a.notas || '')}</textarea>
+    </label>
+    <label>Links úteis</label>
+    <div id="af-links-list">${(a.links || []).map(linkRowHtml).join('')}</div>
+    <form id="af-add-link-form" class="checklist-add-form">
+      <input type="url" id="af-link-url" placeholder="https://" required>
+      <input type="text" id="af-link-titulo" placeholder="Título (opcional)">
+      <button type="submit">Adicionar link</button>
+    </form>
+  `;
+
+  // Handlers por propriedade (não addEventListener): #activityFormStep5 é um container
+  // persistente entre re-renders desta função — evita duplicar bindings a cada chamada.
+  container.onsubmit = e => {
+    e.preventDefault();
+    if (e.target.id === 'af-add-checklist-form') {
+      const name = document.getElementById('af-checklist-name').value.trim();
+      if (!name) return;
+      const mini = document.getElementById('af-checklist-mini').value;
+      const rec = document.getElementById('af-checklist-rec').value;
+      const max = document.getElementById('af-checklist-max').value;
+      patchActivity(a, x => {
+        x.checklistTasks = x.checklistTasks || [];
+        const newTask = {
+          id: uid(), name, date: null, deliveryDate: null, link: '', duration: 0,
+          priority: null, urgent: false, urgentRank: 0,
+          delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
+          fieldValues: {}, team: [], boardId: null, activityId: a.id,
+          antecedenciaMiniDias: mini === '' ? null : Number(mini),
+          antecedenciaRecDias: rec === '' ? null : Number(rec),
+          antecedenciaMaxDias: max === '' ? null : Number(max),
+        };
+        // Atividade já promovida ao board: item novo é promovido imediatamente, senão
+        // ficaria com boardId/date nulos para sempre (promoteChecklistToBoard só roda
+        // uma vez, na transição de status para 'planejada').
+        if (x.status === 'planejada' && x.boardDestinoId && x.dataInicio) {
+          const date = computeChecklistTaskDate(newTask, x.dataInicio);
+          newTask.boardId = x.boardDestinoId;
+          newTask.date = date;
+          newTask.deliveryDate = date;
+        }
+        x.checklistTasks.push(newTask);
+      });
+      render(); // atualiza o board caso o item novo já tenha sido promovido acima
+      renderActivityFormStep5(a);
+      return;
+    }
+    if (e.target.id === 'af-add-link-form') {
+      const url = document.getElementById('af-link-url').value.trim();
+      if (!url) return;
+      const titulo = document.getElementById('af-link-titulo').value.trim();
+      patchActivity(a, x => { x.links = x.links || []; x.links.push({ url, titulo }); });
+      renderActivityFormStep5(a);
+      return;
+    }
+  };
+
+  container.onclick = e => {
+    const nameBtn = e.target.closest('.checklist-task-name');
+    if (nameBtn) { openModal(nameBtn.dataset.id); return; } // reaproveita o modal do board (fe-13)
+    const rmBtn = e.target.closest('.checklist-task-remove');
+    if (rmBtn) {
+      patchActivity(a, x => { x.checklistTasks = (x.checklistTasks || []).filter(t => t.id !== rmBtn.dataset.id); });
+      renderActivityFormStep5(a);
+      return;
+    }
+    const linkRm = e.target.closest('.af-link-remove');
+    if (linkRm) {
+      const idx = Number(linkRm.dataset.index);
+      patchActivity(a, x => { x.links.splice(idx, 1); });
+      renderActivityFormStep5(a);
+      return;
+    }
+  };
+
+  container.onchange = e => {
+    if (e.target.classList.contains('checklist-chk-done')) {
+      const t = (a.checklistTasks || []).find(x => x.id === e.target.dataset.id);
+      if (t) {
+        setCompleted(t, e.target.checked, t.boardId ? boards.find(b => b.id === t.boardId) : null);
+        patchActivity(a, () => {});
+        renderActivityFormStep5(a);
+      }
+      return;
+    }
+  };
+  container.oninput = e => {
+    if (e.target.id === 'af-notas') patchActivity(a, x => { x.notas = e.target.value; });
+  };
+
+  // Drag-and-drop para reordenar o checklist — mesmo padrão de getDragAfterElement/finalizeOrder
+  // já usado no board, adaptado para a lista de checklist.
+  container.ondragstart = e => {
+    const row = e.target.closest('.checklist-task-row');
+    if (!row) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', row.dataset.id);
+    setTimeout(() => row.classList.add('dragging'), 0);
+  };
+  container.ondragend = e => {
+    const row = e.target.closest('.checklist-task-row');
+    if (row) row.classList.remove('dragging');
+  };
+  container.ondragover = e => {
+    const list = document.getElementById('af-checklist-list');
+    if (!list) return;
+    e.preventDefault();
+    const dragging = list.querySelector('.dragging');
+    if (!dragging) return;
+    const after = getDragAfterChecklistRow(list, e.clientY);
+    if (after == null) list.appendChild(dragging);
+    else list.insertBefore(dragging, after);
+  };
+  container.ondrop = e => {
+    const list = document.getElementById('af-checklist-list');
+    if (!list) return;
+    e.preventDefault();
+    const ids = [...list.querySelectorAll('.checklist-task-row')].map(r => r.dataset.id);
+    patchActivity(a, x => {
+      const byId = new Map((x.checklistTasks || []).map(t => [t.id, t]));
+      x.checklistTasks = ids.map(id => byId.get(id)).filter(Boolean);
+    });
+    renderActivityFormStep5(a);
+  };
+}
+
+// ---------- Máquina de estados ----------
+function activityMeetsQueroFazerConditions(a) {
+  const hasModalidade = (a.modalidadesDuracao || []).length > 0;
+  const hasCompleteCostRange = PERFIS_CUSTO_TIPOS.some(tipo => {
+    const perfil = (a.perfisCusto || {})[tipo];
+    const baixa = perfil && perfil.baixa_temporada;
+    return baixa && baixa[0] != null && baixa[1] != null;
+  });
+  return hasModalidade && hasCompleteCostRange;
+}
+
+// Avança automaticamente rascunho → quero_fazer assim que as condições mínimas forem atendidas
+// (ao menos 1 modalidade de duração + range completo de ao menos 1 perfil de custo em baixa
+// temporada). Chamada após cada auto-save (patchActivity). Nunca reverte quero_fazer → rascunho
+// manualmente — não existe nenhum controle de UI que force esse retorno; esta função só avança.
+function maybeAdvanceActivityStatus(a) {
+  if (a.status === 'rascunho' && activityMeetsQueroFazerConditions(a)) {
+    a.status = 'quero_fazer';
+  }
+}
+
+// ---------- promoção do checklist ao board (status → planejada) ----------
+function fmtDateBRWithDow(dateKey) {
+  const d = new Date(dateKey + 'T00:00:00');
+  const dowAbbrev = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()];
+  return `${fmtDateBR(dateKey)} (${dowAbbrev})`;
+}
+
+// Calcula a data de cada tarefa do checklist (data_inicio − antecedenciaMiniDias), com fallback
+// para hoje quando o resultado cair no passado. Usada tanto no preview do dialog quanto na
+// promoção de fato — mantém as duas em sincronia (mesma fórmula).
+// Calcula a data de uma tarefa de checklist a partir da data de início da atividade e da
+// antecedência mínima, com fallback para hoje se a data calculada cair no passado.
+function computeChecklistTaskDate(task, dataInicio) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const inicio = new Date(dataInicio + 'T00:00:00');
+  if (task.antecedenciaMiniDias == null) return null;
+  const d = new Date(inicio);
+  d.setDate(d.getDate() - task.antecedenciaMiniDias);
+  return d < today ? toKey(today) : toKey(d);
+}
+
+function computeChecklistPromotionPreview(a, dataInicio) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return (a.checklistTasks || []).map(t => {
+    const taskDate = computeChecklistTaskDate(t, dataInicio);
+    return { task: t, date: taskDate, isToday: taskDate === toKey(today) };
+  });
+}
+
+function renderActivityPromotePreview(a) {
+  const dataInicio = document.getElementById('activityPromoteDate').value;
+  const el = document.getElementById('activityPromotePreview');
+  if (!dataInicio) { el.innerHTML = ''; return; }
+  const preview = computeChecklistPromotionPreview(a, dataInicio);
+  el.innerHTML = preview.map(p => {
+    const label = p.date == null ? 'Sem data' : (p.isToday ? 'Hoje' : fmtDateBRWithDow(p.date));
+    return `<div class="activity-promote-preview-row"><span>${escapeHtml(p.task.name)}</span><span>→ ${label}</span></div>`;
+  }).join('');
+}
+
+function updateActivityPromoteConfirmState() {
+  const dataInicio = document.getElementById('activityPromoteDate').value;
+  const boardId = document.getElementById('activityPromoteBoard').value;
+  document.getElementById('activityPromoteConfirmBtn').disabled = !dataInicio || !boardId;
+}
+
+function openActivityPromote(id) {
+  const a = findActivity(id);
+  if (!a || !(a.checklistTasks || []).length) return; // guarda extra: botão já deveria estar disabled
+  activityDetailId = id;
+  const tomorrow = toKey(addDays(new Date(), 1));
+  const dateInput = document.getElementById('activityPromoteDate');
+  dateInput.value = tomorrow;
+  dateInput.min = tomorrow;
+  const boardSel = document.getElementById('activityPromoteBoard');
+  boardSel.innerHTML = boards.map(b => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+  renderActivityPromotePreview(a);
+  updateActivityPromoteConfirmState();
+  document.getElementById('activityPromoteOverlay').classList.remove('hidden');
+}
+function closeActivityPromote() {
+  document.getElementById('activityPromoteOverlay').classList.add('hidden');
+}
+
+// Promove o checklist ao board: calcula a data de cada tarefa, define boardId/date e muda o
+// status da atividade para 'planejada'. Fonte de verdade única em activity.checklistTasks — o
+// board passa a exibir essas tarefas via getTasksForDateAndBoard() (fe-14), sem duplicação.
+function promoteChecklistToBoard(activity, boardId, dataInicio) {
+  const preview = computeChecklistPromotionPreview(activity, dataInicio);
+  preview.forEach(({ task, date }) => {
+    task.boardId = boardId;
+    task.date = date;
+    task.deliveryDate = date;
+  });
+  activity.status = 'planejada';
+  activity.dataInicio = dataInicio;
+  activity.boardDestinoId = boardId;
+  activity.updatedAt = Date.now();
+  save();
+  render();
+  renderActivities();
+}
+
+// Cancela o planejamento: tarefas do checklist voltam ao estado pré-promoção (boardId/date
+// nulos, completed zerado) e o status volta para quero_fazer. Nada é deletado da gestão de
+// tarefas — só desassocia do board.
+function cancelActivityPlan(activity) {
+  (activity.checklistTasks || []).forEach(task => {
+    task.boardId = null;
+    task.date = null;
+    task.deliveryDate = null;
+    task.completed = false; // progresso zerado intencionalmente — ver spec "Cancelamento do plano"
+  });
+  activity.status = 'quero_fazer';
+  activity.dataInicio = null;
+  activity.boardDestinoId = null;
+  activity.updatedAt = Date.now();
+  save();
+  render();
+  renderActivities();
+}
+
+document.getElementById('activityPromoteDate').addEventListener('change', () => {
+  const a = findActivity(activityDetailId);
+  if (a) renderActivityPromotePreview(a);
+  updateActivityPromoteConfirmState();
+});
+document.getElementById('activityPromoteBoard').addEventListener('change', updateActivityPromoteConfirmState);
+document.getElementById('closeActivityPromote').addEventListener('click', closeActivityPromote);
+document.getElementById('activityPromoteCancelBtn').addEventListener('click', closeActivityPromote);
+document.getElementById('activityPromoteOverlay').addEventListener('click', e => { if (e.target.id === 'activityPromoteOverlay') closeActivityPromote(); });
+document.getElementById('activityPromoteConfirmBtn').addEventListener('click', () => {
+  const a = findActivity(activityDetailId);
+  if (!a) return;
+  const dataInicio = document.getElementById('activityPromoteDate').value;
+  const boardId = document.getElementById('activityPromoteBoard').value;
+  if (!dataInicio || !boardId) return;
+  promoteChecklistToBoard(a, boardId, dataInicio);
+  closeActivityPromote();
+  openActivityDetail(a.id);
+});
+
+// ---------- registro de realização ----------
+let editingRealizationId = null;
+
+function starsInputHtml(rating) {
+  return [1, 2, 3, 4, 5].map(n => `<button type="button" class="realization-star ${n <= rating ? 'filled' : ''}" data-star="${n}">★</button>`).join('');
+}
+
+function openActivityRealization(activityId, realizationId) {
+  const a = findActivity(activityId);
+  if (!a) return;
+  activityDetailId = activityId;
+  editingRealizationId = realizationId || null;
+  const r = realizationId ? (a.realizacoes || []).find(x => x.id === realizationId) : null;
+  const today = toKey(new Date());
+  document.getElementById('activityRealizationFields').innerHTML = `
+    <label>Data realizada
+      <input type="date" id="real-data" max="${today}" value="${r ? r.data : today}">
+    </label>
+    <label>Gasto total (R$)
+      <input type="number" min="0" id="real-gasto" value="${r && r.gasto_total != null ? r.gasto_total : ''}">
+    </label>
+    <label>Perfil vivido
+      <select id="real-perfil">
+        <option value="">Não definido</option>
+        ${PERFIS_CUSTO_TIPOS.map(tipo => `<option value="${tipo}" ${r && r.perfil_vivido === tipo ? 'selected' : ''}>${PERFIS_CUSTO_LABELS[tipo]}</option>`).join('')}
+      </select>
+    </label>
+    <label>Variação vivida
+      <select id="real-variacao">
+        <option value="">Nenhuma / não se aplica</option>
+        ${(a.variacoes || []).map(v => `<option value="${v.id}" ${r && r.variacao_vivida_id === v.id ? 'selected' : ''}>${escapeHtml(v.nome)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Com quem foi
+      <input type="text" id="real-com-quem" value="${escapeHtml(r ? (r.com_quem || '') : '')}">
+    </label>
+    <label>Avaliação</label>
+    <div id="real-stars" class="realization-stars" data-rating="${r ? (r.avaliacao || 0) : 0}">${starsInputHtml(r ? (r.avaliacao || 0) : 0)}</div>
+    <label>Nota
+      <textarea id="real-nota" rows="2">${escapeHtml(r ? (r.nota || '') : '')}</textarea>
+    </label>
+  `;
+  document.getElementById('activityRealizationOverlay').classList.remove('hidden');
+}
+function closeActivityRealization() {
+  document.getElementById('activityRealizationOverlay').classList.add('hidden');
+  editingRealizationId = null;
+}
+
+document.getElementById('activityRealizationFields').addEventListener('click', e => {
+  const star = e.target.closest('.realization-star');
+  if (!star) return;
+  const n = Number(star.dataset.star);
+  const starsEl = document.getElementById('real-stars');
+  starsEl.dataset.rating = String(n);
+  starsEl.innerHTML = starsInputHtml(n);
+});
+
+// Registra (ou edita) uma realização: adiciona/atualiza `activity.realizacoes`.
+// Se for uma nova realização (não edição), muda o status para 'realizada' e pergunta
+// se o usuário quer manter a atividade em Quero Fazer para refazê-la no futuro.
+let pendingKeepActivityId = null;
+function confirmActivityRealization() {
+  const a = findActivity(activityDetailId);
+  if (!a) return;
+  const data = document.getElementById('real-data').value;
+  const today = toKey(new Date());
+  if (!data || data > today) { alert('A data realizada deve ser hoje ou uma data passada.'); return; }
+  const gastoRaw = document.getElementById('real-gasto').value;
+  const isNew = !editingRealizationId;
+  const registro = {
+    id: editingRealizationId || uid(),
+    data,
+    gasto_total: gastoRaw === '' ? null : Number(gastoRaw),
+    perfil_vivido: document.getElementById('real-perfil').value || null,
+    variacao_vivida_id: document.getElementById('real-variacao').value || null,
+    com_quem: document.getElementById('real-com-quem').value.trim(),
+    avaliacao: Number(document.getElementById('real-stars').dataset.rating) || 0,
+    nota: document.getElementById('real-nota').value.trim(),
+  };
+  a.realizacoes = a.realizacoes || [];
+  const idx = a.realizacoes.findIndex(x => x.id === registro.id);
+  if (idx >= 0) a.realizacoes[idx] = registro; else a.realizacoes.push(registro);
+
+  if (isNew) {
+    // Nova realização: marca como realizada e pergunta se quer manter em Quero Fazer
+    a.status = 'realizada';
+    a.updatedAt = Date.now();
+    save();
+    closeActivityRealization();
+    renderActivities();
+    pendingKeepActivityId = a.id;
+    const nameEl = document.getElementById('activityKeepQueroFazerName');
+    if (nameEl) nameEl.textContent = a.name;
+    document.getElementById('activityKeepQueroFazerOverlay').classList.remove('hidden');
+  } else {
+    // Edição de realização existente: só salva e volta para o detalhe
+    a.updatedAt = Date.now();
+    save();
+    closeActivityRealization();
+    openActivityDetail(a.id);
+    renderActivities();
+  }
+}
+
+document.getElementById('closeActivityRealization').addEventListener('click', closeActivityRealization);
+document.getElementById('activityRealizationCancelBtn').addEventListener('click', closeActivityRealization);
+document.getElementById('activityRealizationOverlay').addEventListener('click', e => { if (e.target.id === 'activityRealizationOverlay') closeActivityRealization(); });
+document.getElementById('activityRealizationConfirmBtn').addEventListener('click', confirmActivityRealization);
+
+// ---------- diálogo "Manter em Quero Fazer?" ----------
+document.getElementById('activityKeepYesBtn').addEventListener('click', () => {
+  document.getElementById('activityKeepQueroFazerOverlay').classList.add('hidden');
+  const a = findActivity(pendingKeepActivityId);
+  if (a) {
+    // Mantém em Quero Fazer: duplica (atividade volta ao ciclo) — status volta para quero_fazer,
+    // a realização já foi registrada em a.realizacoes e continua visível no histórico.
+    a.status = 'quero_fazer';
+    a.variacaoEscolhidaId = null;
+    a.dataInicio = null;
+    a.updatedAt = Date.now();
+    save();
+    renderActivities();
+    openActivityDetail(a.id);
+  }
+  pendingKeepActivityId = null;
+});
+document.getElementById('activityKeepNoBtn').addEventListener('click', () => {
+  document.getElementById('activityKeepQueroFazerOverlay').classList.add('hidden');
+  const a = findActivity(pendingKeepActivityId);
+  if (a) openActivityDetail(a.id);
+  pendingKeepActivityId = null;
+});
+
+// ---------- toggle de visualização (Categoria / Status) ----------
+document.getElementById('viewByCategoryBtn').addEventListener('click', () => {
+  activityDisplayView = 'category';
+  document.getElementById('viewByCategoryBtn').classList.add('active');
+  document.getElementById('viewByStatusBtn').classList.remove('active');
+  renderActivities();
+});
+document.getElementById('viewByStatusBtn').addEventListener('click', () => {
+  activityDisplayView = 'status';
+  document.getElementById('viewByStatusBtn').classList.add('active');
+  document.getElementById('viewByCategoryBtn').classList.remove('active');
+  renderActivities();
+});
+
+// ---------- exclusão de atividade ----------
+// Bloqueada quando já houve ao menos 1 realização (ver Fluxo 7 da spec). O delete de `tasks`
+// órfãs (checklist da atividade) acontece no servidor via FK `activity_id ... ON DELETE CASCADE`
+// quando `saveState()` remove a atividade que não veio mais no payload.
+function deleteActivity(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  if ((a.realizacoes || []).length >= 1) {
+    alert('Esta atividade já foi realizada e não pode ser excluída.');
+    return;
+  }
+  const taskCount = (a.checklistTasks || []).length;
+  const msg = `Excluir "${a.name}" vai remover a atividade${taskCount ? ` e ${taskCount === 1 ? 'sua tarefa' : `suas ${taskCount} tarefas`} de checklist` : ''} permanentemente. Esta ação não pode ser desfeita. Deseja continuar?`;
+  if (!confirm(msg)) return;
+  activities = activities.filter(x => x.id !== id);
+  save();
+  closeActivityDetail();
+  renderActivities();
+}
+
+// ---------- importação de JSON (Fluxo 3) ----------
+// Validação em duas camadas: (1) campos obrigatórios presentes; (2) tipos corretos por campo,
+// incluindo a estrutura de perfis_custo, variacoes e checklist_sugerido.
+function validateActivityImportJson(json) {
+  const errors = [];
+  if (!json || typeof json !== 'object' || Array.isArray(json)) {
+    return { valid: false, errors: [{ field: 'JSON', message: 'O conteúdo colado não é um objeto JSON válido.' }] };
+  }
+  if (!json.nome || typeof json.nome !== 'string' || !json.nome.trim()) {
+    errors.push({ field: 'nome', message: 'Campo obrigatório ausente ou inválido (deve ser texto).' });
+  }
+  if (!json.categoria || typeof json.categoria !== 'string' || !json.categoria.trim()) {
+    errors.push({ field: 'categoria', message: 'Campo obrigatório ausente ou inválido (deve ser texto).' });
+  }
+
+  const arrayFields = ['vibes', 'modalidades_duracao', 'meios_transporte', 'condicao_climatica_ideal', 'epoca_ideal', 'perfil_grupo', 'variacoes', 'checklist_sugerido'];
+  arrayFields.forEach(f => {
+    if (json[f] != null && !Array.isArray(json[f])) errors.push({ field: f, message: 'Deve ser uma lista (array).' });
+  });
+
+  if (json.perfis_custo != null) {
+    if (typeof json.perfis_custo !== 'object' || Array.isArray(json.perfis_custo)) {
+      errors.push({ field: 'perfis_custo', message: 'Deve ser um objeto com as chaves economico/padrao/conforto.' });
+    } else {
+      PERFIS_CUSTO_TIPOS.forEach(tipo => {
+        const p = json.perfis_custo[tipo];
+        if (p == null) return;
+        ['baixa_temporada', 'alta_temporada'].forEach(temp => {
+          const range = p[temp];
+          if (range != null && (!Array.isArray(range) || range.length !== 2)) {
+            errors.push({ field: `perfis_custo.${tipo}.${temp}`, message: 'Deve ser um array [min, max].' });
+          }
+        });
+      });
+    }
+  }
+
+  (json.variacoes || []).forEach((v, i) => {
+    if (!v || typeof v !== 'object') { errors.push({ field: `variacoes[${i}]`, message: 'Deve ser um objeto.' }); return; }
+    if (!v.nome) errors.push({ field: `variacoes[${i}].nome`, message: 'Nome da variação é obrigatório.' });
+    if (v.epocas_cobertas != null && !Array.isArray(v.epocas_cobertas)) errors.push({ field: `variacoes[${i}].epocas_cobertas`, message: 'Deve ser uma lista.' });
+  });
+
+  (json.checklist_sugerido || []).forEach((c, i) => {
+    if (!c || typeof c !== 'object') { errors.push({ field: `checklist_sugerido[${i}]`, message: 'Deve ser um objeto.' }); return; }
+    if (!c.name) errors.push({ field: `checklist_sugerido[${i}].name`, message: 'Nome da tarefa é obrigatório.' });
+    ['antecedencia_minima_dias', 'antecedencia_max_dias', 'antecedencia_rec_dias'].forEach(f => {
+      if (c[f] != null && typeof c[f] !== 'number') errors.push({ field: `checklist_sugerido[${i}].${f}`, message: 'Deve ser número ou null.' });
+    });
+  });
+
+  return { valid: errors.length === 0, errors };
+}
+
+// Converte o JSON do prompt de refinamento (snake_case) em um objeto Activity completo
+// (camelCase — ver decisão de nomenclatura em "Registro de desenvolvimento"). Foto de capa não é
+// importável via JSON (campo visual, preenchido só pela Etapa 1 do formulário).
+function importJsonToActivity(json) {
+  const now = Date.now();
+  const perfisCusto = {};
+  PERFIS_CUSTO_TIPOS.forEach(tipo => {
+    const p = json.perfis_custo && json.perfis_custo[tipo];
+    if (p) perfisCusto[tipo] = { baixa_temporada: p.baixa_temporada || null, alta_temporada: p.alta_temporada || null };
+  });
+  const variacoes = (json.variacoes || []).map(v => {
+    const variation = {
+      id: uid(),
+      nome: v.nome || '',
+      epocasCobertas: v.epocas_cobertas || [],
+      incluiFeriadosProlongados: !!v.inclui_feriados_prolongados,
+    };
+    if (v.vibes && v.vibes.length) variation.vibes = v.vibes;
+    if (v.condicao_climatica_ideal && v.condicao_climatica_ideal.length) variation.condicaoClimaticaIdeal = v.condicao_climatica_ideal;
+    if (v.temperatura_minima_celsius != null) variation.temperaturaMiniCelsius = v.temperatura_minima_celsius;
+    if (v.antecedencia_minima_dias != null) variation.antecedenciaMiniDias = v.antecedencia_minima_dias;
+    if (v.decisao_ultima_hora != null) variation.decisaoUltimaHora = v.decisao_ultima_hora;
+    if (v.perfis_custo && Object.keys(v.perfis_custo).length) variation.perfisCusto = v.perfis_custo;
+    if (v.modalidades_duracao && v.modalidades_duracao.length) variation.modalidadesDuracao = v.modalidades_duracao;
+    if (v.meios_transporte && v.meios_transporte.length) variation.meiosTransporte = v.meios_transporte;
+    if (v.perfil_grupo && v.perfil_grupo.length) variation.perfilGrupo = v.perfil_grupo;
+    if (v.evitar_alta_temporada != null) variation.evitarAltaTemporada = v.evitar_alta_temporada;
+    if (v.notas) variation.notas = v.notas;
+    return variation;
+  });
+  const activityId = uid();
+  const checklistTasks = (json.checklist_sugerido || []).map(c => ({
+    id: uid(), name: c.name, date: null, deliveryDate: null, link: '', duration: 0,
+    priority: null, urgent: false, urgentRank: 0,
+    delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: now,
+    fieldValues: {}, team: [], boardId: null, activityId,
+    antecedenciaMiniDias: c.antecedencia_minima_dias ?? null,
+    antecedenciaMaxDias: c.antecedencia_max_dias ?? null,
+    antecedenciaRecDias: c.antecedencia_rec_dias ?? null,
+  }));
+  const activity = {
+    id: activityId,
+    name: json.nome,
+    categoria: json.categoria,
+    status: 'rascunho',
+    descricao: json.descricao ?? null,
+    fotoCapa: null,
+    vibes: json.vibes || [],
+    modalidadesDuracao: json.modalidades_duracao || [],
+    meiosTransporte: json.meios_transporte || [],
+    nivelPlanejamento: json.nivel_planejamento || null,
+    antecedenciaMiniDias: json.antecedencia_minima_dias ?? null,
+    decisaoUltimaHora: !!json.decisao_ultima_hora,
+    localidade: null,
+    distanciaSP: json.distancia_sp || null,
+    condicaoClimaticaIdeal: json.condicao_climatica_ideal || [],
+    temperaturaMiniCelsius: json.temperatura_minima_ideal_celsius ?? null,
+    epocaIdeal: json.epoca_ideal || [],
+    perfilGrupo: json.perfil_grupo || [],
+    tamanhoGrupo: json.tamanho_grupo || null,
+    condicionamentoFisico: json.condicionamento_fisico || null,
+    evitarAltaTemporada: !!json.evitar_alta_temporada,
+    repetivel: json.repetivel !== false,
+    petFriendly: json.pet_friendly ?? null,
+    perfisCusto,
+    variacoes,
+    notas: null,
+    links: [],
+    dataInicio: null,
+    boardDestinoId: null,
+    realizacoes: [],
+    checklistTasks,
+    createdAt: now,
+    updatedAt: now,
+  };
+  // Entra com o status correto (quero_fazer ou rascunho) já a partir das condições mínimas
+  // presentes no JSON — mesma regra da máquina de estados (fe-33).
+  activity.status = activityMeetsQueroFazerConditions(activity) ? 'quero_fazer' : 'rascunho';
+  return activity;
+}
+
+let activityImportParsed = null;
+
+function renderActivityImportErrors(errors) {
+  const el = document.getElementById('activityImportErrors');
+  if (!errors.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `<ul>${errors.map(e => `<li><strong>${escapeHtml(e.field)}</strong>: ${escapeHtml(e.message)}</li>`).join('')}</ul>`;
+}
+
+function renderActivityImportPreview(activity) {
+  const el = document.getElementById('activityImportPreview');
+  if (!activity) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <h4>Preview (revise e edite antes de confirmar)</h4>
+    <label>Nome <input type="text" id="import-preview-name" value="${escapeHtml(activity.name)}"></label>
+    <label>Categoria <input type="text" id="import-preview-categoria" value="${escapeHtml(activity.categoria)}"></label>
+    ${detailRow('Status inicial', ACTIVITY_STATUS_LABELS[activity.status])}
+    ${detailRow('Vibe', activity.vibes)}
+    ${detailRow('Modalidades de duração', activity.modalidadesDuracao)}
+    ${detailRow('Variações sazonais', activity.variacoes.map(v => v.nome))}
+    ${detailRow('Checklist sugerido', activity.checklistTasks.map(t => t.name))}
+  `;
+}
+
+function openActivityImport() {
+  document.getElementById('activityImportTextarea').value = '';
+  activityImportParsed = null;
+  renderActivityImportErrors([]);
+  renderActivityImportPreview(null);
+  document.getElementById('activityImportConfirmBtn').disabled = true;
+  document.getElementById('activityImportOverlay').classList.remove('hidden');
+}
+function closeActivityImport() {
+  document.getElementById('activityImportOverlay').classList.add('hidden');
+}
+
+function validateActivityImportFromTextarea() {
+  const raw = document.getElementById('activityImportTextarea').value.trim();
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch (err) {
+    renderActivityImportErrors([{ field: 'JSON', message: 'JSON inválido: ' + err.message }]);
+    renderActivityImportPreview(null);
+    document.getElementById('activityImportConfirmBtn').disabled = true;
+    return;
+  }
+  const { valid, errors } = validateActivityImportJson(json);
+  renderActivityImportErrors(errors);
+  if (!valid) {
+    activityImportParsed = null;
+    renderActivityImportPreview(null);
+    document.getElementById('activityImportConfirmBtn').disabled = true;
+    return;
+  }
+  activityImportParsed = importJsonToActivity(json);
+  renderActivityImportPreview(activityImportParsed);
+  document.getElementById('activityImportConfirmBtn').disabled = false;
+}
+
+function confirmActivityImport() {
+  if (!activityImportParsed) return;
+  const nameInput = document.getElementById('import-preview-name');
+  const categoriaInput = document.getElementById('import-preview-categoria');
+  if (nameInput && nameInput.value.trim()) activityImportParsed.name = nameInput.value.trim();
+  if (categoriaInput && categoriaInput.value.trim()) activityImportParsed.categoria = categoriaInput.value.trim();
+  activities.push(activityImportParsed);
+  save();
+  activityImportParsed = null;
+  closeActivityImport();
+  renderActivities();
+}
+
+document.getElementById('activityImportBtn').addEventListener('click', openActivityImport);
+document.getElementById('closeActivityImport').addEventListener('click', closeActivityImport);
+document.getElementById('activityImportCancelBtn').addEventListener('click', closeActivityImport);
+document.getElementById('activityImportOverlay').addEventListener('click', e => { if (e.target.id === 'activityImportOverlay') closeActivityImport(); });
+document.getElementById('activityImportValidateBtn').addEventListener('click', validateActivityImportFromTextarea);
+document.getElementById('activityImportConfirmBtn').addEventListener('click', confirmActivityImport);
+
+// ---------- painel de filtros ----------
+function renderActivityFiltersPanel() {
+  const panel = document.getElementById('activityFiltersPanel');
+  const categorias = [...new Set(activities.map(a => a.categoria))];
+  panel.innerHTML = `
+    <label>Categoria
+      <select id="filter-categoria">
+        <option value="">Todas</option>
+        ${categorias.map(c => `<option value="${escapeHtml(c)}" ${activityFilters.categoria === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Vibe
+      <select id="filter-vibe">
+        <option value="">Todas</option>
+        ${VIBES.map(v => `<option value="${escapeHtml(v)}" ${activityFilters.vibe === v ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Status
+      <select id="filter-status">
+        <option value="">Todos</option>
+        ${Object.keys(ACTIVITY_STATUS_LABELS).map(s => `<option value="${s}" ${activityFilters.status === s ? 'selected' : ''}>${ACTIVITY_STATUS_LABELS[s]}</option>`).join('')}
+      </select>
+    </label>
+    <label>Modalidade de duração
+      <select id="filter-modalidade">
+        <option value="">Todas</option>
+        ${MODALIDADES_DURACAO.map(m => `<option value="${escapeHtml(m)}" ${activityFilters.modalidade === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+      </select>
+    </label>
+    <label>Custo máx. (baixa temporada, R$/pessoa)
+      <input type="number" id="filter-custo-max" min="0" value="${activityFilters.custoMax ?? ''}">
+    </label>
+    <label>Época do ano
+      <select id="filter-epoca">
+        <option value="">Todas</option>
+        ${EPOCAS.map(e => `<option value="${escapeHtml(e)}" ${activityFilters.epoca === e ? 'selected' : ''}>${escapeHtml(e)}</option>`).join('')}
+      </select>
+    </label>
+    <button type="button" id="filter-clear-btn" class="btn-neutral-sm">Limpar filtros</button>
+  `;
+
+  // Handlers por propriedade: o painel persiste entre aberturas — evita duplicar bindings.
+  panel.onchange = e => {
+    if (e.target.id === 'filter-categoria') activityFilters.categoria = e.target.value || null;
+    else if (e.target.id === 'filter-vibe') activityFilters.vibe = e.target.value || null;
+    else if (e.target.id === 'filter-status') activityFilters.status = e.target.value || null;
+    else if (e.target.id === 'filter-modalidade') activityFilters.modalidade = e.target.value || null;
+    else if (e.target.id === 'filter-epoca') activityFilters.epoca = e.target.value || null;
+    else return;
+    renderActivities();
+  };
+  panel.oninput = e => {
+    if (e.target.id === 'filter-custo-max') {
+      activityFilters.custoMax = e.target.value === '' ? null : Number(e.target.value);
+      renderActivities();
+    }
+  };
+  panel.onclick = e => {
+    if (e.target.id === 'filter-clear-btn') {
+      activityFilters = { categoria: null, vibe: null, status: null, modalidade: null, custoMax: null, epoca: null };
+      renderActivityFiltersPanel();
+      renderActivities();
+    }
+  };
+}
+
+document.getElementById('activityFiltersBtn').addEventListener('click', () => {
+  const panel = document.getElementById('activityFiltersPanel');
+  const opening = panel.classList.contains('hidden');
+  if (opening) renderActivityFiltersPanel();
+  panel.classList.toggle('hidden');
+});
+
+// ---------- feriadosapi.com ----------
+// Nota: o endpoint exato de feriadosapi.com não está documentado na spec além de "gratuito, 60
+// req/min, feriados do estado de SP". A URL abaixo é a melhor tentativa com base no nome do
+// serviço; como o fetch tem fallback silencioso em qualquer erro (rede, 404, formato inesperado),
+// o app nunca quebra mesmo que o endpoint precise de ajuste — ver "Registro de desenvolvimento".
+async function fetchHolidays() {
+  if (holidaysCache !== null) return holidaysCache; // uma chamada por sessão (cache em memória)
+  try {
+    const year = new Date().getFullYear();
+    const res = await fetch(`https://feriadosapi.com/api/v1/feriados/SP/${year}`);
+    if (!res.ok) throw new Error('feriadosapi.com request failed');
+    const json = await res.json();
+    const list = Array.isArray(json) ? json : (json.feriados || json.holidays || []);
+    holidaysCache = list.map(h => ({ date: h.date || h.data, name: h.name || h.nome || '' })).filter(h => h.date);
+  } catch (err) {
+    console.error('Falha ao carregar feriados via feriadosapi.com:', err);
+    holidaysCache = [];
+  }
+  if (activityDetailId && !document.getElementById('activityDetailOverlay').classList.contains('hidden')) {
+    const a = findActivity(activityDetailId);
+    if (a) renderActivityDetailHolidays(a);
+  }
+  if (currentView === 'activities') renderActivities(); // atualiza chip de variação ativa por feriado prolongado
+  return holidaysCache;
+}
+
+const ACTIVITY_MODALIDADES_SIMPLES = ['Parada rápida', 'Meio período', 'Dia inteiro', 'Bate volta', 'Final de semana'];
+const ACTIVITY_MODALIDADES_PROLONGADAS = ['Feriado prolongado', 'Semana+'];
+
+// Feriados/períodos futuros compatíveis com as modalidades de duração da atividade: atividades
+// que só fazem sentido como feriado prolongado/viagem longa só veem os períodos de 3+ dias;
+// as demais veem qualquer feriado futuro (simples ou prolongado).
+function upcomingCompatibleHolidays(a) {
+  if (!holidaysCache || !holidaysCache.length) return [];
+  const today = toKey(new Date());
+  const modalidades = a.modalidadesDuracao || [];
+  const wantsProlonged = modalidades.some(m => ACTIVITY_MODALIDADES_PROLONGADAS.includes(m));
+  const wantsSimple = !modalidades.length || modalidades.some(m => ACTIVITY_MODALIDADES_SIMPLES.includes(m));
+  const results = [];
+  const periods = findProlongedHolidayPeriods(holidaysCache);
+  if (wantsProlonged || !modalidades.length) {
+    periods.filter(p => p.end >= today).forEach(p => results.push({ label: `${fmtDateBR(p.start)} – ${fmtDateBR(p.end)} (prolongado)`, start: p.start }));
+  }
+  if (wantsSimple) {
+    holidaysCache.filter(h => h.date >= today).forEach(h => results.push({ label: `${fmtDateBR(h.date)} · ${h.name}`, start: h.date }));
+  }
+  results.sort((x, y) => x.start.localeCompare(y.start));
+  return results.slice(0, 5);
+}
+
+function renderActivityDetailHolidays(a) {
+  const el = document.getElementById('activityDetailHolidays');
+  if (!el) return;
+  if (holidaysCache === null) { el.innerHTML = '<div class="activity-detail-empty">Carregando feriados...</div>'; return; }
+  if (!holidaysCache.length) { el.innerHTML = '<div class="activity-detail-empty">Não foi possível carregar feriados</div>'; return; }
+  const compat = upcomingCompatibleHolidays(a);
+  el.innerHTML = compat.length
+    ? `<ul class="activity-holidays-list">${compat.map(c => `<li>${escapeHtml(c.label)}</li>`).join('')}</ul>`
+    : '<div class="activity-detail-empty">Nenhum feriado compatível encontrado.</div>';
+}
 
 load();
