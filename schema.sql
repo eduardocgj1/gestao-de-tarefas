@@ -148,3 +148,46 @@ CREATE INDEX IF NOT EXISTS tasks_activity_id_idx     ON tasks(activity_id);
 CREATE INDEX IF NOT EXISTS activities_status_idx     ON activities(status);
 CREATE INDEX IF NOT EXISTS activities_categoria_idx  ON activities(categoria);
 CREATE INDEX IF NOT EXISTS activities_created_at_idx ON activities(created_at);
+
+-- ============================================================
+-- Feature: Finanças
+-- Ver docs/features/financas/spec.md
+-- ============================================================
+
+-- Categorias de gastos
+CREATE TABLE IF NOT EXISTS finance_categories (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  icon          TEXT NOT NULL DEFAULT '📦',
+  color         TEXT NOT NULL DEFAULT 'gray',
+  monthly_limit NUMERIC(12,2) DEFAULT NULL,
+  sort_order    INTEGER NOT NULL DEFAULT 0
+);
+
+-- Transações (receitas e despesas)
+CREATE TABLE IF NOT EXISTS finance_transactions (
+  id          TEXT PRIMARY KEY,
+  type        TEXT NOT NULL CHECK (type IN ('expense','income')),
+  nature      TEXT NOT NULL DEFAULT 'variable' CHECK (nature IN ('fixed','variable')),
+  description TEXT NOT NULL,
+  amount      NUMERIC(12,2) NOT NULL,
+  date        DATE NOT NULL,
+  category_id TEXT REFERENCES finance_categories(id) ON DELETE SET NULL
+);
+
+-- Compras planejadas
+CREATE TABLE IF NOT EXISTS finance_planned_purchases (
+  id             TEXT PRIMARY KEY,
+  name           TEXT NOT NULL,
+  description    TEXT,
+  target_amount  NUMERIC(12,2) NOT NULL DEFAULT 0,
+  saved_amount   NUMERIC(12,2) NOT NULL DEFAULT 0,
+  priority       TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('high','medium','low')),
+  category_label TEXT,
+  created_at     BIGINT
+);
+
+-- Índices
+CREATE INDEX IF NOT EXISTS fin_txn_date_idx    ON finance_transactions(date);
+CREATE INDEX IF NOT EXISTS fin_txn_type_idx    ON finance_transactions(type);
+CREATE INDEX IF NOT EXISTS fin_txn_cat_idx     ON finance_transactions(category_id);

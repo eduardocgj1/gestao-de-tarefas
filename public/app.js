@@ -497,6 +497,8 @@ function renderSidebar() {
   renderSidebarAddBoardArea();
   sidebarCalendarItemEl.classList.toggle('active', currentView === 'calendar');
   sidebarActivitiesItemEl.classList.toggle('active', currentView === 'activities');
+  const finItem = document.getElementById('sidebarFinanceItem');
+  if (finItem) finItem.classList.toggle('active', currentView === 'finance');
 }
 
 function renderSidebarAddBoardArea() {
@@ -573,24 +575,28 @@ function deleteBoard(id) {
 }
 
 function updateAppTitle() {
-  const titles = { calendar: 'Calendário', activities: 'Atividades' };
+  const titles = { calendar: 'Calendário', activities: 'Atividades', finance: 'Finanças' };
   document.getElementById('appTitle').textContent = titles[currentView] || (currentBoard() ? currentBoard().name : 'Tarefas 2026');
 }
 
-// ---------- view mode (board vs calendário vs atividades) ----------
+// ---------- view mode (board vs calendário vs atividades vs finanças) ----------
 function setView(view) {
   currentView = view;
-  const isCalendar = view === 'calendar';
+  const isCalendar   = view === 'calendar';
   const isActivities = view === 'activities';
-  const isBoard = view === 'board';
+  const isBoard      = view === 'board';
+  const isFinance    = view === 'finance';
   document.getElementById('board').classList.toggle('hidden', !isBoard);
   document.getElementById('calendarView').classList.toggle('hidden', !isCalendar);
   document.getElementById('activitiesView').classList.toggle('hidden', !isActivities);
+  document.getElementById('financeView').classList.toggle('hidden', !isFinance);
   document.getElementById('boardLegend').classList.toggle('hidden', !isCalendar);
   document.getElementById('navBoardControls').classList.toggle('hidden', !isBoard);
   document.getElementById('navCalendarControls').classList.toggle('hidden', !isCalendar);
   document.getElementById('navActivitiesControls').classList.toggle('hidden', !isActivities);
+  document.getElementById('navFinanceControls').classList.toggle('hidden', !isFinance);
   document.getElementById('exportReportBtn').classList.toggle('hidden', !isBoard);
+  document.getElementById('financeLancarBtn').classList.toggle('hidden', !isFinance);
   updateAppTitle();
   renderSidebar();
   if (isCalendar) {
@@ -599,6 +605,8 @@ function setView(view) {
   } else if (isActivities) {
     renderActivities();
     fetchHolidays();
+  } else if (isFinance) {
+    renderFinanceView();
   } else {
     render();
   }
@@ -5371,4 +5379,690 @@ function renderActivityDetailHolidays(a) {
     : '<div class="activity-detail-empty">Nenhum feriado compatível encontrado.</div>';
 }
 
+// ================================================================
+// FINANÇAS
+// ================================================================
+
+// --- Estado global de finanças ---
+let financeState = { categories: [], transactions: [], plannedPurchases: [] };
+let financeMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let financeTab = 'geral';
+let financeCatFilter = null;
+let financeTxnTypeFilter = 'all';
+let finTransactionType = 'expense';
+let finTransactionNature = 'variable';
+let finTransactionCatId = null;
+let finPurchasePriority = 'medium';
+
+// MON e MONTH_NAMES já declarados no topo do arquivo
+
+// --- Persistência ---
+async function loadFinance() {
+  try {
+    const res = await fetch('/api/finance');
+    const data = await res.json();
+    if (!res.ok) { console.error('Erro ao carregar finanças:', data.error); return; }
+    financeState.categories       = data.categories       || [];
+    financeState.transactions     = data.transactions     || [];
+    financeState.plannedPurchases = data.plannedPurchases || [];
+    if (financeState.categories.length === 0) initDefaultFinanceCategories();
+    if (currentView === 'finance') renderFinanceView();
+  } catch (err) {
+    console.error('Falha ao carregar finanças:', err);
+  }
+}
+
+let finSaveTimer = null;
+function saveFinance() {
+  clearTimeout(finSaveTimer);
+  finSaveTimer = setTimeout(() => {
+    fetch('/api/finance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(financeState),
+    }).catch(err => console.error('Erro ao salvar finanças:', err));
+  }, 300);
+}
+
+function initDefaultFinanceCategories() {
+  const defaults = [
+    { name: 'Moradia',      icon: '🏠', color: 'blue',   monthlyLimit: null, sortOrder: 0 },
+    { name: 'Alimentação',  icon: '🍽️', color: 'green',  monthlyLimit: null, sortOrder: 1 },
+    { name: 'Transporte',   icon: '🚗', color: 'amber',  monthlyLimit: null, sortOrder: 2 },
+    { name: 'Saúde',        icon: '💊', color: 'teal',   monthlyLimit: null, sortOrder: 3 },
+    { name: 'Lazer',        icon: '🎮', color: 'red',    monthlyLimit: null, sortOrder: 4 },
+    { name: 'Outros',       icon: '📦', color: 'gray',   monthlyLimit: null, sortOrder: 5 },
+  ];
+  financeState.categories = defaults.map(d => ({ id: uid(), ...d }));
+  saveFinance();
+}
+
+// --- Cálculos ---
+function finGetSummary(month) {
+  const y = month.getFullYear(), m = month.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = (y === today.getFullYear() && m === today.getMonth());
+  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
+
+  const txns = financeState.transactions.filter(t => {
+    const d = new Date(t.date + 'T12:00:00');
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+
+  const income   = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+  const expense  = txns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+  const fixedExp = txns.filter(t => t.type === 'expense' && t.nature === 'fixed').reduce((s, t) => s + Number(t.amount), 0);
+  const varExp   = txns.filter(t => t.type === 'expense' && t.nature === 'variable').reduce((s, t) => s + Number(t.amount), 0);
+  const dailyRate = dayOfMonth > 0 ? varExp / dayOfMonth : 0;
+  const projExp   = fixedExp + dailyRate * daysInMonth;
+  const projSavings = income - projExp;
+
+  const byCat = {};
+  for (const t of txns.filter(t => t.type === 'expense')) {
+    byCat[t.categoryId] = (byCat[t.categoryId] || 0) + Number(t.amount);
+  }
+
+  return { income, expense, balance: income - expense, projExp, projSavings, dailyRate, dayOfMonth, daysInMonth, byCat, txns, isCurrentMonth };
+}
+
+function finGetInsights(summary) {
+  const ins = [];
+  const { income, projSavings, byCat, daysInMonth, dayOfMonth, dailyRate } = summary;
+  const remaining = daysInMonth - dayOfMonth;
+
+  if (income > 0) {
+    if (projSavings > 0) {
+      const pct = Math.round((projSavings / income) * 100);
+      ins.push({ type: 'ok', text: `No ritmo atual você fecha o mês com <strong>R$&nbsp;${finFmt(projSavings)} de economia</strong> (${pct}% da receita).` });
+    } else {
+      ins.push({ type: 'alert', text: 'Atenção: no ritmo atual você vai <strong>gastar mais do que recebe</strong> este mês.' });
+    }
+  }
+
+  for (const cat of financeState.categories) {
+    if (!cat.monthlyLimit) continue;
+    const spent = byCat[cat.id] || 0;
+    const pct   = spent / cat.monthlyLimit;
+    if (pct >= 1) {
+      ins.push({ type: 'alert', text: `<strong>${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</strong> atingiu 100% do limite este mês.` });
+    } else if (pct >= 0.75 && remaining > 5) {
+      ins.push({ type: 'warn', text: `<strong>${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</strong> está em ${Math.round(pct * 100)}% do limite com ${remaining} dias restantes.` });
+    }
+  }
+
+  if (dailyRate > 0) {
+    ins.push({ type: 'info', text: `Média de gastos variáveis: <strong>R$&nbsp;${finFmt(dailyRate)}/dia</strong>.` });
+  }
+
+  return ins.slice(0, 4);
+}
+
+// --- Formatação ---
+function finFmt(n) {
+  const val = Math.round(Number(n) || 0);
+  return val.toLocaleString('pt-BR');
+}
+
+function finFmtDate(dateStr) {
+  const parts = dateStr.split('-');
+  return `${parseInt(parts[2])} ${MON[parseInt(parts[1]) - 1]}`;
+}
+
+function finFmtDateFull(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${d.getDate()} de ${MONTH_NAMES[d.getMonth()].toLowerCase()}`;
+}
+
+function finCatBarColor(color) {
+  const map = { blue: 'var(--color-blue)', green: 'var(--color-green)', amber: '#C07C30', teal: '#1F7A6E', red: 'var(--color-terracotta)', gray: '#9A9488', purple: '#7B4FA0' };
+  return map[color] || '#9A9488';
+}
+
+// --- Renderização principal ---
+function renderFinanceView() {
+  const el = document.getElementById('financeView');
+  if (!el || el.classList.contains('hidden')) return;
+
+  const label = MONTH_NAMES[financeMonth.getMonth()] + ' ' + financeMonth.getFullYear();
+  const lblEl = document.getElementById('financeMonthLabel');
+  if (lblEl) lblEl.textContent = label;
+
+  const cats    = [...financeState.categories].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const summary = finGetSummary(financeMonth);
+
+  el.innerHTML = `
+    <div class="fin-tabs-row">
+      ${['geral','lancamentos','planejados'].map(t => `
+        <button class="fin-tab ${financeTab === t ? 'active' : ''}" data-tab="${t}">${
+          t === 'geral' ? 'Visão geral' : t === 'lancamentos' ? 'Lançamentos' : 'Planejados'
+        }</button>
+      `).join('')}
+    </div>
+    <div class="fin-tab-body">
+      ${financeTab === 'geral'        ? renderFinanceGeral(summary, cats)       : ''}
+      ${financeTab === 'lancamentos'  ? renderFinanceLancamentos(summary, cats) : ''}
+      ${financeTab === 'planejados'   ? renderFinancePlanejados(summary)        : ''}
+    </div>
+  `;
+
+  // Tab navigation
+  el.querySelectorAll('.fin-tab').forEach(btn => {
+    btn.addEventListener('click', () => { financeTab = btn.dataset.tab; renderFinanceView(); });
+  });
+
+  // Tab-switch link (from geral → lançamentos)
+  el.querySelectorAll('[data-tab-switch]').forEach(btn => {
+    btn.addEventListener('click', () => { financeTab = btn.dataset.tabSwitch; renderFinanceView(); });
+  });
+
+  // Delete transactions
+  el.querySelectorAll('[data-del-txn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      financeState.transactions = financeState.transactions.filter(t => t.id !== btn.dataset.delTxn);
+      saveFinance(); renderFinanceView();
+    });
+  });
+
+  // Delete purchases
+  el.querySelectorAll('[data-del-purchase]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      financeState.plannedPurchases = financeState.plannedPurchases.filter(p => p.id !== btn.dataset.delPurchase);
+      saveFinance(); renderFinanceView();
+    });
+  });
+
+  // Type filter
+  el.querySelectorAll('[data-fin-type-filter]').forEach(btn => {
+    btn.addEventListener('click', () => { financeTxnTypeFilter = btn.dataset.finTypeFilter; renderFinanceView(); });
+  });
+
+  // Cat filter
+  el.querySelectorAll('[data-fin-cat-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.finCatFilter;
+      financeCatFilter = financeCatFilter === v ? null : v;
+      renderFinanceView();
+    });
+  });
+
+  // Inline "Lançar" button in lancamentos tab
+  const inlineBtn = el.querySelector('#finLancarBtnInline');
+  if (inlineBtn) inlineBtn.addEventListener('click', openFinTransactionModal);
+
+  // Add purchase buttons
+  el.querySelectorAll('#finAddPurchaseBtn, #finAddPurchaseBtnGrid').forEach(btn => {
+    btn.addEventListener('click', openFinPurchaseModal);
+  });
+}
+
+// --- Visão Geral ---
+function renderFinanceGeral(summary, cats) {
+  const { income, expense, balance, projSavings, byCat, dayOfMonth } = summary;
+  const pctSpent = income > 0 ? Math.min(100, Math.round((expense / income) * 100)) : 0;
+
+  const kpiHtml = `
+    <div class="fin-kpi-grid">
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Receita do mês</div>
+        <div class="fin-kpi-value" style="color:var(--color-green)">R$&nbsp;${finFmt(income)}</div>
+        <span class="fin-tag fin-tag-gray">entradas</span>
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Gastos até agora</div>
+        <div class="fin-kpi-value">R$&nbsp;${finFmt(expense)}</div>
+        <div class="fin-kpi-sub">${pctSpent}% da receita · ${dayOfMonth} dias</div>
+        <div class="fin-kpi-bar"><div class="fin-kpi-bar-fill" style="width:${pctSpent}%;background:${pctSpent > 80 ? 'var(--color-terracotta)' : '#C07C30'}"></div></div>
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Saldo atual</div>
+        <div class="fin-kpi-value" style="color:${balance >= 0 ? 'var(--color-green)' : 'var(--color-terracotta)'}">R$&nbsp;${finFmt(balance)}</div>
+        <span class="fin-tag ${balance >= 0 ? 'fin-tag-green' : 'fin-tag-red'}">${balance >= 0 ? '↑ no azul' : '↓ no vermelho'}</span>
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Projeção fim do mês</div>
+        <div class="fin-kpi-value" style="color:${projSavings >= 0 ? 'var(--color-green)' : 'var(--color-terracotta)'}">R$&nbsp;${finFmt(Math.abs(projSavings))}</div>
+        <div class="fin-kpi-sub">${projSavings >= 0 ? 'economia estimada' : 'déficit estimado'}</div>
+        <span class="fin-tag fin-tag-blue">ritmo atual</span>
+      </div>
+    </div>
+  `;
+
+  const catHtml = cats.map(cat => {
+    const spent = byCat[cat.id] || 0;
+    const limit = cat.monthlyLimit;
+    const pct   = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+    const barClr = pct >= 100 ? 'var(--color-terracotta)' : pct >= 75 ? '#C07C30' : finCatBarColor(cat.color);
+    return `
+      <div class="fin-cat-row">
+        <div class="fin-cat-top">
+          <span class="fin-cat-badge fin-c-${escapeHtml(cat.color)}">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</span>
+          <span class="fin-cat-spent${pct >= 100 ? ' fin-over' : ''}">R$&nbsp;${finFmt(spent)}</span>
+          ${limit ? `<span class="fin-cat-limit">/&nbsp;R$&nbsp;${finFmt(limit)}</span>` : ''}
+        </div>
+        <div class="fin-cat-bar-wrap"><div class="fin-cat-bar" style="width:${pct || (spent > 0 ? 2 : 0)}%;background:${barClr}"></div></div>
+      </div>
+    `;
+  }).join('') || '<div style="color:var(--color-text-tertiary);font:500 12.5px var(--font-sora)">Nenhuma categoria.</div>';
+
+  const insights = finGetInsights(summary);
+  const insHtml  = insights.map(i => `
+    <div class="fin-insight-row">
+      <div class="fin-insight-icon">${{ ok: '✅', warn: '⚡', info: '📊', alert: '🚨' }[i.type] || '💡'}</div>
+      <div class="fin-insight-text">${i.text}</div>
+    </div>
+  `).join('') || '<div style="color:var(--color-text-tertiary);font:500 12.5px var(--font-sora)">Lance transações para ver insights.</div>';
+
+  const recentTxns = [...financeState.transactions]
+    .filter(t => {
+      const d = new Date(t.date + 'T12:00:00');
+      return d.getFullYear() === financeMonth.getFullYear() && d.getMonth() === financeMonth.getMonth();
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
+
+  const recentHtml = recentTxns.length ? recentTxns.map(t => {
+    const cat  = financeState.categories.find(c => c.id === t.categoryId);
+    const sign = t.type === 'expense' ? '−' : '+';
+    const cls  = t.type === 'expense' ? 'out' : 'in';
+    return `
+      <div class="fin-txn-item">
+        ${cat
+          ? `<span class="fin-cat-badge fin-c-${escapeHtml(cat.color)}" style="font-size:10.5px">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</span>`
+          : t.type === 'income'
+            ? `<span class="fin-cat-badge fin-c-green" style="font-size:10.5px">💰 Receita</span>`
+            : `<span class="fin-cat-badge fin-c-gray" style="font-size:10.5px">Sem categoria</span>`}
+        <div class="fin-txn-info">
+          <div class="fin-txn-name">${escapeHtml(t.description)}</div>
+          <div class="fin-txn-meta">${finFmtDate(t.date)}${t.nature === 'fixed' ? ' · fixo' : ''}</div>
+        </div>
+        <div class="fin-txn-amt ${cls}">${sign}&nbsp;R$&nbsp;${finFmt(t.amount)}</div>
+      </div>
+    `;
+  }).join('') : '<div style="color:var(--color-text-tertiary);font:500 12.5px var(--font-sora);padding:8px 0">Nenhuma transação neste mês.</div>';
+
+  return `
+    ${kpiHtml}
+    <div class="fin-body-grid">
+      <div class="fin-col-left">
+        <div class="fin-section">
+          <div class="fin-section-head">
+            <span class="fin-section-title">Gastos por categoria</span>
+            <span class="fin-section-sub">${MONTH_NAMES[financeMonth.getMonth()]} ${financeMonth.getFullYear()}</span>
+          </div>
+          <div class="fin-section-body">${catHtml}</div>
+        </div>
+        <div class="fin-section">
+          <div class="fin-section-head">
+            <span class="fin-section-title">Histórico de gastos</span>
+            <span class="fin-section-sub">últimos 6 meses</span>
+          </div>
+          <div class="fin-section-body">${renderFinanceHistChart()}</div>
+        </div>
+      </div>
+      <div class="fin-col-right">
+        <div class="fin-section">
+          <div class="fin-section-head"><span class="fin-section-title">Insights</span></div>
+          <div class="fin-section-body" style="padding-bottom:10px">${insHtml}</div>
+        </div>
+        <div class="fin-section">
+          <div class="fin-section-head">
+            <span class="fin-section-title">Últimos lançamentos</span>
+            <button class="fin-link-btn" data-tab-switch="lancamentos">ver todos</button>
+          </div>
+          <div class="fin-section-body" style="padding-top:8px">${recentHtml}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// --- Histórico chart ---
+function renderFinanceHistChart() {
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    months.push(new Date(financeMonth.getFullYear(), financeMonth.getMonth() - i, 1));
+  }
+  const totals = months.map(m => {
+    const y = m.getFullYear(), mo = m.getMonth();
+    return financeState.transactions
+      .filter(t => { const d = new Date(t.date + 'T12:00:00'); return t.type === 'expense' && d.getFullYear() === y && d.getMonth() === mo; })
+      .reduce((s, t) => s + Number(t.amount), 0);
+  });
+  const maxVal = Math.max(...totals, 1);
+  const bars = months.map((m, i) => {
+    const isCur = m.getFullYear() === financeMonth.getFullYear() && m.getMonth() === financeMonth.getMonth();
+    const pct   = Math.round((totals[i] / maxVal) * 100);
+    return `
+      <div class="fin-hist-col">
+        <div class="fin-hist-bar" style="height:${Math.max(pct, 3)}%;background:${isCur ? 'var(--color-green)' : '#D8D2C2'}"></div>
+        <span class="fin-hist-lbl" style="color:${isCur ? 'var(--color-green)' : 'var(--color-text-tertiary)'};font-weight:${isCur ? '700' : '600'}">${MON[m.getMonth()]}</span>
+      </div>
+    `;
+  }).join('');
+  const prev5 = totals.slice(0, 5).filter(v => v > 0);
+  const avg   = prev5.length ? prev5.reduce((a, b) => a + b, 0) / prev5.length : 0;
+  return `
+    <div class="fin-hist-wrap">${bars}</div>
+    <div class="fin-hist-footer">
+      <span>Média 5m: R$&nbsp;${finFmt(avg)}</span>
+      <span>${MON[financeMonth.getMonth()]}: R$&nbsp;${finFmt(totals[5])}</span>
+    </div>
+  `;
+}
+
+// --- Lançamentos ---
+function renderFinanceLancamentos(summary, cats) {
+  const allTxns = [...financeState.transactions]
+    .filter(t => {
+      const d = new Date(t.date + 'T12:00:00');
+      return d.getFullYear() === financeMonth.getFullYear() && d.getMonth() === financeMonth.getMonth();
+    });
+
+  let filtered = allTxns;
+  if (financeTxnTypeFilter !== 'all') filtered = filtered.filter(t => t.type === financeTxnTypeFilter);
+  if (financeCatFilter) filtered = filtered.filter(t => t.categoryId === financeCatFilter);
+  filtered.sort((a, b) => b.date.localeCompare(a.date));
+
+  const groups = {};
+  filtered.forEach(t => { if (!groups[t.date]) groups[t.date] = []; groups[t.date].push(t); });
+
+  const typeFilterHtml = ['all','expense','income'].map((k, _, arr) => {
+    const labels = { all: 'Todos', expense: 'Gastos', income: 'Receitas' };
+    return `<button class="fin-filter-pill ${financeTxnTypeFilter === k ? 'active' : ''}" data-fin-type-filter="${k}">${labels[k]}</button>`;
+  }).join('');
+
+  const catFilterHtml = cats.map(c =>
+    `<button class="fin-filter-pill ${financeCatFilter === c.id ? 'active' : ''}" data-fin-cat-filter="${c.id}">${escapeHtml(c.icon)} ${escapeHtml(c.name)}</button>`
+  ).join('');
+
+  const txnGroupHtml = Object.keys(groups).sort((a,b) => b.localeCompare(a)).map(date => {
+    const items = groups[date].map(t => {
+      const cat  = cats.find(c => c.id === t.categoryId);
+      const sign = t.type === 'expense' ? '−' : '+';
+      const cls  = t.type === 'expense' ? 'out' : 'in';
+      return `
+        <div class="fin-txn-full">
+          ${cat
+            ? `<span class="fin-cat-badge fin-c-${escapeHtml(cat.color)}">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</span>`
+            : t.type === 'income'
+              ? `<span class="fin-cat-badge fin-c-green">💰 Receita</span>`
+              : `<span class="fin-cat-badge fin-c-gray">Sem categoria</span>`}
+          <div class="fin-txn-info">
+            <div class="fin-txn-name">${escapeHtml(t.description)}</div>
+            <div class="fin-txn-meta">${t.nature === 'fixed' ? 'fixo · mensal' : 'variável'}</div>
+          </div>
+          <div class="fin-txn-amt ${cls}">${sign}&nbsp;R$&nbsp;${finFmt(t.amount)}</div>
+          <button class="fin-txn-del" data-del-txn="${t.id}" title="Excluir">×</button>
+        </div>
+      `;
+    }).join('');
+    return `<div class="fin-date-label">${finFmtDateFull(date)}</div>${items}`;
+  }).join('') || '<div class="fin-empty">Nenhuma transação neste mês.</div>';
+
+  return `
+    <div class="fin-lancamentos-header">
+      <div>
+        <div class="fin-view-title">Lançamentos — ${MONTH_NAMES[financeMonth.getMonth()]} ${financeMonth.getFullYear()}</div>
+        <div class="fin-view-sub">${allTxns.length} transaç${allTxns.length === 1 ? 'ão' : 'ões'}</div>
+      </div>
+      <button class="fin-btn-brand" id="finLancarBtnInline">+ Lançar</button>
+    </div>
+    <div class="fin-filter-row">
+      <span class="fin-filter-label">Filtrar:</span>
+      ${typeFilterHtml}
+      <div style="flex:1"></div>
+      ${catFilterHtml}
+    </div>
+    <div class="fin-txn-list">${txnGroupHtml}</div>
+  `;
+}
+
+// --- Planejados ---
+function renderFinancePlanejados(summary) {
+  const { projSavings } = summary;
+  const purchases = [...financeState.plannedPurchases].sort((a, b) => {
+    const o = { high: 0, medium: 1, low: 2 };
+    return (o[a.priority] || 1) - (o[b.priority] || 1);
+  });
+  const totalTarget = purchases.reduce((s, p) => s + Number(p.targetAmount), 0);
+  const safeProj = Math.max(projSavings, 0);
+
+  const summaryHtml = projSavings > 0 && purchases.length > 0 ? `
+    <div class="fin-plan-summary">
+      <div>
+        <div class="fin-plan-summary-label">Meta total</div>
+        <div class="fin-plan-summary-value">R$&nbsp;${finFmt(totalTarget)}</div>
+      </div>
+      <div class="fin-plan-summary-sep"></div>
+      <div>
+        <div class="fin-plan-summary-label">Tempo estimado</div>
+        <div class="fin-plan-summary-value">~${projSavings > 0 ? (totalTarget / projSavings).toFixed(1) : '—'} meses</div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="fin-plan-summary-hint">Economia projetada: <strong>R$&nbsp;${finFmt(projSavings)}/mês</strong></div>
+    </div>
+  ` : '';
+
+  const pLabel = { high: 'alta', medium: 'média', low: 'baixa' };
+  const pClass = { high: 'fin-p-high', medium: 'fin-p-mid', low: 'fin-p-low' };
+
+  const cardsHtml = purchases.map(p => {
+    const pct = p.targetAmount > 0 ? Math.min(100, Math.round((p.savedAmount / p.targetAmount) * 100)) : 0;
+    const months = safeProj > 0 ? ((p.targetAmount - p.savedAmount) / safeProj).toFixed(1) : '—';
+    return `
+      <div class="fin-plan-card">
+        <div class="fin-plan-card-top">
+          <span class="fin-priority ${pClass[p.priority] || 'fin-p-mid'}">${(pLabel[p.priority] || 'média')} prioridade</span>
+          ${p.categoryLabel ? `<span class="fin-plan-cat">${escapeHtml(p.categoryLabel)}</span>` : ''}
+          <button class="fin-plan-del" data-del-purchase="${p.id}" title="Excluir">×</button>
+        </div>
+        <div class="fin-plan-name">${escapeHtml(p.name)}</div>
+        <div class="fin-plan-value">R$&nbsp;${finFmt(p.targetAmount)}</div>
+        ${p.description ? `<div class="fin-plan-desc">${escapeHtml(p.description)}</div>` : ''}
+        <div class="fin-plan-bar-wrap"><div class="fin-plan-bar" style="width:${pct}%"></div></div>
+        <div class="fin-plan-months">💡 ~${months} meses de economia${p.savedAmount > 0 ? ` · R$&nbsp;${finFmt(p.savedAmount)} guardados` : ''}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="fin-planejados-header">
+      <div>
+        <div class="fin-view-title">Compras planejadas</div>
+        <div class="fin-view-sub">Economia projetada: ~R$&nbsp;${finFmt(safeProj)}/mês</div>
+      </div>
+      <button class="fin-btn-brand" id="finAddPurchaseBtn">+ Adicionar</button>
+    </div>
+    ${summaryHtml}
+    <div class="fin-plan-grid">
+      ${cardsHtml}
+      <button class="fin-plan-add-btn" id="finAddPurchaseBtnGrid">
+        <span style="font-size:20px">+</span>
+        <span>Adicionar compra planejada</span>
+      </button>
+    </div>
+  `;
+}
+
+// --- Modal de transação ---
+function openFinTransactionModal() {
+  finTransactionType   = 'expense';
+  finTransactionNature = 'variable';
+  finTransactionCatId  = null;
+  renderFinTransactionModal();
+  document.getElementById('finTransactionModal').classList.remove('hidden');
+  document.getElementById('finTxnDate').value = toKey(new Date());
+  document.getElementById('finTxnDesc').value = '';
+  document.getElementById('finTxnAmount').value = '';
+  document.getElementById('finTxnDesc').focus();
+}
+
+function renderFinTransactionModal() {
+  // Type tabs
+  document.querySelectorAll('#finTypeTabs .fin-type-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === finTransactionType);
+  });
+
+  // Category pills
+  const isCatVisible = finTransactionType === 'expense';
+  document.getElementById('finCatField').style.display   = isCatVisible ? '' : 'none';
+  document.getElementById('finNatureField').style.display = isCatVisible ? '' : 'none';
+
+  const catPills = document.getElementById('finCatPills');
+  if (catPills) {
+    catPills.innerHTML = financeState.categories.map(c => `
+      <button type="button" class="fin-cat-pill ${finTransactionCatId === c.id ? 'selected' : ''}" data-cat="${c.id}">
+        ${escapeHtml(c.icon)} ${escapeHtml(c.name)}
+      </button>
+    `).join('');
+    catPills.querySelectorAll('.fin-cat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        finTransactionCatId = finTransactionCatId === btn.dataset.cat ? null : btn.dataset.cat;
+        renderFinTransactionModal();
+      });
+    });
+  }
+
+  // Nature buttons
+  document.querySelectorAll('.fin-nature-btn[data-nature]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.nature === finTransactionNature);
+  });
+}
+
+function saveFinTransaction() {
+  const desc   = document.getElementById('finTxnDesc').value.trim();
+  const amount = parseFloat(document.getElementById('finTxnAmount').value);
+  const date   = document.getElementById('finTxnDate').value;
+
+  if (!desc)        { alert('Informe a descrição.'); return; }
+  if (!amount || amount <= 0) { alert('Informe um valor válido.'); return; }
+  if (!date)        { alert('Informe a data.'); return; }
+
+  financeState.transactions.push({
+    id:          uid(),
+    type:        finTransactionType,
+    nature:      finTransactionType === 'expense' ? finTransactionNature : 'variable',
+    description: desc,
+    amount:      amount,
+    date:        date,
+    categoryId:  finTransactionType === 'expense' ? finTransactionCatId : null,
+  });
+
+  saveFinance();
+  document.getElementById('finTransactionModal').classList.add('hidden');
+  renderFinanceView();
+}
+
+// --- Modal de compra planejada ---
+function openFinPurchaseModal() {
+  finPurchasePriority = 'medium';
+  document.getElementById('finPurchaseName').value     = '';
+  document.getElementById('finPurchaseTarget').value   = '';
+  document.getElementById('finPurchaseSaved').value    = '';
+  document.getElementById('finPurchaseCatLabel').value = '';
+  document.getElementById('finPurchaseDesc').value     = '';
+  document.querySelectorAll('.fin-nature-btn[data-priority]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.priority === 'medium');
+  });
+  document.getElementById('finPurchaseModal').classList.remove('hidden');
+  document.getElementById('finPurchaseName').focus();
+}
+
+function saveFinPurchase() {
+  const name   = document.getElementById('finPurchaseName').value.trim();
+  const target = parseFloat(document.getElementById('finPurchaseTarget').value) || 0;
+  const saved  = parseFloat(document.getElementById('finPurchaseSaved').value)  || 0;
+  const cat    = document.getElementById('finPurchaseCatLabel').value.trim();
+  const desc   = document.getElementById('finPurchaseDesc').value.trim();
+
+  if (!name)         { alert('Informe o nome da compra.'); return; }
+  if (target <= 0)   { alert('Informe um valor alvo.'); return; }
+
+  financeState.plannedPurchases.push({
+    id:            uid(),
+    name:          name,
+    description:   desc || null,
+    targetAmount:  target,
+    savedAmount:   saved,
+    priority:      finPurchasePriority,
+    categoryLabel: cat || null,
+    createdAt:     Date.now(),
+  });
+
+  saveFinance();
+  document.getElementById('finPurchaseModal').classList.add('hidden');
+  financeTab = 'planejados';
+  renderFinanceView();
+}
+
+// --- Registrar handlers dos modais de finanças ---
+(function initFinanceModalHandlers() {
+  // Transaction modal
+  document.getElementById('finModalClose').addEventListener('click', () => {
+    document.getElementById('finTransactionModal').classList.add('hidden');
+  });
+  document.getElementById('finModalCancel').addEventListener('click', () => {
+    document.getElementById('finTransactionModal').classList.add('hidden');
+  });
+  document.getElementById('finModalSave').addEventListener('click', saveFinTransaction);
+
+  document.querySelectorAll('#finTypeTabs .fin-type-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finTransactionType = btn.dataset.type;
+      renderFinTransactionModal();
+    });
+  });
+
+  document.querySelectorAll('.fin-nature-btn[data-nature]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finTransactionNature = btn.dataset.nature;
+      document.querySelectorAll('.fin-nature-btn[data-nature]').forEach(b => b.classList.toggle('active', b.dataset.nature === finTransactionNature));
+    });
+  });
+
+  // Close on overlay click
+  document.getElementById('finTransactionModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('finTransactionModal'))
+      document.getElementById('finTransactionModal').classList.add('hidden');
+  });
+
+  // Purchase modal
+  document.getElementById('finPurchaseModalClose').addEventListener('click', () => {
+    document.getElementById('finPurchaseModal').classList.add('hidden');
+  });
+  document.getElementById('finPurchaseModalCancel').addEventListener('click', () => {
+    document.getElementById('finPurchaseModal').classList.add('hidden');
+  });
+  document.getElementById('finPurchaseModalSave').addEventListener('click', saveFinPurchase);
+
+  document.querySelectorAll('.fin-nature-btn[data-priority]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finPurchasePriority = btn.dataset.priority;
+      document.querySelectorAll('.fin-nature-btn[data-priority]').forEach(b => b.classList.toggle('active', b.dataset.priority === finPurchasePriority));
+    });
+  });
+
+  document.getElementById('finPurchaseModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('finPurchaseModal'))
+      document.getElementById('finPurchaseModal').classList.add('hidden');
+  });
+})();
+
+// --- Sidebar item e mês nav ---
+document.getElementById('sidebarFinanceItem').addEventListener('click', () => setView('finance'));
+
+document.getElementById('finPrevMonth').addEventListener('click', () => {
+  financeMonth = new Date(financeMonth.getFullYear(), financeMonth.getMonth() - 1, 1);
+  renderFinanceView();
+});
+document.getElementById('finNextMonth').addEventListener('click', () => {
+  financeMonth = new Date(financeMonth.getFullYear(), financeMonth.getMonth() + 1, 1);
+  renderFinanceView();
+});
+
+// Botão "Lançar" no topbar
+document.getElementById('financeLancarBtn').addEventListener('click', openFinTransactionModal);
+
 load();
+loadFinance();

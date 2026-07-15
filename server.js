@@ -17,7 +17,7 @@ const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/jav
 // usada neste arquivo (from().select(), from().upsert(), from().delete().not()) sobre um objeto
 // JS simples em memória, com o MESMO formato de entrada/saída (linhas em snake_case, como no
 // banco real) — loadState()/saveState() não precisam saber a diferença.
-const memoryDb = { boards: [], tasks: [], calendar_events: [], people: [], app_state: [], activities: [] };
+const memoryDb = { boards: [], tasks: [], calendar_events: [], people: [], app_state: [], activities: [], finance_categories: [], finance_transactions: [], finance_planned_purchases: [] };
 
 function makeMemorySupabaseClient() {
   return {
@@ -419,6 +419,151 @@ function dbActivityToApp(a) {
   };
 }
 
+// ── Mapeamento finanças app <-> banco ────────────────────────
+function appCategoryToDb(c) {
+  return {
+    id:            c.id,
+    name:          c.name,
+    icon:          c.icon          || '📦',
+    color:         c.color         || 'gray',
+    monthly_limit: c.monthlyLimit  ?? null,
+    sort_order:    c.sortOrder     ?? 0,
+  };
+}
+function dbCategoryToApp(c) {
+  return {
+    id:           c.id,
+    name:         c.name,
+    icon:         c.icon          || '📦',
+    color:        c.color         || 'gray',
+    monthlyLimit: c.monthly_limit ?? null,
+    sortOrder:    c.sort_order    ?? 0,
+  };
+}
+
+function appTransactionToDb(t) {
+  return {
+    id:          t.id,
+    type:        t.type,
+    nature:      t.nature       || 'variable',
+    description: t.description  || '',
+    amount:      t.amount       ?? 0,
+    date:        t.date,
+    category_id: t.categoryId   ?? null,
+  };
+}
+function dbTransactionToApp(t) {
+  return {
+    id:          t.id,
+    type:        t.type,
+    nature:      t.nature       || 'variable',
+    description: t.description  || '',
+    amount:      Number(t.amount) ?? 0,
+    date:        t.date,
+    categoryId:  t.category_id  ?? null,
+  };
+}
+
+function appPurchaseToDb(p) {
+  return {
+    id:             p.id,
+    name:           p.name,
+    description:    p.description    ?? null,
+    target_amount:  p.targetAmount   ?? 0,
+    saved_amount:   p.savedAmount    ?? 0,
+    priority:       p.priority       || 'medium',
+    category_label: p.categoryLabel  ?? null,
+    created_at:     p.createdAt      ?? null,
+  };
+}
+function dbPurchaseToApp(p) {
+  return {
+    id:            p.id,
+    name:          p.name,
+    description:   p.description    ?? null,
+    targetAmount:  Number(p.target_amount) ?? 0,
+    savedAmount:   Number(p.saved_amount)  ?? 0,
+    priority:      p.priority       || 'medium',
+    categoryLabel: p.category_label ?? null,
+    createdAt:     p.created_at     ?? null,
+  };
+}
+
+// ── Finance: leitura e escrita ───────────────────────────────
+async function loadFinance() {
+  const [
+    { data: cats,      error: e1 },
+    { data: txns,      error: e2 },
+    { data: purchases, error: e3 },
+  ] = await Promise.all([
+    supabase.from('finance_categories').select('*'),
+    supabase.from('finance_transactions').select('*'),
+    supabase.from('finance_planned_purchases').select('*'),
+  ]);
+
+  if (e1 || e2 || e3) {
+    throw new Error([e1, e2, e3].filter(Boolean).map(e => e.message).join('; '));
+  }
+
+  return {
+    categories:       (cats      || []).map(dbCategoryToApp),
+    transactions:     (txns      || []).map(dbTransactionToApp),
+    plannedPurchases: (purchases || []).map(dbPurchaseToApp),
+  };
+}
+
+async function saveFinance(state) {
+  const { categories = [], transactions = [], plannedPurchases = [] } = state;
+
+  // Upsert + delete categories
+  if (categories.length > 0) {
+    const { error } = await supabase.from('finance_categories').upsert(
+      categories.map(appCategoryToDb), { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+  const catIds = categories.map(c => c.id);
+  if (Array.isArray(state.categories)) {
+    const q = supabase.from('finance_categories').delete();
+    const { error } = catIds.length > 0
+      ? await q.not('id', 'in', `(${catIds.join(',')})`)
+      : await q.not('id', 'is', null);
+    if (error) throw error;
+  }
+
+  // Upsert + delete transactions
+  if (transactions.length > 0) {
+    const { error } = await supabase.from('finance_transactions').upsert(
+      transactions.map(appTransactionToDb), { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+  const txnIds = transactions.map(t => t.id);
+  if (Array.isArray(state.transactions)) {
+    const q = supabase.from('finance_transactions').delete();
+    const { error } = txnIds.length > 0
+      ? await q.not('id', 'in', `(${txnIds.join(',')})`)
+      : await q.not('id', 'is', null);
+    if (error) throw error;
+  }
+
+  // Upsert + delete planned purchases
+  if (plannedPurchases.length > 0) {
+    const { error } = await supabase.from('finance_planned_purchases').upsert(
+      plannedPurchases.map(appPurchaseToDb), { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+  const purchaseIds = plannedPurchases.map(p => p.id);
+  if (Array.isArray(state.plannedPurchases)) {
+    const q = supabase.from('finance_planned_purchases').delete();
+    const { error } = purchaseIds.length > 0
+      ? await q.not('id', 'in', `(${purchaseIds.join(',')})`)
+      : await q.not('id', 'is', null);
+    if (error) throw error;
+  }
+}
+
 // ── Servidor HTTP ────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   // GET /api/tasks — carrega estado do Supabase
@@ -441,6 +586,31 @@ const server = http.createServer(async (req, res) => {
       send(res, 200, { ok: true });
     } catch (err) {
       console.error('POST /api/tasks error:', err.message);
+      send(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  // GET /api/finance — carrega dados financeiros
+  if (req.method === 'GET' && req.url === '/api/finance') {
+    try {
+      const data = await loadFinance();
+      send(res, 200, data);
+    } catch (err) {
+      console.error('GET /api/finance error:', err.message);
+      send(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/finance — salva dados financeiros
+  if (req.method === 'POST' && req.url === '/api/finance') {
+    try {
+      const body = await parseBody(req);
+      await saveFinance(body);
+      send(res, 200, { ok: true });
+    } catch (err) {
+      console.error('POST /api/finance error:', err.message);
       send(res, 500, { error: err.message });
     }
     return;
