@@ -1,0 +1,216 @@
+<!-- @dsCard group="Tarefas App" viewport="1280x760" name="Tarefas — App Recreation" subtitle="Board, calendário, Visão do Dia, modais — interativo" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tarefas</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg-page); color: var(--text-primary); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--sand-500); border-radius: 8px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel" src="./Sidebar.jsx"></script>
+<script type="text/babel" src="./BoardView.jsx"></script>
+<script type="text/babel" src="./CalendarView.jsx"></script>
+<script type="text/babel" src="./DayDrawer.jsx"></script>
+<script type="text/babel" src="./Modals.jsx"></script>
+<script type="text/babel">
+const { IconButton, Button } = window.TarefasDesignSystem_671953;
+
+const BOARDS = [
+  { id: 'trabalho', name: 'Trabalho', color: '#3A6604' },
+  { id: 'pessoal', name: 'Pessoal', color: '#C1622D' },
+];
+
+const INITIAL_DAYS = {
+  '06': { label: '06/jul · Seg', fullLabel: 'Segunda-feira, 06 de julho', pct: 50,
+    events: [], mit: [],
+    tasks: [
+      { id: 'a1', name: 'Atualizar ppt semanal NAC', completed: true },
+      { id: 'a2', name: 'Detalhar governança de produtos', duration: '45min', tag: '#1', completed: false },
+    ] },
+  '07': { label: '07/jul · Ter', fullLabel: 'Terça-feira, 07 de julho', pct: 0, isToday: true,
+    events: [{ name: 'Alinhamento de Squad', dotColor: '#3A6604', bg: '#EAF0DE' }],
+    mit: ['b1'],
+    tasks: [
+      { id: 'b1', name: 'Testes First Layer', duration: '1h', completed: false, urgent: true, mit: true },
+      { id: 'b2', name: 'Limpar e-mail', tag: '#2', completed: false },
+    ] },
+  '08': { label: '08/jul · Qua', fullLabel: 'Quarta-feira, 08 de julho', pct: 0, events: [], mit: [],
+    tasks: [{ id: 'c1', name: 'Agendar reunião com startups', tag: '#1', completed: false }] },
+  '09': { label: '09/jul · Qui', fullLabel: 'Quinta-feira, 09 de julho', pct: 0, mit: [],
+    events: [{ name: 'Fechamento do Sprint', span: '1/2', dotColor: '#3A6604', bg: '#EAF0DE' }],
+    tasks: [{ id: 'd1', name: 'Ver extração de dados do GCP', tag: '#1', completed: false }] },
+  '10': { label: '10/jul · Sex', fullLabel: 'Sexta-feira, 10 de julho', pct: 0, mit: [],
+    events: [{ name: 'Fechamento do Sprint', span: '2/2', dotColor: '#3A6604', bg: '#EAF0DE' }, { name: 'Sprint Review', dotColor: '#3E6FBD', bg: '#EFEDE6', textColor: '#262420' }],
+    tasks: [{ id: 'e1', name: 'Montar apresentação Conecta RDA', tag: '#1', completed: false }] },
+};
+
+const CUSTOM_FIELDS = [
+  { id: 'f1', name: 'Projeto', values: [{ name: 'Conecta RDA', color: '#3E6FBD' }, { name: 'NAC', color: '#3A6604' }, { name: 'First Layer', color: '#C1622D' }] },
+  { id: 'f2', name: 'Modo', values: [{ name: 'Execução', color: '#8B8778' }, { name: 'Reunião', color: '#C99A2E' }] },
+];
+
+function accentFor(t) { return t.urgent ? 'var(--task-urgent-border)' : t.completed ? 'var(--task-done-border)' : 'var(--task-normal-border)'; }
+function bgFor(t) { return t.urgent ? 'var(--task-urgent-bg)' : t.completed ? 'var(--task-done-bg)' : 'var(--task-normal-bg)'; }
+
+function App() {
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [pomoExpanded, setPomoExpanded] = React.useState(false);
+  const [addingBoard, setAddingBoard] = React.useState(false);
+  const [activeBoardId, setActiveBoardId] = React.useState('trabalho');
+  const [view, setView] = React.useState('board');
+  const [days, setDays] = React.useState(INITIAL_DAYS);
+  const [drawerBoardsState, setDrawerBoardsState] = React.useState({ trabalho: true, pessoal: true });
+
+  const [dayDrawerOpen, setDayDrawerOpen] = React.useState(false);
+  const [dayDrawerKey, setDayDrawerKey] = React.useState(null);
+  const [drawerWidth, setDrawerWidth] = React.useState(400);
+  const [drawerExpanded, setDrawerExpanded] = React.useState(false);
+  const [shutdownOpen, setShutdownOpen] = React.useState(false);
+  const [shutdownChoices, setShutdownChoices] = React.useState({});
+
+  const [taskModal, setTaskModal] = React.useState(null); // { dayKey, taskId }
+  const [eventModalOpen, setEventModalOpen] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+  const resizeRef = React.useRef(null);
+  React.useEffect(() => {
+    function onMove(e) {
+      if (!resizeRef.current) return;
+      const delta = resizeRef.current.startX - e.clientX;
+      let w = resizeRef.current.startWidth + delta;
+      w = Math.max(320, Math.min(720, w));
+      setDrawerWidth(w);
+    }
+    function onUp() { resizeRef.current = null; }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+
+  const openDay = (key) => { setDayDrawerKey(key); setDayDrawerOpen(true); setShutdownOpen(false); setShutdownChoices({}); };
+  const closeDay = () => { setDayDrawerOpen(false); setDrawerExpanded(false); setShutdownOpen(false); };
+  const toggleTask = (dayKey, taskId) => {
+    setDays((ds) => ({ ...ds, [dayKey]: { ...ds[dayKey], tasks: ds[dayKey].tasks.map((t) => t.id === taskId ? { ...t, completed: !t.completed } : t) } }));
+  };
+
+  const boardsForNav = BOARDS.map((b) => ({ ...b }));
+  const dayList = ['06', '07', '08', '09', '10'].map((key) => {
+    const d = days[key];
+    const done = d.tasks.filter((t) => t.completed).length;
+    return { key, label: d.label, isToday: !!d.isToday, pct: d.tasks.length ? Math.round((done / d.tasks.length) * 100) : 0,
+      summary: `${done}/${d.tasks.length} tarefas`, timeSummary: '',
+      events: d.events, tasks: d.tasks };
+  });
+
+  const cells = React.useMemo(() => {
+    const evTrabalho = { textColor: '#3A6604', bg: '#EAF0DE', dot: '#3A6604' };
+    const evPessoal = { textColor: '#C1622D', bg: '#F7E9DF', dot: '#C1622D' };
+    const evMulti = { textColor: '#262420', bg: '#EFEDE6', dot: '#3E6FBD' };
+    const mk = (num, opts = {}) => ({ key: String(num).padStart(2, '0'), num, outside: !!opts.outside, today: !!opts.today, events: opts.events || [] });
+    return [
+      mk(28, { outside: true }), mk(29, { outside: true }), mk(30, { outside: true }),
+      mk(1), mk(2), mk(3), mk(4), mk(5), mk(6),
+      mk(7, { today: true, events: [{ name: 'Alinhamento de Squad', ...evTrabalho }] }),
+      mk(8), mk(9, { events: [{ name: 'Fechamento do Sprint', ...evTrabalho }] }),
+      mk(10, { events: [{ name: 'Fechamento do Sprint', ...evTrabalho }, { name: 'Sprint Review', ...evMulti }] }),
+      mk(11), mk(12), mk(13, { events: [{ name: 'Viagem em família', ...evPessoal }] }),
+      mk(14, { events: [{ name: 'Viagem em família', ...evPessoal }] }), mk(15, { events: [{ name: 'Viagem em família', ...evPessoal }] }),
+      mk(16), mk(17), mk(18), mk(19), mk(20), mk(21), mk(22), mk(23), mk(24), mk(25), mk(26),
+      mk(27, { events: [{ name: 'Planejamento trimestral', ...evTrabalho }] }),
+      mk(28, { events: [{ name: 'Planejamento trimestral', ...evTrabalho }] }),
+      mk(29), mk(30), mk(31), mk(1, { outside: true }),
+    ];
+  }, []);
+
+  const sd = dayDrawerKey ? days[dayDrawerKey] : null;
+  const mitTasks = sd ? sd.tasks.filter((t) => t.mit) : [];
+  const pendingTasks = sd ? sd.tasks.filter((t) => !t.completed).map((t) => ({ ...t, choice: shutdownChoices[t.id] })) : [];
+  const selectedDay = sd ? {
+    fullLabel: sd.fullLabel, planned: '45min', done: `${sd.tasks.filter(t => t.completed).length * 15}min`, rest: '30min',
+    mitTasks, pendingTasks,
+    tasks: sd.tasks.map((t) => ({ ...t, accent: accentFor(t), bg: bgFor(t) })),
+  } : { fullLabel: '', planned: '', done: '', rest: '', mitTasks: [], pendingTasks: [], tasks: [] };
+
+  const drawerBoardsForUi = BOARDS.map((b) => ({ ...b, checked: drawerBoardsState[b.id], toggle: () => setDrawerBoardsState((s) => ({ ...s, [b.id]: !s[b.id] })) }));
+
+  let taskModalData = null;
+  if (taskModal) {
+    const t = days[taskModal.dayKey].tasks.find((x) => x.id === taskModal.taskId);
+    if (t) taskModalData = { name: t.name, durationRaw: parseInt(t.duration) || 0, urgent: !!t.urgent, completed: !!t.completed };
+  }
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden', background: 'var(--bg-page)' }}>
+      <TarefasSidebar
+        open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)}
+        boards={boardsForNav} activeBoardId={activeBoardId} onSelectBoard={(id) => { setActiveBoardId(id); setView('board'); }}
+        view={view} onSelectCalendar={() => setView('calendar')}
+        addingBoard={addingBoard} onStartAddBoard={() => setAddingBoard(true)} onCancelAddBoard={() => setAddingBoard(false)}
+        pomoExpanded={pomoExpanded} onTogglePomo={() => setPomoExpanded((v) => !v)}
+      />
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 26px', borderBottom: '1px solid var(--border-default)', background: 'var(--surface)' }}>
+          <h1 style={{ font: '700 17px var(--font-sans)', margin: 0 }}>{view === 'board' ? 'Trabalho' : 'Calendário'}</h1>
+          <div style={{ flex: 1 }} />
+          {view === 'board' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconButton size={30}>‹‹</IconButton>
+              <IconButton size={30}>‹</IconButton>
+              <span style={{ font: '600 12.5px var(--font-sans)', color: 'var(--text-secondary)', minWidth: 130, textAlign: 'center' }}>06 jul – 10 jul</span>
+              <Button variant="brand-soft" size="sm">Hoje</Button>
+              <IconButton size={30}>›</IconButton>
+              <IconButton size={30}>››</IconButton>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, font: '600 12px var(--font-sans)', color: 'var(--text-secondary)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3A6604' }} />Trabalho</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#C1622D' }} />Pessoal</span>
+              </div>
+              <span style={{ font: '600 12.5px var(--font-sans)', color: 'var(--text-secondary)' }}>Julho 2026</span>
+              <Button variant="brand-soft" size="sm">Hoje</Button>
+            </div>
+          )}
+          <IconButton onClick={() => setSettingsOpen(true)} title="Configurações">⚙</IconButton>
+        </header>
+
+        {view === 'board' ? (
+          <TarefasBoardView days={dayList} onOpenDay={openDay} onOpenTask={(dayKey, taskId) => setTaskModal({ dayKey, taskId })} onToggleTask={toggleTask} />
+        ) : (
+          <TarefasCalendarView cells={cells} onOpenDay={openDay} onOpenEventModal={() => setEventModalOpen(true)} />
+        )}
+      </div>
+
+      <TarefasDayDrawer
+        open={dayDrawerOpen} expanded={drawerExpanded} width={drawerWidth}
+        selectedDay={selectedDay} drawerBoards={drawerBoardsForUi} shutdownOpen={shutdownOpen}
+        onClose={closeDay} onToggleExpand={() => setDrawerExpanded((v) => !v)}
+        onOpenShutdown={() => setShutdownOpen(true)} onBackToNormal={() => setShutdownOpen(false)}
+        onFinalize={() => { setShutdownOpen(false); setDayDrawerOpen(false); setDrawerExpanded(false); }}
+        onSetChoice={(taskId, choice) => setShutdownChoices((s) => ({ ...s, [taskId]: choice }))}
+        onStartResize={(e) => { e.preventDefault(); resizeRef.current = { startX: e.clientX, startWidth: drawerWidth }; }}
+      />
+
+      {taskModalData && <TarefasTaskModal task={taskModalData} onClose={() => setTaskModal(null)} />}
+      {eventModalOpen && <TarefasEventModal onClose={() => setEventModalOpen(false)} />}
+      {settingsOpen && <TarefasSettingsModal customFields={CUSTOM_FIELDS} onClose={() => setSettingsOpen(false)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -10,14 +10,15 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript' };
 
 // ── Fallback de DEV local sem credenciais do Supabase ────────
-// Só para desenvolvimento local sem .env configurado (ex.: este ambiente de implementação, que
-// não tem acesso de rede/credenciais ao painel do Supabase). Em produção (Render) as variáveis
-// SUPABASE_URL/SUPABASE_KEY sempre existem, então este bloco nunca é usado lá — o comportamento
-// real com Supabase não muda. Implementa o mínimo da API encadeável do @supabase/supabase-js
-// usada neste arquivo (from().select(), from().upsert(), from().delete().not()) sobre um objeto
-// JS simples em memória, com o MESMO formato de entrada/saída (linhas em snake_case, como no
-// banco real) — loadState()/saveState() não precisam saber a diferença.
-const memoryDb = { boards: [], tasks: [], calendar_events: [], people: [], app_state: [], activities: [], finance_categories: [], finance_transactions: [], finance_planned_purchases: [] };
+// Só para desenvolvimento local sem .env configurado. Em produção (Render) as variáveis
+// SUPABASE_URL/SUPABASE_KEY sempre existem. Implementa o mínimo da API encadeável do
+// @supabase/supabase-js usada neste arquivo, com armazenamento em memória (dados NÃO
+// persistem entre reinícios).
+const memoryDb = {
+  boards: [], tasks: [], calendar_events: [], people: [], app_state: [], activities: [],
+  finance_categories: [], finance_wallets: [], finance_transactions: [],
+  finance_planned_purchases: [], finance_budget_items: [],
+};
 
 function makeMemorySupabaseClient() {
   return {
@@ -25,7 +26,21 @@ function makeMemorySupabaseClient() {
       if (!memoryDb[table]) memoryDb[table] = [];
       return {
         select(_cols) {
-          return Promise.resolve({ data: memoryDb[table].map(row => ({ ...row })), error: null });
+          const data = memoryDb[table].map(row => ({ ...row }));
+          // Retorna um "thenable" encadeável — eq/like/is são no-ops em dev mode
+          const builder = {
+            eq() { return this; },
+            like() { return this; },
+            is() { return this; },
+            not() { return this; },
+            then(resolve, reject) {
+              return Promise.resolve({ data, error: null }).then(resolve, reject);
+            },
+            catch(reject) {
+              return Promise.resolve({ data, error: null }).catch(reject);
+            },
+          };
+          return builder;
         },
         upsert(payload, opts = {}) {
           const conflictKey = opts.onConflict || 'id';
@@ -38,12 +53,18 @@ function makeMemorySupabaseClient() {
           });
           return Promise.resolve({ error: null });
         },
-        delete() {
+        update(updates) {
+          // Em dev mode, aplica update em todas as linhas (single user)
+          memoryDb[table] = memoryDb[table].map(row => ({ ...row, ...updates }));
           return {
-            // Reproduz `.not(column, 'in', '(v1,v2,...)')`: mantém apenas as linhas cujo valor
-            // está no padrão informado (equivalente a deletar as que NÃO estão). Também reproduz
-            // `.not(column, 'is', null)`, usado para apagar todas as linhas da tabela (coluna é
-            // sempre NOT NULL por ser a primary key).
+            is() { return Promise.resolve({ error: null }); },
+            eq() { return Promise.resolve({ error: null }); },
+            filter() { return Promise.resolve({ error: null }); },
+          };
+        },
+        delete() {
+          const builder = {
+            eq() { return this; },  // no-op em dev mode (single user)
             not(column, op, pattern) {
               if (op === 'is') {
                 memoryDb[table] = [];
@@ -55,6 +76,7 @@ function makeMemorySupabaseClient() {
               return Promise.resolve({ error: null });
             },
           };
+          return builder;
         },
       };
     },
@@ -63,7 +85,7 @@ function makeMemorySupabaseClient() {
 
 const useMemoryFallback = !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY;
 if (useMemoryFallback) {
-  console.warn('[dev] SUPABASE_URL/SUPABASE_KEY ausentes — usando armazenamento em memória (SOMENTE para desenvolvimento local). Os dados NÃO persistem entre reinícios do servidor. Em produção (Render), configure as env vars normalmente.');
+  console.warn('[dev] SUPABASE_URL/SUPABASE_KEY ausentes — usando armazenamento em memória (SOMENTE para desenvolvimento local). Os dados NÃO persistem entre reinícios do servidor.');
 }
 
 const supabase = useMemoryFallback
@@ -72,7 +94,10 @@ const supabase = useMemoryFallback
 
 // ── Helpers ─────────────────────────────────────────────────
 function send(res, status, body, type = 'application/json') {
-  res.writeHead(status, { 'Content-Type': type });
+  res.writeHead(status, {
+    'Content-Type': type,
+    'Access-Control-Allow-Origin': '*',
+  });
   res.end(typeof body === 'string' ? body : JSON.stringify(body));
 }
 
@@ -86,8 +111,33 @@ function parseBody(req) {
   });
 }
 
+// ── Autenticação ─────────────────────────────────────────────
+// Em dev mode (sem Supabase), retorna 'dev-user' sem validar token.
+// Em produção, valida o JWT emitido pelo Supabase Auth e retorna o user.id.
+async function authenticate(req, res) {
+  if (useMemoryFallback) return 'dev-user';
+
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : null;
+
+  if (!token) {
+    send(res, 401, { error: 'Não autenticado' });
+    return null;
+  }
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) {
+    send(res, 401, { error: 'Token inválido ou expirado' });
+    return null;
+  }
+
+  return user.id;
+}
+
 // ── Leitura: monta o estado completo a partir do Supabase ───
-async function loadState() {
+async function loadState(userId) {
   const [
     { data: boards,     error: e1 },
     { data: tasks,      error: e2 },
@@ -96,35 +146,33 @@ async function loadState() {
     { data: state,      error: e5 },
     { data: activities, error: e6 },
   ] = await Promise.all([
-    supabase.from('boards').select('*'),
-    supabase.from('tasks').select('*'),
-    supabase.from('calendar_events').select('*'),
-    supabase.from('people').select('*'),
-    supabase.from('app_state').select('*'),
-    supabase.from('activities').select('*'),
+    supabase.from('boards').select('*').eq('user_id', userId),
+    supabase.from('tasks').select('*').eq('user_id', userId),
+    supabase.from('calendar_events').select('*').eq('user_id', userId),
+    supabase.from('people').select('*').eq('user_id', userId),
+    supabase.from('app_state').select('*').like('key', `${userId}:%`),
+    supabase.from('activities').select('*').eq('user_id', userId),
   ]);
 
   if (e1 || e2 || e3 || e4 || e5 || e6) {
     throw new Error([e1, e2, e3, e4, e5, e6].filter(Boolean).map(e => e.message).join('; '));
   }
 
-  // Indexar estado global
-  const appState = Object.fromEntries((state || []).map(r => [r.key, r.value]));
+  // Indexar estado global — strip do prefixo userId: das chaves
+  const appState = Object.fromEntries(
+    (state || []).map(r => [r.key.replace(`${userId}:`, ''), r.value])
+  );
 
-  // Separar tasks por board e por atividade.
-  // Tarefas promovidas (com activity_id E board_id) vão APENAS para tasksByActivity —
-  // o board as lê via getTasksForDateAndBoard()/tasksFor(), evitando duplicação na renderização.
+  // Separar tasks por board e por atividade
   const tasksByBoard = {};
   const tasksByActivity = {};
   for (const t of tasks || []) {
     const mapped = dbTaskToApp(t);
     if (t.board_id && !t.activity_id) {
-      // Tarefa de board puro (não pertence a nenhuma atividade)
       if (!tasksByBoard[t.board_id]) tasksByBoard[t.board_id] = [];
       tasksByBoard[t.board_id].push(mapped);
     }
     if (t.activity_id) {
-      // Tarefa de checklist (promovida ou não) — fonte de verdade em activity.checklistTasks
       if (!tasksByActivity[t.activity_id]) tasksByActivity[t.activity_id] = [];
       tasksByActivity[t.activity_id].push(mapped);
     }
@@ -155,47 +203,45 @@ async function loadState() {
 }
 
 // ── Escrita: sincroniza estado completo no Supabase ─────────
-async function saveState(state) {
+async function saveState(state, userId) {
   const { boards = [], activities = [], calendarEvents = [], people = [], activeBoardId,
           pomodoroSettings, pomodoro, exportViews = {} } = state;
 
-  // 1. Upsert boards (sem tasks — tasks ficam em tabela separada)
+  // 1. Upsert boards
   if (boards.length > 0) {
     const { error } = await supabase.from('boards').upsert(
-      boards.map(b => ({ id: b.id, name: b.name, color: b.color || null, fields: b.fields || [] })),
+      boards.map(b => ({ id: b.id, name: b.name, color: b.color || null, fields: b.fields || [], user_id: userId })),
       { onConflict: 'id' }
     );
     if (error) throw error;
   }
 
-  // 2. Deletar boards removidos (só se vieram boards no payload — evita wipe acidental)
+  // 2. Deletar boards removidos
   const boardIds = boards.map(b => b.id);
   if (boardIds.length > 0) {
-    const { error } = await supabase.from('boards').delete().not('id', 'in', `(${boardIds.join(',')})`);
+    const { error } = await supabase.from('boards').delete()
+      .eq('user_id', userId)
+      .not('id', 'in', `(${boardIds.join(',')})`);
     if (error) throw error;
   }
 
-  // 2.5. Upsert activities (precisa acontecer antes do upsert de tasks — tasks.activity_id
-  // referencia activities(id) via FK, então a atividade precisa existir antes da task promovida/checklist)
+  // 2.5. Upsert activities (antes das tasks — FK)
   if (activities.length > 0) {
     const { error } = await supabase.from('activities').upsert(
-      activities.map(appActivityToDb), { onConflict: 'id' }
+      activities.map(a => ({ ...appActivityToDb(a), user_id: userId })),
+      { onConflict: 'id' }
     );
     if (error) throw error;
   }
 
   // 3. Upsert tasks
-  // Tasks de board puro (sem activityId) — tarefas promovidas NÃO estão em board.tasks,
-  // ficam em activity.checklistTasks e são salvas pelo bloco abaixo.
   const boardTasks = boards.flatMap(b =>
     (b.tasks || [])
       .filter(t => !t.activityId)
-      .map(t => appTaskToDb(t, b.id))
+      .map(t => ({ ...appTaskToDb(t, b.id), user_id: userId }))
   );
-  // Todas as tasks de checklist (promovidas ou não) — fonte de verdade única em activity.checklistTasks.
-  // Tarefas promovidas têm boardId preenchido; não-promovidas têm boardId null.
   const allChecklistTasks = activities.flatMap(a =>
-    (a.checklistTasks || []).map(t => appTaskToDb(t, t.boardId || null, a.id))
+    (a.checklistTasks || []).map(t => ({ ...appTaskToDb(t, t.boardId || null, a.id), user_id: userId }))
   );
   const allTasks = [...boardTasks, ...allChecklistTasks];
   if (allTasks.length > 0) {
@@ -203,20 +249,19 @@ async function saveState(state) {
     if (error) throw error;
   }
 
-  // 4. Deletar tasks removidas (só se vieram boards OU activities no payload — evita wipe
-  // acidental quando um dos dois arrays está vazio por engano/erro, mas o outro tem conteúdo real;
-  // ver histórico de bug de wipe no commit f5e418d)
+  // 4. Deletar tasks removidas
   const taskIds = allTasks.map(t => t.id);
   if ((boards.length > 0 || activities.length > 0) && taskIds.length > 0) {
-    const { error } = await supabase.from('tasks').delete().not('id', 'in', `(${taskIds.join(',')})`);
+    const { error } = await supabase.from('tasks').delete()
+      .eq('user_id', userId)
+      .not('id', 'in', `(${taskIds.join(',')})`);
     if (error) throw error;
   }
 
-  // 4.5. Deletar activities removidas (só se o campo veio no payload — evita wipe acidental
-  // quando o campo está ausente por erro, mas permite deletar a última activity restante)
+  // 4.5. Deletar activities removidas
   const activityIds = activities.map(a => a.id);
   if (Array.isArray(state.activities)) {
-    const query = supabase.from('activities').delete();
+    const query = supabase.from('activities').delete().eq('user_id', userId);
     const { error } = activityIds.length > 0
       ? await query.not('id', 'in', `(${activityIds.join(',')})`)
       : await query.not('id', 'is', null);
@@ -226,34 +271,41 @@ async function saveState(state) {
   // 5. Upsert calendar_events
   if (calendarEvents.length > 0) {
     const { error } = await supabase.from('calendar_events').upsert(
-      calendarEvents.map(appEventToDb),
+      calendarEvents.map(e => ({ ...appEventToDb(e), user_id: userId })),
       { onConflict: 'id' }
     );
     if (error) throw error;
   }
   const eventIds = calendarEvents.map(e => e.id);
   if (eventIds.length > 0) {
-    const { error } = await supabase.from('calendar_events').delete().not('id', 'in', `(${eventIds.join(',')})`);
+    const { error } = await supabase.from('calendar_events').delete()
+      .eq('user_id', userId)
+      .not('id', 'in', `(${eventIds.join(',')})`);
     if (error) throw error;
   }
 
   // 6. Upsert people
   if (people.length > 0) {
-    const { error } = await supabase.from('people').upsert(people, { onConflict: 'id' });
+    const { error } = await supabase.from('people').upsert(
+      people.map(p => ({ ...p, user_id: userId })),
+      { onConflict: 'id' }
+    );
     if (error) throw error;
   }
   const peopleIds = people.map(p => p.id);
   if (peopleIds.length > 0) {
-    const { error } = await supabase.from('people').delete().not('id', 'in', `(${peopleIds.join(',')})`);
+    const { error } = await supabase.from('people').delete()
+      .eq('user_id', userId)
+      .not('id', 'in', `(${peopleIds.join(',')})`);
     if (error) throw error;
   }
 
-  // 7. Upsert app_state (chaves globais)
+  // 7. Upsert app_state — chaves prefixadas com userId: para isolamento por usuário
   const stateRows = [
-    { key: 'activeBoardId',    value: activeBoardId    ?? null },
-    { key: 'pomodoroSettings', value: pomodoroSettings ?? {} },
-    { key: 'pomodoro',         value: pomodoro         ?? {} },
-    { key: 'exportViews',      value: exportViews      ?? {} },
+    { key: `${userId}:activeBoardId`,    value: activeBoardId    ?? null },
+    { key: `${userId}:pomodoroSettings`, value: pomodoroSettings ?? {} },
+    { key: `${userId}:pomodoro`,         value: pomodoro         ?? {} },
+    { key: `${userId}:exportViews`,      value: exportViews      ?? {} },
   ];
   const { error: stateErr } = await supabase.from('app_state').upsert(stateRows, { onConflict: 'key' });
   if (stateErr) throw stateErr;
@@ -413,7 +465,7 @@ function dbActivityToApp(a) {
     dataInicio:               a.data_inicio             ?? null,
     boardDestinoId:           a.board_destino_id        ?? null,
     realizacoes:              a.realizacoes             ?? [],
-    checklistTasks:           [],  // populado separadamente a partir da tabela tasks
+    checklistTasks:           [],
     createdAt:                a.created_at              ?? null,
     updatedAt:                a.updated_at              ?? null,
   };
@@ -441,6 +493,23 @@ function dbCategoryToApp(c) {
   };
 }
 
+function appWalletToDb(w) {
+  return {
+    id:         w.id,
+    name:       w.name,
+    icon:       w.icon      || '💳',
+    sort_order: w.sortOrder ?? 0,
+  };
+}
+function dbWalletToApp(w) {
+  return {
+    id:        w.id,
+    name:      w.name,
+    icon:      w.icon       || '💳',
+    sortOrder: w.sort_order ?? 0,
+  };
+}
+
 function appTransactionToDb(t) {
   return {
     id:          t.id,
@@ -450,6 +519,7 @@ function appTransactionToDb(t) {
     amount:      t.amount       ?? 0,
     date:        t.date,
     category_id: t.categoryId   ?? null,
+    wallet_id:   t.walletId     ?? null,
   };
 }
 function dbTransactionToApp(t) {
@@ -461,6 +531,7 @@ function dbTransactionToApp(t) {
     amount:      Number(t.amount) ?? 0,
     date:        t.date,
     categoryId:  t.category_id  ?? null,
+    walletId:    t.wallet_id    ?? null,
   };
 }
 
@@ -489,44 +560,87 @@ function dbPurchaseToApp(p) {
   };
 }
 
-// ── Finance: leitura e escrita ───────────────────────────────
-async function loadFinance() {
-  const [
-    { data: cats,      error: e1 },
-    { data: txns,      error: e2 },
-    { data: purchases, error: e3 },
-  ] = await Promise.all([
-    supabase.from('finance_categories').select('*'),
-    supabase.from('finance_transactions').select('*'),
-    supabase.from('finance_planned_purchases').select('*'),
-  ]);
-
-  if (e1 || e2 || e3) {
-    throw new Error([e1, e2, e3].filter(Boolean).map(e => e.message).join('; '));
-  }
-
+function appBudgetItemToDb(i) {
   return {
-    categories:       (cats      || []).map(dbCategoryToApp),
-    transactions:     (txns      || []).map(dbTransactionToApp),
-    plannedPurchases: (purchases || []).map(dbPurchaseToApp),
+    id:          i.id,
+    category_id: i.categoryId ?? null,
+    description: i.description || '',
+    icon:        i.icon        || '📌',
+    amount:      i.amount      ?? 0,
+    sort_order:  i.sortOrder   ?? 0,
+  };
+}
+function dbBudgetItemToApp(i) {
+  return {
+    id:          i.id,
+    categoryId:  i.category_id ?? null,
+    description: i.description || '',
+    icon:        i.icon        || '📌',
+    amount:      Number(i.amount) ?? 0,
+    sortOrder:   i.sort_order  ?? 0,
   };
 }
 
-async function saveFinance(state) {
-  const { categories = [], transactions = [], plannedPurchases = [] } = state;
+// ── Finance: leitura e escrita ───────────────────────────────
+async function loadFinance(userId) {
+  const [
+    { data: cats,        error: e1 },
+    { data: txns,        error: e2 },
+    { data: purchases,   error: e3 },
+    { data: wallets,     error: e4 },
+    { data: budgetItems, error: e5 },
+  ] = await Promise.all([
+    supabase.from('finance_categories').select('*').eq('user_id', userId),
+    supabase.from('finance_transactions').select('*').eq('user_id', userId),
+    supabase.from('finance_planned_purchases').select('*').eq('user_id', userId),
+    supabase.from('finance_wallets').select('*').eq('user_id', userId),
+    supabase.from('finance_budget_items').select('*').eq('user_id', userId),
+  ]);
+
+  if (e1 || e2 || e3 || e4 || e5) {
+    throw new Error([e1, e2, e3, e4, e5].filter(Boolean).map(e => e.message).join('; '));
+  }
+
+  return {
+    categories:       (cats        || []).map(dbCategoryToApp),
+    transactions:     (txns        || []).map(dbTransactionToApp),
+    plannedPurchases: (purchases   || []).map(dbPurchaseToApp),
+    wallets:          (wallets     || []).map(dbWalletToApp),
+    budgetItems:      (budgetItems || []).map(dbBudgetItemToApp),
+  };
+}
+
+async function saveFinance(state, userId) {
+  const { categories = [], transactions = [], plannedPurchases = [], wallets = [], budgetItems = [] } = state;
 
   // Upsert + delete categories
   if (categories.length > 0) {
     const { error } = await supabase.from('finance_categories').upsert(
-      categories.map(appCategoryToDb), { onConflict: 'id' }
+      categories.map(c => ({ ...appCategoryToDb(c), user_id: userId })), { onConflict: 'id' }
     );
     if (error) throw error;
   }
   const catIds = categories.map(c => c.id);
   if (Array.isArray(state.categories)) {
-    const q = supabase.from('finance_categories').delete();
+    const q = supabase.from('finance_categories').delete().eq('user_id', userId);
     const { error } = catIds.length > 0
       ? await q.not('id', 'in', `(${catIds.join(',')})`)
+      : await q.not('id', 'is', null);
+    if (error) throw error;
+  }
+
+  // Upsert + delete wallets
+  if (wallets.length > 0) {
+    const { error } = await supabase.from('finance_wallets').upsert(
+      wallets.map(w => ({ ...appWalletToDb(w), user_id: userId })), { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+  const walletIds = wallets.map(w => w.id);
+  if (Array.isArray(state.wallets)) {
+    const q = supabase.from('finance_wallets').delete().eq('user_id', userId);
+    const { error } = walletIds.length > 0
+      ? await q.not('id', 'in', `(${walletIds.join(',')})`)
       : await q.not('id', 'is', null);
     if (error) throw error;
   }
@@ -534,13 +648,13 @@ async function saveFinance(state) {
   // Upsert + delete transactions
   if (transactions.length > 0) {
     const { error } = await supabase.from('finance_transactions').upsert(
-      transactions.map(appTransactionToDb), { onConflict: 'id' }
+      transactions.map(t => ({ ...appTransactionToDb(t), user_id: userId })), { onConflict: 'id' }
     );
     if (error) throw error;
   }
   const txnIds = transactions.map(t => t.id);
   if (Array.isArray(state.transactions)) {
-    const q = supabase.from('finance_transactions').delete();
+    const q = supabase.from('finance_transactions').delete().eq('user_id', userId);
     const { error } = txnIds.length > 0
       ? await q.not('id', 'in', `(${txnIds.join(',')})`)
       : await q.not('id', 'is', null);
@@ -550,15 +664,31 @@ async function saveFinance(state) {
   // Upsert + delete planned purchases
   if (plannedPurchases.length > 0) {
     const { error } = await supabase.from('finance_planned_purchases').upsert(
-      plannedPurchases.map(appPurchaseToDb), { onConflict: 'id' }
+      plannedPurchases.map(p => ({ ...appPurchaseToDb(p), user_id: userId })), { onConflict: 'id' }
     );
     if (error) throw error;
   }
   const purchaseIds = plannedPurchases.map(p => p.id);
   if (Array.isArray(state.plannedPurchases)) {
-    const q = supabase.from('finance_planned_purchases').delete();
+    const q = supabase.from('finance_planned_purchases').delete().eq('user_id', userId);
     const { error } = purchaseIds.length > 0
       ? await q.not('id', 'in', `(${purchaseIds.join(',')})`)
+      : await q.not('id', 'is', null);
+    if (error) throw error;
+  }
+
+  // Upsert + delete budget items
+  if (budgetItems.length > 0) {
+    const { error } = await supabase.from('finance_budget_items').upsert(
+      budgetItems.map(i => ({ ...appBudgetItemToDb(i), user_id: userId })), { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+  const budgetItemIds = budgetItems.map(i => i.id);
+  if (Array.isArray(state.budgetItems)) {
+    const q = supabase.from('finance_budget_items').delete().eq('user_id', userId);
+    const { error } = budgetItemIds.length > 0
+      ? await q.not('id', 'in', `(${budgetItemIds.join(',')})`)
       : await q.not('id', 'is', null);
     if (error) throw error;
   }
@@ -566,10 +696,33 @@ async function saveFinance(state) {
 
 // ── Servidor HTTP ────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
+
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    });
+    res.end();
+    return;
+  }
+
+  // GET /api/config — expõe configuração pública do Supabase para o frontend
+  if (req.method === 'GET' && req.url === '/api/config') {
+    send(res, 200, {
+      supabaseUrl:     process.env.SUPABASE_URL     || '',
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+    });
+    return;
+  }
+
   // GET /api/tasks — carrega estado do Supabase
   if (req.method === 'GET' && req.url === '/api/tasks') {
+    const userId = await authenticate(req, res);
+    if (!userId) return;
     try {
-      const state = await loadState();
+      const state = await loadState(userId);
       send(res, 200, state);
     } catch (err) {
       console.error('GET /api/tasks error:', err.message);
@@ -580,9 +733,11 @@ const server = http.createServer(async (req, res) => {
 
   // POST /api/tasks — salva estado no Supabase
   if (req.method === 'POST' && req.url === '/api/tasks') {
+    const userId = await authenticate(req, res);
+    if (!userId) return;
     try {
       const body = await parseBody(req);
-      await saveState(body);
+      await saveState(body, userId);
       send(res, 200, { ok: true });
     } catch (err) {
       console.error('POST /api/tasks error:', err.message);
@@ -593,8 +748,10 @@ const server = http.createServer(async (req, res) => {
 
   // GET /api/finance — carrega dados financeiros
   if (req.method === 'GET' && req.url === '/api/finance') {
+    const userId = await authenticate(req, res);
+    if (!userId) return;
     try {
-      const data = await loadFinance();
+      const data = await loadFinance(userId);
       send(res, 200, data);
     } catch (err) {
       console.error('GET /api/finance error:', err.message);
@@ -605,12 +762,47 @@ const server = http.createServer(async (req, res) => {
 
   // POST /api/finance — salva dados financeiros
   if (req.method === 'POST' && req.url === '/api/finance') {
+    const userId = await authenticate(req, res);
+    if (!userId) return;
     try {
       const body = await parseBody(req);
-      await saveFinance(body);
+      await saveFinance(body, userId);
       send(res, 200, { ok: true });
     } catch (err) {
       console.error('POST /api/finance error:', err.message);
+      send(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  // POST /api/claim-data — migra dados existentes (sem user_id) para o usuário logado
+  // Chamado automaticamente pelo frontend na primeira vez que o usuário entra no app
+  if (req.method === 'POST' && req.url === '/api/claim-data') {
+    if (useMemoryFallback) { send(res, 200, { ok: true }); return; }
+    const userId = await authenticate(req, res);
+    if (!userId) return;
+    try {
+      const tables = [
+        'boards', 'tasks', 'calendar_events', 'people', 'activities',
+        'finance_categories', 'finance_wallets', 'finance_transactions',
+        'finance_planned_purchases', 'finance_budget_items',
+      ];
+      for (const t of tables) {
+        const { error } = await supabase.from(t).update({ user_id: userId }).is('user_id', null);
+        if (error) console.warn(`claim-data ${t}:`, error.message);
+      }
+      // Migrar chaves do app_state sem prefixo para o formato userId:key
+      const { data: oldState } = await supabase.from('app_state').select('*');
+      const toMigrate = (oldState || []).filter(r => !r.key.includes(':'));
+      for (const row of toMigrate) {
+        await supabase.from('app_state').upsert(
+          { key: `${userId}:${row.key}`, value: row.value },
+          { onConflict: 'key' }
+        );
+      }
+      send(res, 200, { ok: true });
+    } catch (err) {
+      console.error('POST /api/claim-data error:', err.message);
       send(res, 500, { error: err.message });
     }
     return;

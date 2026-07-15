@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finanças – Planejamento do Mês</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #FAF7F2;
+  --surface: #FFFFFF;
+  --border: #ECE6D8;
+  --border-strong: #F1ECE0;
+  --neutral-btn: #F5F1E8;
+  --neutral-btn-hover: #ECE6D8;
+  --text: #262420;
+  --text-2: #7A766C;
+  --text-3: #B3AE9F;
+  --text-meta: #8B8778;
+  --green: #3A6604;
+  --green-soft: #EAF0DE;
+  --green-soft-hover: #DCE7C9;
+  --green-hover: #2F5303;
+  --red: #C1622D;
+  --red-soft: #FBEEE6;
+  --blue: #3E6FBD;
+  --blue-soft: #E8EFF9;
+  --amber: #C07C30;
+  --amber-soft: #FDF0E0;
+  --teal: #1F7A6E;
+  --teal-soft: #E0F5F2;
+  --dark: #262420;
+  --r-panel: 16px;
+  --r-btn: 10px;
+  --shadow-card: 0 1px 2px rgba(38,36,32,.05);
+  --shadow-modal: 0 20px 50px rgba(38,36,32,.2);
+  --font: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #E3DDCF; border-radius: 8px; }
+.hidden { display: none !important; }
+
+/* ===================================================
+   APP SHELL
+   =================================================== */
+.app-shell { display: flex; height: 100vh; width: 100%; overflow: hidden; }
+
+/* ===================================================
+   SIDEBAR
+   =================================================== */
+.sidebar {
+  width: 236px; flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 16px 0; overflow: hidden;
+}
+.sidebar-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px 16px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.app-logo {
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--green); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 14px;
+}
+.sidebar-name { font: 700 14.5px var(--font); flex: 1; white-space: nowrap; }
+.sidebar-collapse {
+  border: none; background: transparent; color: #9A9488;
+  cursor: pointer; font-size: 15px; padding: 4px; border-radius: 6px;
+}
+.sidebar-collapse:hover { background: var(--border-strong); }
+.sidebar-nav {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  padding: 0 10px; overflow-y: auto;
+}
+.nav-label {
+  font: 700 10px/1 var(--font); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em;
+  padding: 8px 8px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  border: none; cursor: pointer; padding: 9px 8px;
+  border-radius: 10px; text-align: left;
+  background: transparent; color: var(--text);
+  font: 600 13px var(--font); width: 100%;
+}
+.nav-item:hover { background: var(--neutral-btn); }
+.nav-item.active { background: var(--green-soft); color: var(--green); }
+.nav-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.nav-sep { height: 1px; background: var(--border-strong); margin: 10px 4px; }
+.nav-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Pomodoro */
+.pomo-wrap { padding: 10px; margin-top: auto; }
+.pomo-card { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; background: #FBF9F4; }
+.pomo-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.pomo-dot { width: 8px; height: 8px; border-radius: 50%; background: #E3DDCF; flex-shrink: 0; }
+.pomo-label { font: 600 11.5px var(--font); color: var(--text-2); flex: 1; }
+.pomo-time { font: 700 15px var(--font); font-variant-numeric: tabular-nums; }
+
+/* ===================================================
+   MAIN
+   =================================================== */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
+/* Topbar */
+.topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 26px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.topbar h1 { font: 700 17px var(--font); margin: 0; }
+.spacer { flex: 1; }
+.month-nav { display: flex; align-items: center; gap: 6px; }
+.month-nav button {
+  width: 30px; height: 30px; border: none;
+  background: var(--neutral-btn); color: var(--text);
+  border-radius: var(--r-btn); font-size: 15px; cursor: pointer;
+}
+.month-nav button:hover { background: var(--neutral-btn-hover); }
+.month-chip { font: 600 12.5px var(--font); color: var(--text-2); min-width: 110px; text-align: center; }
+.btn-brand {
+  height: 32px; padding: 0 14px; border: none;
+  border-radius: var(--r-btn); background: var(--green); color: #fff;
+  font: 700 12px var(--font); cursor: pointer; white-space: nowrap;
+}
+.btn-brand:hover { background: var(--green-hover); }
+.btn-neutral {
+  height: 32px; padding: 0 14px; border: none;
+  border-radius: var(--r-btn); background: var(--neutral-btn); color: var(--text);
+  font: 700 12px var(--font); cursor: pointer;
+}
+.btn-neutral:hover { background: var(--neutral-btn-hover); }
+.btn-primary {
+  height: 34px; padding: 0 16px; border: none;
+  border-radius: var(--r-btn); background: var(--green); color: #fff;
+  font: 700 12.5px var(--font); cursor: pointer;
+}
+.btn-primary:hover { background: var(--green-hover); }
+.icon-btn {
+  border: none; background: var(--neutral-btn); color: var(--text-2);
+  border-radius: var(--r-btn); cursor: pointer; width: 32px; height: 32px;
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+}
+.icon-btn:hover { background: var(--neutral-btn-hover); }
+
+/* Tabs */
+.fin-tabs {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 26px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.fin-tab {
+  padding: 11px 14px; border: none; background: transparent;
+  color: var(--text-2); font: 600 13px var(--font); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.fin-tab:hover { color: var(--text); }
+.fin-tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+/* Views */
+.fin-view { flex: 1; overflow-y: auto; padding: 22px 26px; display: none; }
+.fin-view.active { display: block; }
+
+/* ===================================================
+   CATEGORY COLOR CLASSES (shared)
+   =================================================== */
+.c-blue   { background: var(--blue-soft);  color: var(--blue); }
+.c-green  { background: var(--green-soft); color: var(--green); }
+.c-amber  { background: var(--amber-soft); color: var(--amber); }
+.c-teal   { background: var(--teal-soft);  color: var(--teal); }
+.c-red    { background: var(--red-soft);   color: var(--red); }
+.c-gray   { background: #F0EEE8; color: var(--text-2); }
+.c-purple { background: #F0EBF8; color: #7B4FA0; }
+
+.bar-blue   { background: var(--blue); }
+.bar-green  { background: var(--green); }
+.bar-amber  { background: var(--amber); }
+.bar-teal   { background: var(--teal); }
+.bar-red    { background: var(--red); }
+.bar-gray   { background: #9A9488; }
+.bar-purple { background: #7B4FA0; }
+
+/* ===================================================
+   SECTION CARD
+   =================================================== */
+.sc {
+  background: var(--surface); border-radius: var(--r-panel);
+  box-shadow: var(--shadow-card); border: 1px solid var(--border-strong);
+  overflow: hidden;
+}
+.sc-head {
+  padding: 14px 18px 10px; border-bottom: 1px solid var(--border-strong);
+  display: flex; align-items: center; gap: 8px;
+}
+.sc-title { font: 700 13px var(--font); flex: 1; }
+.sc-sub { font: 600 11px var(--font); color: var(--text-3); }
+.sc-body { padding: 12px 18px; }
+.sc-link {
+  height: 26px; padding: 0 10px; border: none;
+  background: var(--neutral-btn); color: var(--text-2);
+  border-radius: 8px; font: 600 11.5px var(--font); cursor: pointer;
+  white-space: nowrap;
+}
+.sc-link:hover { background: var(--neutral-btn-hover); }
+
+/* ===================================================
+   PLANEJAMENTO DO MÊS
+   =================================================== */
+
+/* Summary bar at top */
+.plan-summary {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-bottom: 22px;
+}
+.plan-kpi {
+  background: var(--surface); border-radius: var(--r-panel);
+  padding: 16px 18px; box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-strong);
+}
+.plan-kpi-label {
+  font: 600 10.5px var(--font); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px;
+}
+.plan-kpi-value { font: 800 22px var(--font); color: var(--text); line-height: 1.1; margin-bottom: 5px; }
+.plan-kpi-sub { font: 500 11.5px var(--font); color: var(--text-meta); }
+.plan-kpi-bar { height: 4px; background: var(--border-strong); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+.plan-kpi-bar-fill { height: 100%; border-radius: 4px; }
+
+/* Body: two-column layout */
+.plan-body {
+  display: grid; grid-template-columns: 1fr 300px;
+  gap: 14px; align-items: start;
+}
+
+/* Category planning card */
+.plan-cat-card {
+  background: var(--surface); border-radius: var(--r-panel);
+  box-shadow: var(--shadow-card); border: 1px solid var(--border-strong);
+  overflow: hidden; margin-bottom: 12px;
+}
+.plan-cat-card:last-child { margin-bottom: 0; }
+
+.plan-cat-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 18px; cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: background .12s;
+}
+.plan-cat-header:hover { background: #FAFAF7; }
+.plan-cat-header.expanded { border-bottom-color: var(--border-strong); }
+
+.cat-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 20px; font: 600 11.5px var(--font);
+  white-space: nowrap;
+}
+
+.plan-cat-info { flex: 1; min-width: 0; }
+.plan-cat-name-row { display: flex; align-items: center; gap: 8px; }
+.plan-cat-progress-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.plan-cat-bar-wrap { flex: 1; height: 5px; background: var(--border-strong); border-radius: 5px; overflow: hidden; }
+.plan-cat-bar { height: 100%; border-radius: 5px; }
+.plan-cat-pct { font: 700 11px var(--font); color: var(--text-3); flex-shrink: 0; min-width: 34px; text-align: right; }
+
+.plan-cat-amounts { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; text-align: right; }
+.plan-spent { font: 700 13px var(--font); }
+.plan-spent.ok { color: var(--text); }
+.plan-spent.warn { color: var(--amber); }
+.plan-spent.over { color: var(--red); }
+.plan-of { font: 500 11px var(--font); color: var(--text-3); }
+
+/* Budget inline edit */
+.budget-edit {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.budget-value {
+  font: 700 13px var(--font); color: var(--text-2);
+  border: none; background: transparent;
+  cursor: pointer; padding: 0; outline: none;
+  border-bottom: 1px dashed var(--border);
+  min-width: 70px; text-align: right;
+}
+.budget-value:hover { color: var(--text); border-bottom-color: var(--text-3); }
+.budget-value:focus { color: var(--text); border-bottom-color: var(--green); background: #fff; border-radius: 0; padding: 1px 2px; }
+
+.plan-no-limit {
+  font: 500 11.5px var(--font); color: var(--text-3);
+  border-bottom: 1px dashed var(--border);
+  cursor: pointer; padding: 0 2px;
+}
+.plan-no-limit:hover { color: var(--text-2); border-bottom-color: var(--text-3); }
+
+.plan-expand-icon {
+  font-size: 12px; color: var(--text-3);
+  transition: transform .2s; flex-shrink: 0;
+}
+.plan-expand-icon.open { transform: rotate(90deg); }
+
+/* Fixed items inside expanded category */
+.plan-fixed-list { padding: 0 18px 14px; }
+.plan-fixed-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 0 8px;
+  font: 700 10px var(--font); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.plan-fixed-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 10px;
+  margin-bottom: 6px;
+}
+.plan-fixed-item:last-of-type { margin-bottom: 0; }
+.plan-fixed-name { flex: 1; font: 500 12.5px var(--font); }
+.plan-fixed-amt {
+  font: 700 12.5px var(--font); color: var(--text);
+  border: none; background: transparent;
+  text-align: right; outline: none;
+  min-width: 80px; cursor: text;
+  border-bottom: 1px solid transparent;
+}
+.plan-fixed-amt:hover { border-bottom-color: var(--border); }
+.plan-fixed-amt:focus { border-bottom-color: var(--green); background: #fff; border-radius: 2px; padding: 1px 4px; }
+.plan-fixed-del {
+  width: 22px; height: 22px; border: none; background: transparent;
+  color: var(--text-3); cursor: pointer; border-radius: 5px;
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.plan-fixed-del:hover { background: var(--red-soft); color: var(--red); }
+
+.plan-add-fixed {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 7px 12px;
+  border: 1.5px dashed var(--border); border-radius: 10px;
+  background: transparent; cursor: pointer; width: 100%;
+  font: 600 12px var(--font); color: var(--text-3);
+}
+.plan-add-fixed:hover { border-color: var(--text-3); background: var(--neutral-btn); color: var(--text-2); }
+
+/* Add category button */
+.plan-add-cat {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px; width: 100%;
+  border: 2px dashed var(--border); border-radius: var(--r-panel);
+  background: transparent; cursor: pointer;
+  font: 600 13px var(--font); color: var(--text-3);
+  margin-top: 4px;
+}
+.plan-add-cat:hover { border-color: var(--text-3); background: var(--neutral-btn); color: var(--text-2); }
+
+/* Right column: summary panel */
+.plan-right { display: flex; flex-direction: column; gap: 14px; }
+
+.plan-total-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border-strong);
+}
+.plan-total-row:last-child { border-bottom: none; padding-bottom: 0; }
+.plan-total-name { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--font); }
+.plan-total-val { font: 700 12.5px var(--font); }
+.plan-total-val.green { color: var(--green); }
+.plan-total-val.red { color: var(--red); }
+
+.plan-divider {
+  height: 1px; background: var(--border-strong);
+  margin: 4px 0;
+}
+
+/* Tips card */
+.plan-tip {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border-strong);
+  font: 500 11.5px var(--font); color: var(--text); line-height: 1.55;
+}
+.plan-tip:last-child { border-bottom: none; padding-bottom: 0; }
+.plan-tip-icon {
+  width: 26px; height: 26px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex-shrink: 0;
+}
+
+/* ===================================================
+   MODAL
+   =================================================== */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(38,36,32,.42);
+  z-index: 50; display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .15s ease;
+}
+.modal {
+  background: var(--surface); border-radius: 16px;
+  box-shadow: var(--shadow-modal);
+  width: 460px; max-width: 94vw; max-height: 90vh;
+  overflow-y: auto; animation: modalIn .18s ease;
+}
+.modal-hd {
+  padding: 20px 22px 14px; border-bottom: 1px solid var(--border-strong);
+  display: flex; align-items: center;
+}
+.modal-title { font: 800 16px var(--font); flex: 1; }
+.close-btn {
+  width: 28px; height: 28px; border: none; background: var(--neutral-btn);
+  border-radius: 8px; cursor: pointer; font-size: 17px; color: var(--text-2);
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.close-btn:hover { background: var(--neutral-btn-hover); }
+.modal-bd { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.modal-ft {
+  padding: 12px 22px 18px; display: flex; gap: 10px; justify-content: flex-end;
+  border-top: 1px solid var(--border-strong);
+}
+.field {
+  display: block; font: 700 10.5px var(--font); color: var(--text-2);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.field input, .field select {
+  display: block; width: 100%; margin-top: 5px;
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 9px 11px; font: 500 13px var(--font);
+  background: var(--bg); outline: none; color: var(--text);
+}
+.field input:focus, .field select:focus { border-color: var(--green); background: #fff; }
+
+/* Icon picker */
+.icon-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.icon-opt {
+  width: 34px; height: 34px; border: 1.5px solid var(--border);
+  border-radius: 9px; background: var(--bg); cursor: pointer; font-size: 17px;
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-opt:hover { background: var(--neutral-btn); }
+.icon-opt.selected { border-color: var(--green); background: var(--green-soft); }
+
+/* Color picker */
+.color-picker { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.color-opt {
+  width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; transition: transform .1s;
+}
+.color-opt:hover { transform: scale(1.15); }
+.color-opt.selected { border-color: var(--text); transform: scale(1.1); }
+
+@keyframes fadeIn  { from { opacity: 0; }                              to { opacity: 1; } }
+@keyframes modalIn { from { transform: translateY(10px) scale(.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ======================== SIDEBAR ======================== -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="app-logo">T</div>
+      <span class="sidebar-name">Tarefas</span>
+      <button class="sidebar-collapse">‹</button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Boards</div>
+      <button class="nav-item">
+        <span class="nav-dot" style="background:#C1622D"></span>
+        <span>Trabalho</span>
+      </button>
+      <button class="nav-item">
+        <span class="nav-dot" style="background:#3E6FBD"></span>
+        <span>Pessoal</span>
+      </button>
+      <button class="nav-item" style="color:var(--text-3)">
+        <span style="width:9px;height:9px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">+</span>
+        <span>Novo board</span>
+      </button>
+
+      <div class="nav-sep"></div>
+
+      <button class="nav-item">
+        <span class="nav-icon">
+          <span style="width:13px;height:12px;border:1.5px solid currentColor;border-radius:3px;position:relative;display:block">
+            <span style="position:absolute;top:3px;left:0;right:0;height:1.5px;background:currentColor"></span>
+          </span>
+        </span>
+        <span>Calendário</span>
+      </button>
+
+      <button class="nav-item">
+        <span class="nav-icon">
+          <svg width="14" height="13" viewBox="0 0 14 13" fill="none"><rect x=".75" y=".75" width="12.5" height="11.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/><path d="M4 4.5h6M4 7h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </span>
+        <span>Atividades</span>
+      </button>
+
+      <div class="nav-sep"></div>
+
+      <button class="nav-item active">
+        <span class="nav-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="6.25" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M7 3.5v7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M5.2 9.2c0 .77.81 1.3 1.8 1.3s1.8-.53 1.8-1.3c0-.76-.81-1.3-1.8-1.3s-1.8-.53-1.8-1.3c0-.76.81-1.3 1.8-1.3s1.8.54 1.8 1.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span>Finanças</span>
+      </button>
+    </nav>
+
+    <div class="pomo-wrap">
+      <div class="pomo-card">
+        <div class="pomo-row">
+          <span class="pomo-dot"></span>
+          <span class="pomo-label">Foco</span>
+          <span class="pomo-time">24:12</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ======================== MAIN ======================== -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <h1>Finanças</h1>
+      <div class="month-nav">
+        <button>‹</button>
+        <span class="month-chip">Julho 2026</span>
+        <button>›</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn-brand" onclick="openLancarModal()">+ Lançar</button>
+      <button class="icon-btn">⚙</button>
+    </header>
+
+    <!-- Tabs -->
+    <div class="fin-tabs">
+      <button class="fin-tab" onclick="switchTab('geral')">Visão geral</button>
+      <button class="fin-tab" onclick="switchTab('lancamentos')">Lançamentos</button>
+      <button class="fin-tab active" onclick="switchTab('planejamento')">Planejamento</button>
+      <button class="fin-tab" onclick="switchTab('planejados')">Planejados</button>
+    </div>
+
+    <!-- ============================================================
+         TAB: PLANEJAMENTO DO MÊS
+         ============================================================ -->
+    <div class="fin-view active" id="tab-planejamento">
+
+      <!-- Summary KPIs -->
+      <div class="plan-summary">
+        <div class="plan-kpi">
+          <div class="plan-kpi-label">Orçamento total</div>
+          <div class="plan-kpi-value">R$&nbsp;5.200</div>
+          <div class="plan-kpi-sub">soma de todas as categorias</div>
+        </div>
+        <div class="plan-kpi">
+          <div class="plan-kpi-label">Gastos fixos</div>
+          <div class="plan-kpi-value">R$&nbsp;3.060</div>
+          <div class="plan-kpi-sub">59% do orçamento</div>
+          <div class="plan-kpi-bar">
+            <div class="plan-kpi-bar-fill bar-blue" style="width:59%"></div>
+          </div>
+        </div>
+        <div class="plan-kpi">
+          <div class="plan-kpi-label">Gasto até agora</div>
+          <div class="plan-kpi-value" style="color:var(--amber)">R$&nbsp;3.840</div>
+          <div class="plan-kpi-sub">74% do orçamento · 15 dias</div>
+          <div class="plan-kpi-bar">
+            <div class="plan-kpi-bar-fill bar-amber" style="width:74%"></div>
+          </div>
+        </div>
+        <div class="plan-kpi">
+          <div class="plan-kpi-label">Disponível restante</div>
+          <div class="plan-kpi-value" style="color:var(--green)">R$&nbsp;1.360</div>
+          <div class="plan-kpi-sub">para os próximos 16 dias</div>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="plan-body">
+
+        <!-- LEFT: category cards -->
+        <div>
+
+          <!-- ── MORADIA ── -->
+          <div class="plan-cat-card">
+            <div class="plan-cat-header expanded" onclick="toggleCat(this)">
+              <span class="cat-badge c-blue">🏠 Moradia</span>
+              <div class="plan-cat-info">
+                <div class="plan-cat-progress-row">
+                  <div class="plan-cat-bar-wrap">
+                    <div class="plan-cat-bar bar-blue" style="width:100%"></div>
+                  </div>
+                  <span class="plan-cat-pct" style="color:var(--amber)">100%</span>
+                </div>
+              </div>
+              <div class="plan-cat-amounts">
+                <span class="plan-spent warn">R$&nbsp;2.200</span>
+                <span class="plan-of">/</span>
+                <input type="text" class="budget-value" value="R$ 2.200" onclick="event.stopPropagation()" title="Clique para editar o orçamento">
+              </div>
+              <span class="plan-expand-icon open">›</span>
+            </div>
+            <div class="plan-fixed-list">
+              <div class="plan-fixed-head">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="display:none"/><rect x="1" y="5" width="10" height="2" rx="1" fill="currentColor" opacity=".4"/><rect x="5" y="1" width="2" height="10" rx="1" fill="currentColor" opacity=".4" style="display:none"/></svg>
+                Gastos fixos
+              </div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">🏠</span>
+                <span class="plan-fixed-name">Aluguel</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 2.200" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <button class="plan-add-fixed" onclick="addFixed(this, 'Moradia')">
+                <span style="font-size:15px">+</span> Adicionar gasto fixo
+              </button>
+            </div>
+          </div>
+
+          <!-- ── ALIMENTAÇÃO ── -->
+          <div class="plan-cat-card">
+            <div class="plan-cat-header expanded" onclick="toggleCat(this)">
+              <span class="cat-badge c-green">🍽 Alimentação</span>
+              <div class="plan-cat-info">
+                <div class="plan-cat-progress-row">
+                  <div class="plan-cat-bar-wrap">
+                    <div class="plan-cat-bar bar-green" style="width:62%"></div>
+                  </div>
+                  <span class="plan-cat-pct">62%</span>
+                </div>
+              </div>
+              <div class="plan-cat-amounts">
+                <span class="plan-spent ok">R$&nbsp;750</span>
+                <span class="plan-of">/</span>
+                <input type="text" class="budget-value" value="R$ 1.200" onclick="event.stopPropagation()" title="Clique para editar o orçamento">
+              </div>
+              <span class="plan-expand-icon open">›</span>
+            </div>
+            <div class="plan-fixed-list">
+              <div class="plan-fixed-head">Gastos fixos</div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">🍱</span>
+                <span class="plan-fixed-name">Marmita mensal</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 320" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">☕</span>
+                <span class="plan-fixed-name">iFood assinatura</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 30" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <button class="plan-add-fixed" onclick="addFixed(this, 'Alimentação')">
+                <span style="font-size:15px">+</span> Adicionar gasto fixo
+              </button>
+            </div>
+          </div>
+
+          <!-- ── TRANSPORTE ── -->
+          <div class="plan-cat-card">
+            <div class="plan-cat-header" onclick="toggleCat(this)">
+              <span class="cat-badge c-amber">🚗 Transporte</span>
+              <div class="plan-cat-info">
+                <div class="plan-cat-progress-row">
+                  <div class="plan-cat-bar-wrap">
+                    <div class="plan-cat-bar bar-amber" style="width:56%"></div>
+                  </div>
+                  <span class="plan-cat-pct">56%</span>
+                </div>
+              </div>
+              <div class="plan-cat-amounts">
+                <span class="plan-spent ok">R$&nbsp;280</span>
+                <span class="plan-of">/</span>
+                <input type="text" class="budget-value" value="R$ 500" onclick="event.stopPropagation()" title="Clique para editar o orçamento">
+              </div>
+              <span class="plan-expand-icon">›</span>
+            </div>
+            <div class="plan-fixed-list" style="display:none">
+              <div class="plan-fixed-head">Gastos fixos</div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">🚌</span>
+                <span class="plan-fixed-name">Vale transporte</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 220" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <button class="plan-add-fixed" onclick="addFixed(this, 'Transporte')">
+                <span style="font-size:15px">+</span> Adicionar gasto fixo
+              </button>
+            </div>
+          </div>
+
+          <!-- ── SAÚDE ── -->
+          <div class="plan-cat-card">
+            <div class="plan-cat-header" onclick="toggleCat(this)">
+              <span class="cat-badge c-teal">💊 Saúde</span>
+              <div class="plan-cat-info">
+                <div class="plan-cat-progress-row">
+                  <div class="plan-cat-bar-wrap">
+                    <div class="plan-cat-bar bar-teal" style="width:0%"></div>
+                  </div>
+                  <span class="plan-cat-pct">0%</span>
+                </div>
+              </div>
+              <div class="plan-cat-amounts">
+                <span class="plan-spent ok" style="color:var(--text-3)">R$&nbsp;0</span>
+                <span class="plan-of">/</span>
+                <input type="text" class="budget-value" value="R$ 300" onclick="event.stopPropagation()" title="Clique para editar o orçamento">
+              </div>
+              <span class="plan-expand-icon">›</span>
+            </div>
+            <div class="plan-fixed-list" style="display:none">
+              <div class="plan-fixed-head">Gastos fixos</div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">🏥</span>
+                <span class="plan-fixed-name">Plano de saúde</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 180" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <button class="plan-add-fixed" onclick="addFixed(this, 'Saúde')">
+                <span style="font-size:15px">+</span> Adicionar gasto fixo
+              </button>
+            </div>
+          </div>
+
+          <!-- ── LAZER ── -->
+          <div class="plan-cat-card">
+            <div class="plan-cat-header" onclick="toggleCat(this)">
+              <span class="cat-badge c-red">🎮 Lazer</span>
+              <div class="plan-cat-info">
+                <div class="plan-cat-progress-row">
+                  <div class="plan-cat-bar-wrap">
+                    <div class="plan-cat-bar bar-red" style="width:70%"></div>
+                  </div>
+                  <span class="plan-cat-pct" style="color:var(--amber)">70%</span>
+                </div>
+              </div>
+              <div class="plan-cat-amounts">
+                <span class="plan-spent warn">R$&nbsp;420</span>
+                <span class="plan-of">/</span>
+                <input type="text" class="budget-value" value="R$ 600" onclick="event.stopPropagation()" title="Clique para editar o orçamento">
+              </div>
+              <span class="plan-expand-icon">›</span>
+            </div>
+            <div class="plan-fixed-list" style="display:none">
+              <div class="plan-fixed-head">Gastos fixos</div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">🎵</span>
+                <span class="plan-fixed-name">Spotify</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 22" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">📺</span>
+                <span class="plan-fixed-name">Netflix</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 55" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <div class="plan-fixed-item">
+                <span style="font-size:15px">🎮</span>
+                <span class="plan-fixed-name">Xbox Game Pass</span>
+                <input type="text" class="plan-fixed-amt" value="R$ 34" title="Editar valor">
+                <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+              </div>
+              <button class="plan-add-fixed" onclick="addFixed(this, 'Lazer')">
+                <span style="font-size:15px">+</span> Adicionar gasto fixo
+              </button>
+            </div>
+          </div>
+
+          <!-- ── OUTROS ── -->
+          <div class="plan-cat-card">
+            <div class="plan-cat-header" onclick="toggleCat(this)">
+              <span class="cat-badge c-gray">📦 Outros</span>
+              <div class="plan-cat-info">
+                <div class="plan-cat-progress-row">
+                  <div class="plan-cat-bar-wrap">
+                    <div class="plan-cat-bar bar-gray" style="width:47%"></div>
+                  </div>
+                  <span class="plan-cat-pct">47%</span>
+                </div>
+              </div>
+              <div class="plan-cat-amounts">
+                <span class="plan-spent ok">R$&nbsp;190</span>
+                <span class="plan-of">/</span>
+                <span class="plan-no-limit" title="Clique para definir um orçamento" onclick="event.stopPropagation(); setLimit(this)">sem limite</span>
+              </div>
+              <span class="plan-expand-icon">›</span>
+            </div>
+            <div class="plan-fixed-list" style="display:none">
+              <div class="plan-fixed-head">Gastos fixos</div>
+              <p style="font:500 12px var(--font);color:var(--text-3);margin:0 0 8px">Nenhum gasto fixo ainda.</p>
+              <button class="plan-add-fixed" onclick="addFixed(this, 'Outros')">
+                <span style="font-size:15px">+</span> Adicionar gasto fixo
+              </button>
+            </div>
+          </div>
+
+          <!-- Add new category -->
+          <button class="plan-add-cat" onclick="openNewCatModal()">
+            <span style="font-size:18px">+</span>
+            Nova categoria
+          </button>
+
+        </div>
+
+        <!-- RIGHT: totals + tips -->
+        <div class="plan-right">
+
+          <!-- Budget totals -->
+          <div class="sc">
+            <div class="sc-head">
+              <span class="sc-title">Resumo do planejamento</span>
+              <span class="sc-sub">Jul 2026</span>
+            </div>
+            <div class="sc-body" style="padding-top:8px;padding-bottom:8px">
+
+              <div class="plan-total-row">
+                <span class="plan-total-name"><span style="font-size:14px">🏠</span> Moradia</span>
+                <span class="plan-total-val">R$&nbsp;2.200</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name"><span style="font-size:14px">🍽</span> Alimentação</span>
+                <span class="plan-total-val">R$&nbsp;1.200</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name"><span style="font-size:14px">🚗</span> Transporte</span>
+                <span class="plan-total-val">R$&nbsp;500</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name"><span style="font-size:14px">💊</span> Saúde</span>
+                <span class="plan-total-val">R$&nbsp;300</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name"><span style="font-size:14px">🎮</span> Lazer</span>
+                <span class="plan-total-val">R$&nbsp;600</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name"><span style="font-size:14px">📦</span> Outros</span>
+                <span class="plan-total-val" style="color:var(--text-3)">–</span>
+              </div>
+
+              <div class="plan-divider" style="margin:10px 0"></div>
+
+              <div class="plan-total-row" style="padding-top:6px">
+                <span class="plan-total-name" style="font-weight:700">Total planejado</span>
+                <span class="plan-total-val">R$&nbsp;4.800</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">Receita estimada</span>
+                <span class="plan-total-val green">R$&nbsp;8.500</span>
+              </div>
+              <div class="plan-total-row" style="border-bottom:none;padding-bottom:0">
+                <span class="plan-total-name" style="font-weight:700">Sobra prevista</span>
+                <span class="plan-total-val green">R$&nbsp;3.700</span>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Fixed costs breakdown -->
+          <div class="sc">
+            <div class="sc-head">
+              <span class="sc-title">Fixos do mês</span>
+              <span class="sc-sub">R$&nbsp;3.061 total</span>
+            </div>
+            <div class="sc-body" style="padding-top:8px;padding-bottom:8px">
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">Aluguel</span>
+                <span class="plan-total-val">R$&nbsp;2.200</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">Marmita mensal</span>
+                <span class="plan-total-val">R$&nbsp;320</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">Plano de saúde</span>
+                <span class="plan-total-val">R$&nbsp;180</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">Vale transporte</span>
+                <span class="plan-total-val">R$&nbsp;220</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">Netflix</span>
+                <span class="plan-total-val">R$&nbsp;55</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">iFood assinatura</span>
+                <span class="plan-total-val">R$&nbsp;30</span>
+              </div>
+              <div class="plan-total-row">
+                <span class="plan-total-name" style="color:var(--text-2)">Xbox Game Pass</span>
+                <span class="plan-total-val">R$&nbsp;34</span>
+              </div>
+              <div class="plan-total-row" style="border-bottom:none">
+                <span class="plan-total-name" style="color:var(--text-2)">Spotify</span>
+                <span class="plan-total-val">R$&nbsp;22</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tips -->
+          <div class="sc">
+            <div class="sc-head"><span class="sc-title">Dicas de planejamento</span></div>
+            <div class="sc-body" style="padding-top:8px;padding-bottom:8px">
+              <div class="plan-tip">
+                <div class="plan-tip-icon" style="background:var(--amber-soft)">💡</div>
+                <div><strong>Lazer</strong> está a 70% do limite na metade do mês. Considere reduzir o orçamento ou controlar os variáveis.</div>
+              </div>
+              <div class="plan-tip">
+                <div class="plan-tip-icon" style="background:var(--blue-soft)">📊</div>
+                <div>Seus fixos representam <strong>59%</strong> do orçamento total. A recomendação é manter abaixo de 50%.</div>
+              </div>
+              <div class="plan-tip">
+                <div class="plan-tip-icon" style="background:var(--green-soft)">✅</div>
+                <div>Com R$&nbsp;3.700 de sobra prevista, você tem margem para reforçar algum objetivo financeiro.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /tab-planejamento -->
+
+  </div><!-- /main -->
+</div><!-- /app-shell -->
+
+<!-- ======================== MODAL: Nova Categoria ======================== -->
+<div id="newCatModal" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-title">Nova categoria</span>
+      <button class="close-btn" onclick="closeNewCatModal()">×</button>
+    </div>
+    <div class="modal-bd">
+
+      <label class="field">
+        Nome
+        <input type="text" id="newCatName" placeholder="Ex.: Educação, Pets, Streaming…">
+      </label>
+
+      <div class="field">
+        Ícone
+        <div class="icon-picker">
+          <button class="icon-opt selected" data-icon="📚" onclick="selectIcon(this)">📚</button>
+          <button class="icon-opt" data-icon="🐾" onclick="selectIcon(this)">🐾</button>
+          <button class="icon-opt" data-icon="✈️" onclick="selectIcon(this)">✈️</button>
+          <button class="icon-opt" data-icon="🏋️" onclick="selectIcon(this)">🏋️</button>
+          <button class="icon-opt" data-icon="💻" onclick="selectIcon(this)">💻</button>
+          <button class="icon-opt" data-icon="👕" onclick="selectIcon(this)">👕</button>
+          <button class="icon-opt" data-icon="🎓" onclick="selectIcon(this)">🎓</button>
+          <button class="icon-opt" data-icon="🌿" onclick="selectIcon(this)">🌿</button>
+          <button class="icon-opt" data-icon="🎁" onclick="selectIcon(this)">🎁</button>
+          <button class="icon-opt" data-icon="⚡" onclick="selectIcon(this)">⚡</button>
+          <button class="icon-opt" data-icon="🔧" onclick="selectIcon(this)">🔧</button>
+          <button class="icon-opt" data-icon="📦" onclick="selectIcon(this)">📦</button>
+        </div>
+      </div>
+
+      <div class="field">
+        Cor
+        <div class="color-picker">
+          <div class="color-opt selected" data-color="blue"   style="background:#3E6FBD" onclick="selectColor(this)" title="Azul"></div>
+          <div class="color-opt" data-color="green"  style="background:#3A6604" onclick="selectColor(this)" title="Verde"></div>
+          <div class="color-opt" data-color="amber"  style="background:#C07C30" onclick="selectColor(this)" title="Âmbar"></div>
+          <div class="color-opt" data-color="teal"   style="background:#1F7A6E" onclick="selectColor(this)" title="Teal"></div>
+          <div class="color-opt" data-color="red"    style="background:#C1622D" onclick="selectColor(this)" title="Vermelho"></div>
+          <div class="color-opt" data-color="purple" style="background:#7B4FA0" onclick="selectColor(this)" title="Roxo"></div>
+          <div class="color-opt" data-color="gray"   style="background:#9A9488" onclick="selectColor(this)" title="Cinza"></div>
+        </div>
+      </div>
+
+      <label class="field">
+        Orçamento mensal (opcional)
+        <input type="text" id="newCatBudget" placeholder="R$ 0,00 — deixe em branco para sem limite">
+      </label>
+
+    </div>
+    <div class="modal-ft">
+      <button class="btn-neutral" onclick="closeNewCatModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveNewCat()">Criar categoria</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== MODAL: Novo Gasto Fixo ======================== -->
+<div id="addFixedModal" class="overlay hidden">
+  <div class="modal" style="width:380px">
+    <div class="modal-hd">
+      <span class="modal-title">Novo gasto fixo</span>
+      <button class="close-btn" onclick="closeAddFixedModal()">×</button>
+    </div>
+    <div class="modal-bd">
+      <label class="field">
+        Descrição
+        <input type="text" id="fixedName" placeholder="Ex.: Netflix, Academia, Aluguel…">
+      </label>
+      <label class="field">
+        Valor mensal
+        <input type="text" id="fixedAmt" placeholder="R$ 0,00">
+      </label>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-neutral" onclick="closeAddFixedModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmAddFixed()">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.fin-tab').forEach(b => b.classList.remove('active'));
+  const tabs = document.querySelectorAll('.fin-tab');
+  const map = { geral: 0, lancamentos: 1, planejamento: 2, planejados: 3 };
+  tabs[map[tab]].classList.add('active');
+}
+
+// ── Toggle category expand/collapse ───────────────────────────
+function toggleCat(header) {
+  const fixedList = header.nextElementSibling;
+  const icon = header.querySelector('.plan-expand-icon');
+  const isOpen = icon.classList.contains('open');
+  if (isOpen) {
+    icon.classList.remove('open');
+    header.classList.remove('expanded');
+    fixedList.style.display = 'none';
+  } else {
+    icon.classList.add('open');
+    header.classList.add('expanded');
+    fixedList.style.display = '';
+  }
+}
+
+// ── Remove fixed item ─────────────────────────────────────────
+function removeFixed(btn) {
+  const item = btn.closest('.plan-fixed-item');
+  item.style.opacity = '0';
+  item.style.transition = 'opacity .15s';
+  setTimeout(() => item.remove(), 150);
+}
+
+// ── Add fixed item (modal) ────────────────────────────────────
+let currentAddBtn = null;
+function addFixed(btn, catName) {
+  currentAddBtn = btn;
+  document.getElementById('fixedName').value = '';
+  document.getElementById('fixedAmt').value = '';
+  document.getElementById('addFixedModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('fixedName').focus(), 100);
+}
+function closeAddFixedModal() {
+  document.getElementById('addFixedModal').classList.add('hidden');
+  currentAddBtn = null;
+}
+function confirmAddFixed() {
+  const name = document.getElementById('fixedName').value.trim();
+  const amt  = document.getElementById('fixedAmt').value.trim();
+  if (!name) { document.getElementById('fixedName').focus(); return; }
+
+  const item = document.createElement('div');
+  item.className = 'plan-fixed-item';
+  item.innerHTML = `
+    <span style="font-size:15px">📌</span>
+    <span class="plan-fixed-name">${name}</span>
+    <input type="text" class="plan-fixed-amt" value="${amt || 'R$ 0'}" title="Editar valor">
+    <button class="plan-fixed-del" title="Remover" onclick="removeFixed(this)">×</button>
+  `;
+  currentAddBtn.parentElement.insertBefore(item, currentAddBtn);
+  closeAddFixedModal();
+}
+
+// ── "Sem limite" click → set limit ───────────────────────────
+function setLimit(el) {
+  const val = prompt('Definir orçamento mensal para esta categoria (ex: 400):');
+  if (val && !isNaN(parseFloat(val.replace(',', '.')))) {
+    const num = parseFloat(val.replace(',', '.'));
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'budget-value';
+    input.value = 'R$ ' + num.toLocaleString('pt-BR');
+    input.title = 'Clique para editar o orçamento';
+    input.addEventListener('click', e => e.stopPropagation());
+    el.replaceWith(input);
+  }
+}
+
+// ── Nova categoria modal ──────────────────────────────────────
+function openNewCatModal() {
+  document.getElementById('newCatName').value = '';
+  document.getElementById('newCatBudget').value = '';
+  document.getElementById('newCatModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('newCatName').focus(), 100);
+}
+function closeNewCatModal() {
+  document.getElementById('newCatModal').classList.add('hidden');
+}
+function saveNewCat() {
+  const name   = document.getElementById('newCatName').value.trim();
+  const budget = document.getElementById('newCatBudget').value.trim();
+  const icon   = document.querySelector('.icon-opt.selected')?.dataset.icon || '📦';
+  const color  = document.querySelector('.color-opt.selected')?.dataset.color || 'gray';
+  if (!name) { document.getElementById('newCatName').focus(); return; }
+
+  const colorClass = { blue:'c-blue', green:'c-green', amber:'c-amber', teal:'c-teal', red:'c-red', purple:'c-purple', gray:'c-gray' }[color] || 'c-gray';
+  const barClass   = { blue:'bar-blue', green:'bar-green', amber:'bar-amber', teal:'bar-teal', red:'bar-red', purple:'bar-purple', gray:'bar-gray' }[color] || 'bar-gray';
+
+  const budgetHtml = budget
+    ? `<input type="text" class="budget-value" value="R$ ${budget}" onclick="event.stopPropagation()" title="Clique para editar o orçamento">`
+    : `<span class="plan-no-limit" title="Clique para definir um orçamento" onclick="event.stopPropagation(); setLimit(this)">sem limite</span>`;
+
+  const card = document.createElement('div');
+  card.className = 'plan-cat-card';
+  card.innerHTML = `
+    <div class="plan-cat-header" onclick="toggleCat(this)">
+      <span class="cat-badge ${colorClass}">${icon} ${name}</span>
+      <div class="plan-cat-info">
+        <div class="plan-cat-progress-row">
+          <div class="plan-cat-bar-wrap">
+            <div class="plan-cat-bar ${barClass}" style="width:0%"></div>
+          </div>
+          <span class="plan-cat-pct">0%</span>
+        </div>
+      </div>
+      <div class="plan-cat-amounts">
+        <span class="plan-spent ok" style="color:var(--text-3)">R$&nbsp;0</span>
+        <span class="plan-of">/</span>
+        ${budgetHtml}
+      </div>
+      <span class="plan-expand-icon">›</span>
+    </div>
+    <div class="plan-fixed-list" style="display:none">
+      <div class="plan-fixed-head">Gastos fixos</div>
+      <p style="font:500 12px var(--font);color:var(--text-3);margin:0 0 8px">Nenhum gasto fixo ainda.</p>
+      <button class="plan-add-fixed" onclick="addFixed(this, '${name}')">
+        <span style="font-size:15px">+</span> Adicionar gasto fixo
+      </button>
+    </div>
+  `;
+
+  // Insert before the "add cat" button
+  const addCatBtn = document.querySelector('.plan-add-cat');
+  addCatBtn.parentElement.insertBefore(card, addCatBtn);
+
+  // Also add to summary panel
+  addToSummary(icon, name, budget);
+
+  closeNewCatModal();
+}
+
+function addToSummary(icon, name, budget) {
+  const val = budget ? `R$&nbsp;${parseInt(budget).toLocaleString('pt-BR')}` : '–';
+  const divider = document.querySelector('.plan-divider');
+  const row = document.createElement('div');
+  row.className = 'plan-total-row';
+  row.innerHTML = `
+    <span class="plan-total-name"><span style="font-size:14px">${icon}</span> ${name}</span>
+    <span class="plan-total-val">${val}</span>
+  `;
+  divider.parentElement.insertBefore(row, divider);
+}
+
+function selectIcon(btn) {
+  document.querySelectorAll('.icon-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+function selectColor(el) {
+  document.querySelectorAll('.color-opt').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function openLancarModal() {
+  alert('Modal de Lançamento — já documentado no protótipo original de finanças.');
+}
+
+// Close modals on overlay click
+document.getElementById('newCatModal').addEventListener('click', function(e) {
+  if (e.target === this) closeNewCatModal();
+});
+document.getElementById('addFixedModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddFixedModal();
+});
+</script>
+</body>
+</html>

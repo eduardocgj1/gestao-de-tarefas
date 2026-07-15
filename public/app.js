@@ -91,6 +91,11 @@ const ACTIVITY_VARIATION_MERGE_FIELDS = [
 
 let activities = [];
 let editingActivityId = null;
+
+// ---------- auth ----------
+let supabaseClient = null;
+let currentUser = null;
+let authToken = null;
 let activityFormStep = 1;
 let activityFormMode = 'create'; // 'create' | 'edit'
 let holidaysCache = null;
@@ -209,10 +214,10 @@ function migrateLegacyData(data) {
 }
 
 // ---------- persistence ----------
-async function load() {
+async function load(isRetry = false) {
   let res, data;
   try {
-    res = await fetch('/api/tasks');
+    res = await fetch('/api/tasks', { headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {} });
     data = await res.json();
   } catch (err) {
     console.error('Falha ao carregar dados do servidor:', err);
@@ -235,6 +240,17 @@ async function load() {
     boards = data.boards;
     activeBoardId = data.activeBoardId && boards.some(b => b.id === data.activeBoardId) ? data.activeBoardId : (boards[0] && boards[0].id);
   }
+  // Na primeira vez que um usuário faz login, tenta migrar dados existentes sem user_id
+  if (!boards.length && currentUser && !isRetry) {
+    try {
+      const claimRes = await fetch('/api/claim-data', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (claimRes.ok) return load(true);  // recarrega com os dados migrados
+    } catch (_) { /* ignora — vai criar board padrão */ }
+  }
+
   if (!boards.length) {
     boards = [{ id: uid(), name: 'Trabalho', tasks: [], fields: [] }];
     activeBoardId = boards[0].id;
@@ -270,7 +286,9 @@ let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boards, activeBoardId, pomodoroSettings, pomodoro, calendarEvents, people, exportViews, activities }) });
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    fetch('/api/tasks', { method: 'POST', headers, body: JSON.stringify({ boards, activeBoardId, pomodoroSettings, pomodoro, calendarEvents, people, exportViews, activities }) });
   }, 250);
 }
 function savePomodoro() {
@@ -532,7 +550,7 @@ function renderSidebarAddBoardArea() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'sidebar-add-board-btn';
-    btn.innerHTML = '<span class="sidebar-add-board-icon">+</span><span>Novo board</span>';
+    btn.innerHTML = '<span class="sidebar-add-board-icon">+</span><span class="sidebar-add-board-label">Novo board</span>';
     btn.addEventListener('click', startAddBoard);
     sidebarAddBoardAreaEl.appendChild(btn);
   }
@@ -2082,6 +2100,7 @@ function renderFieldsSettings() {
 function openSettings() {
   renderFieldsSettings();
   renderPeopleSettings();
+  renderWalletSettings();
   pomoSetFocus.value = pomodoroSettings.focus;
   pomoSetShort.value = pomodoroSettings.short;
   pomoSetLong.value = pomodoroSettings.long;
@@ -2238,6 +2257,69 @@ peopleListEl.addEventListener('click', e => {
   if (setBtn) { setPrincipal(setBtn.dataset.id); return; }
   const rmBtn = e.target.closest('.person-remove-btn');
   if (rmBtn) { removePerson(rmBtn.dataset.id); return; }
+});
+
+// ---------- settings (carteiras/finanças) ----------
+const walletListEl = document.getElementById('walletList');
+const addWalletBtnEl = document.getElementById('addWalletBtn');
+const addWalletFormEl = document.getElementById('addWalletForm');
+const newWalletNameEl = document.getElementById('newWalletName');
+
+function addWallet(name) {
+  const wallet = { id: uid(), name: name.trim(), icon: '💳', sortOrder: financeState.wallets.length };
+  financeState.wallets.push(wallet);
+  saveFinance();
+  return wallet;
+}
+function removeWallet(id) {
+  if (!confirm('Remover esta carteira? Lançamentos vinculados ficarão sem carteira.')) return;
+  financeState.wallets = financeState.wallets.filter(w => w.id !== id);
+  saveFinance(); renderWalletSettings();
+}
+
+function walletRowHtml(w) {
+  return `
+  <div class="person-row" data-id="${w.id}">
+    <div>
+      <div class="person-name">${escapeHtml(w.icon)} ${escapeHtml(w.name)}</div>
+    </div>
+    <div class="person-row-actions">
+      <button type="button" class="person-remove-btn" data-id="${w.id}" title="Remover">×</button>
+    </div>
+  </div>`;
+}
+function renderWalletSettings() {
+  if (!walletListEl) return;
+  walletListEl.innerHTML = financeState.wallets.map(walletRowHtml).join('')
+    || '<div class="fin-empty" style="padding:4px 0">Nenhuma carteira cadastrada.</div>';
+}
+
+function startAddWallet() {
+  addWalletBtnEl.classList.add('hidden');
+  addWalletFormEl.classList.remove('hidden');
+  newWalletNameEl.value = '';
+  newWalletNameEl.focus();
+}
+function cancelAddWallet() {
+  addWalletBtnEl.classList.remove('hidden');
+  addWalletFormEl.classList.add('hidden');
+}
+function confirmAddWallet() {
+  const name = newWalletNameEl.value.trim();
+  if (!name) return;
+  addWallet(name);
+  cancelAddWallet();
+  renderWalletSettings();
+}
+
+addWalletBtnEl.addEventListener('click', startAddWallet);
+document.getElementById('cancelAddWallet').addEventListener('click', cancelAddWallet);
+document.getElementById('confirmAddWallet').addEventListener('click', confirmAddWallet);
+newWalletNameEl.addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddWallet(); });
+
+walletListEl.addEventListener('click', e => {
+  const rmBtn = e.target.closest('.person-remove-btn');
+  if (rmBtn) { removeWallet(rmBtn.dataset.id); return; }
 });
 
 // ---------- nav ----------
@@ -5384,7 +5466,7 @@ function renderActivityDetailHolidays(a) {
 // ================================================================
 
 // --- Estado global de finanças ---
-let financeState = { categories: [], transactions: [], plannedPurchases: [] };
+let financeState = { categories: [], transactions: [], plannedPurchases: [], wallets: [], budgetItems: [] };
 let financeMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let financeTab = 'geral';
 let financeCatFilter = null;
@@ -5392,20 +5474,31 @@ let financeTxnTypeFilter = 'all';
 let finTransactionType = 'expense';
 let finTransactionNature = 'variable';
 let finTransactionCatId = null;
+let finTransactionWalletId = null;
+let finEditingTxnId = null;
 let finPurchasePriority = 'medium';
+// Planejamento state
+let finPlanExpandedCats = new Set();
+let finNewCatIcon = '📦';
+let finNewCatColor = 'gray';
+let finAddFixedIcon = '📌';
+let finAddFixedCatId = null;
 
 // MON e MONTH_NAMES já declarados no topo do arquivo
 
 // --- Persistência ---
 async function loadFinance() {
   try {
-    const res = await fetch('/api/finance');
+    const res = await fetch('/api/finance', { headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {} });
     const data = await res.json();
     if (!res.ok) { console.error('Erro ao carregar finanças:', data.error); return; }
     financeState.categories       = data.categories       || [];
     financeState.transactions     = data.transactions     || [];
     financeState.plannedPurchases = data.plannedPurchases || [];
+    financeState.wallets          = data.wallets          || [];
+    financeState.budgetItems      = data.budgetItems      || [];
     if (financeState.categories.length === 0) initDefaultFinanceCategories();
+    renderWalletSettings();
     if (currentView === 'finance') renderFinanceView();
   } catch (err) {
     console.error('Falha ao carregar finanças:', err);
@@ -5416,9 +5509,11 @@ let finSaveTimer = null;
 function saveFinance() {
   clearTimeout(finSaveTimer);
   finSaveTimer = setTimeout(() => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
     fetch('/api/finance', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(financeState),
     }).catch(err => console.error('Erro ao salvar finanças:', err));
   }, 300);
@@ -5531,18 +5626,24 @@ function renderFinanceView() {
   const cats    = [...financeState.categories].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const summary = finGetSummary(financeMonth);
 
+  const tabDefs = [
+    { id: 'geral',         label: 'Visão geral'    },
+    { id: 'lancamentos',   label: 'Lançamentos'    },
+    { id: 'planejamento',  label: 'Planejamento'   },
+    { id: 'planejados',    label: 'Planejados'     },
+  ];
+
   el.innerHTML = `
     <div class="fin-tabs-row">
-      ${['geral','lancamentos','planejados'].map(t => `
-        <button class="fin-tab ${financeTab === t ? 'active' : ''}" data-tab="${t}">${
-          t === 'geral' ? 'Visão geral' : t === 'lancamentos' ? 'Lançamentos' : 'Planejados'
-        }</button>
+      ${tabDefs.map(t => `
+        <button class="fin-tab ${financeTab === t.id ? 'active' : ''}" data-tab="${t.id}">${t.label}</button>
       `).join('')}
     </div>
     <div class="fin-tab-body">
-      ${financeTab === 'geral'        ? renderFinanceGeral(summary, cats)       : ''}
-      ${financeTab === 'lancamentos'  ? renderFinanceLancamentos(summary, cats) : ''}
-      ${financeTab === 'planejados'   ? renderFinancePlanejados(summary)        : ''}
+      ${financeTab === 'geral'        ? renderFinanceGeral(summary, cats)          : ''}
+      ${financeTab === 'lancamentos'  ? renderFinanceLancamentos(summary, cats)    : ''}
+      ${financeTab === 'planejamento' ? renderFinancePlanejamento(summary, cats)   : ''}
+      ${financeTab === 'planejados'   ? renderFinancePlanejados(summary)           : ''}
     </div>
   `;
 
@@ -5561,6 +5662,14 @@ function renderFinanceView() {
     btn.addEventListener('click', () => {
       financeState.transactions = financeState.transactions.filter(t => t.id !== btn.dataset.delTxn);
       saveFinance(); renderFinanceView();
+    });
+  });
+
+  // Edit transactions
+  el.querySelectorAll('[data-edit-txn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const txn = financeState.transactions.find(t => t.id === btn.dataset.editTxn);
+      if (txn) openFinTransactionModal(txn);
     });
   });
 
@@ -5588,12 +5697,96 @@ function renderFinanceView() {
 
   // Inline "Lançar" button in lancamentos tab
   const inlineBtn = el.querySelector('#finLancarBtnInline');
-  if (inlineBtn) inlineBtn.addEventListener('click', openFinTransactionModal);
+  if (inlineBtn) inlineBtn.addEventListener('click', () => openFinTransactionModal());
 
   // Add purchase buttons
   el.querySelectorAll('#finAddPurchaseBtn, #finAddPurchaseBtnGrid').forEach(btn => {
     btn.addEventListener('click', openFinPurchaseModal);
   });
+
+  // ── Planejamento tab handlers ─────────────────────────────
+
+  // Toggle category expand/collapse
+  el.querySelectorAll('[data-toggle-cat]').forEach(header => {
+    header.addEventListener('click', e => {
+      // Don't toggle if clicking on an input/button inside the header
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+      const catId = header.dataset.toggleCat;
+      if (finPlanExpandedCats.has(catId)) finPlanExpandedCats.delete(catId);
+      else finPlanExpandedCats.add(catId);
+      renderFinanceView();
+    });
+  });
+
+  // Edit monthly limit inline
+  el.querySelectorAll('[data-cat-limit]').forEach(input => {
+    const saveLimitChange = () => {
+      const val = parseFloat(input.value);
+      const cat = financeState.categories.find(c => c.id === input.dataset.catLimit);
+      if (cat) {
+        cat.monthlyLimit = (!isNaN(val) && val >= 0) ? val : null;
+        saveFinance();
+      }
+    };
+    input.addEventListener('change', saveLimitChange);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+    input.addEventListener('click', e => e.stopPropagation());
+  });
+
+  // "Sem limite" → inline input
+  el.querySelectorAll('[data-set-limit]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const catId = btn.dataset.setLimit;
+      const input = document.createElement('input');
+      input.type = 'number'; input.min = '0'; input.step = '0.01';
+      input.className = 'fin-bud-limit-input'; input.placeholder = '0,00';
+      btn.replaceWith(input);
+      input.focus();
+      const save = () => {
+        const val = parseFloat(input.value);
+        const cat = financeState.categories.find(c => c.id === catId);
+        if (cat) {
+          cat.monthlyLimit = (!isNaN(val) && val > 0) ? val : null;
+          saveFinance();
+        }
+        renderFinanceView();
+      };
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') input.blur(); if (e2.key === 'Escape') { input.value = ''; input.blur(); } });
+    });
+  });
+
+  // Edit budget item amount inline
+  el.querySelectorAll('[data-item-id]').forEach(input => {
+    const saveItemAmt = () => {
+      const val = parseFloat(input.value);
+      const item = financeState.budgetItems.find(i => i.id === input.dataset.itemId);
+      if (item && !isNaN(val) && val >= 0) { item.amount = val; saveFinance(); }
+    };
+    input.addEventListener('change', saveItemAmt);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+  });
+
+  // Delete budget item
+  el.querySelectorAll('[data-del-budget-item]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      financeState.budgetItems = financeState.budgetItems.filter(i => i.id !== btn.dataset.delBudgetItem);
+      saveFinance(); renderFinanceView();
+    });
+  });
+
+  // Open "add fixed item" modal
+  el.querySelectorAll('[data-add-fixed-cat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finAddFixedCatId = btn.dataset.addFixedCat;
+      openFinAddFixedModal();
+    });
+  });
+
+  // Open "new category" modal
+  const addCatBtn = el.querySelector('#finAddCatBtn');
+  if (addCatBtn) addCatBtn.addEventListener('click', openFinNewCatModal);
 }
 
 // --- Visão Geral ---
@@ -5629,14 +5822,18 @@ function renderFinanceGeral(summary, cats) {
   `;
 
   const catHtml = cats.map(cat => {
-    const spent = byCat[cat.id] || 0;
-    const limit = cat.monthlyLimit;
-    const pct   = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+    const spent  = byCat[cat.id] || 0;
+    const limit  = cat.monthlyLimit;
+    const pct    = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
     const barClr = pct >= 100 ? 'var(--color-terracotta)' : pct >= 75 ? '#C07C30' : finCatBarColor(cat.color);
+    const pctTag = limit
+      ? `<span class="fin-cat-pct-tag ${pct >= 100 ? 'fin-cat-pct-over' : pct >= 75 ? 'fin-cat-pct-warn' : 'fin-cat-pct-ok'}">${pct}%</span>`
+      : '';
     return `
       <div class="fin-cat-row">
         <div class="fin-cat-top">
           <span class="fin-cat-badge fin-c-${escapeHtml(cat.color)}">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</span>
+          ${pctTag}
           <span class="fin-cat-spent${pct >= 100 ? ' fin-over' : ''}">R$&nbsp;${finFmt(spent)}</span>
           ${limit ? `<span class="fin-cat-limit">/&nbsp;R$&nbsp;${finFmt(limit)}</span>` : ''}
         </div>
@@ -5778,9 +5975,12 @@ function renderFinanceLancamentos(summary, cats) {
 
   const txnGroupHtml = Object.keys(groups).sort((a,b) => b.localeCompare(a)).map(date => {
     const items = groups[date].map(t => {
-      const cat  = cats.find(c => c.id === t.categoryId);
+      const cat    = cats.find(c => c.id === t.categoryId);
+      const wallet = financeState.wallets.find(w => w.id === t.walletId);
       const sign = t.type === 'expense' ? '−' : '+';
       const cls  = t.type === 'expense' ? 'out' : 'in';
+      const metaParts = [t.nature === 'fixed' ? 'fixo · mensal' : 'variável'];
+      if (wallet) metaParts.push(`${escapeHtml(wallet.icon)} ${escapeHtml(wallet.name)}`);
       return `
         <div class="fin-txn-full">
           ${cat
@@ -5790,9 +5990,10 @@ function renderFinanceLancamentos(summary, cats) {
               : `<span class="fin-cat-badge fin-c-gray">Sem categoria</span>`}
           <div class="fin-txn-info">
             <div class="fin-txn-name">${escapeHtml(t.description)}</div>
-            <div class="fin-txn-meta">${t.nature === 'fixed' ? 'fixo · mensal' : 'variável'}</div>
+            <div class="fin-txn-meta">${metaParts.join(' · ')}</div>
           </div>
           <div class="fin-txn-amt ${cls}">${sign}&nbsp;R$&nbsp;${finFmt(t.amount)}</div>
+          <button class="fin-txn-edit" data-edit-txn="${t.id}" title="Editar">✎</button>
           <button class="fin-txn-del" data-del-txn="${t.id}" title="Excluir">×</button>
         </div>
       `;
@@ -5815,6 +6016,212 @@ function renderFinanceLancamentos(summary, cats) {
       ${catFilterHtml}
     </div>
     <div class="fin-txn-list">${txnGroupHtml}</div>
+  `;
+}
+
+// --- Planejamento do Mês ---
+function renderFinancePlanejamento(summary, cats) {
+  const { byCat, dayOfMonth, daysInMonth, income } = summary;
+
+  // KPI calculations
+  const totalBudget = cats.reduce((s, c) => s + (c.monthlyLimit || 0), 0);
+  const totalFixed  = financeState.budgetItems.reduce((s, i) => s + Number(i.amount), 0);
+  const totalSpent  = Object.values(byCat).reduce((s, v) => s + v, 0);
+  const available   = totalBudget - totalSpent;
+  const pctFixed    = totalBudget > 0 ? Math.min(100, Math.round((totalFixed  / totalBudget) * 100)) : 0;
+  const pctSpent    = totalBudget > 0 ? Math.min(100, Math.round((totalSpent  / totalBudget) * 100)) : 0;
+  const daysLeft    = daysInMonth - dayOfMonth;
+
+  const kpiHtml = `
+    <div class="fin-bud-kpi-grid">
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Orçamento total</div>
+        <div class="fin-kpi-value">${totalBudget > 0 ? `R$&nbsp;${finFmt(totalBudget)}` : '<span style="color:var(--color-text-tertiary);font-size:16px">–</span>'}</div>
+        <div class="fin-kpi-sub">soma de todas as categorias</div>
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Gastos fixos planejados</div>
+        <div class="fin-kpi-value">R$&nbsp;${finFmt(totalFixed)}</div>
+        ${totalBudget > 0 ? `<div class="fin-kpi-sub">${pctFixed}% do orçamento</div>
+        <div class="fin-kpi-bar"><div class="fin-kpi-bar-fill" style="width:${pctFixed}%;background:var(--color-blue)"></div></div>` : ''}
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Gasto até agora</div>
+        <div class="fin-kpi-value" style="color:${pctSpent >= 90 ? 'var(--color-terracotta)' : pctSpent >= 70 ? '#C07C30' : 'var(--color-text)'}">R$&nbsp;${finFmt(totalSpent)}</div>
+        ${totalBudget > 0 ? `<div class="fin-kpi-sub">${pctSpent}% do orçamento · ${dayOfMonth} dias</div>
+        <div class="fin-kpi-bar"><div class="fin-kpi-bar-fill" style="width:${pctSpent}%;background:${pctSpent >= 90 ? 'var(--color-terracotta)' : '#C07C30'}"></div></div>` : `<div class="fin-kpi-sub">${dayOfMonth} dias do mês</div>`}
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Disponível restante</div>
+        <div class="fin-kpi-value" style="color:${available >= 0 ? 'var(--color-green)' : 'var(--color-terracotta)'}">R$&nbsp;${finFmt(Math.abs(available))}</div>
+        <div class="fin-kpi-sub">${available >= 0 ? `para os próximos ${daysLeft} dias` : 'acima do orçamento'}</div>
+      </div>
+    </div>
+  `;
+
+  // Category cards
+  const catCards = cats.map(cat => {
+    const spent    = byCat[cat.id] || 0;
+    const limit    = cat.monthlyLimit;
+    const pct      = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+    const barClr   = pct >= 100 ? 'var(--color-terracotta)' : pct >= 75 ? '#C07C30' : finCatBarColor(cat.color);
+    const spentCls = pct >= 100 ? 'fin-over' : pct >= 75 ? 'fin-warn' : '';
+    const pctCls   = pct >= 100 ? 'fin-over' : pct >= 75 ? 'fin-warn' : '';
+    const isExpanded = finPlanExpandedCats.has(cat.id);
+
+    const items = financeState.budgetItems
+      .filter(i => i.categoryId === cat.id)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+    const itemsHtml = items.length
+      ? items.map(item => `
+          <div class="fin-bud-fixed-item">
+            <span class="fin-bud-fixed-icon">${escapeHtml(item.icon || '📌')}</span>
+            <span class="fin-bud-fixed-name">${escapeHtml(item.description)}</span>
+            <input type="number" class="fin-bud-fixed-amt" data-item-id="${item.id}" value="${Number(item.amount)}" min="0" step="0.01">
+            <button class="fin-bud-fixed-del" data-del-budget-item="${item.id}" title="Remover">×</button>
+          </div>
+        `).join('')
+      : `<div class="fin-empty" style="padding:6px 0;font-size:11.5px;text-align:left">Nenhum gasto fixo cadastrado.</div>`;
+
+    return `
+      <div class="fin-bud-cat-card">
+        <div class="fin-bud-cat-header ${isExpanded ? 'expanded' : ''}" data-toggle-cat="${cat.id}">
+          <span class="fin-cat-badge fin-c-${escapeHtml(cat.color)}">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</span>
+          <div class="fin-bud-cat-info">
+            <div class="fin-bud-progress-row">
+              <div class="fin-cat-bar-wrap" style="flex:1">
+                <div class="fin-cat-bar" style="width:${pct}%;background:${barClr}"></div>
+              </div>
+              <span class="fin-bud-pct ${pctCls}">${limit ? pct + '%' : '–'}</span>
+            </div>
+          </div>
+          <div class="fin-bud-amounts">
+            <span class="fin-bud-spent ${spentCls}">R$&nbsp;${finFmt(spent)}</span>
+            <span class="fin-bud-of">/</span>
+            ${limit !== null && limit !== undefined
+              ? `<input type="number" class="fin-bud-limit-input" data-cat-limit="${cat.id}" value="${Number(limit)}" min="0" step="0.01" title="Editar orçamento">`
+              : `<button class="fin-bud-no-limit" data-set-limit="${cat.id}">sem limite</button>`
+            }
+          </div>
+          <span class="fin-bud-expand-icon ${isExpanded ? 'open' : ''}">›</span>
+        </div>
+        ${isExpanded ? `
+          <div class="fin-bud-fixed-list">
+            <div class="fin-bud-fixed-head">Gastos fixos mensais</div>
+            ${itemsHtml}
+            <button class="fin-bud-add-fixed-btn" data-add-fixed-cat="${cat.id}">
+              <span>+</span> Adicionar gasto fixo
+            </button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  // Right panel: summary
+  const catsWithLimit = cats.filter(c => c.monthlyLimit);
+  const summaryRowsHtml = catsWithLimit.length
+    ? catsWithLimit.map(cat => `
+        <div class="fin-bud-total-row">
+          <span class="fin-bud-total-name"><span>${escapeHtml(cat.icon)}</span> ${escapeHtml(cat.name)}</span>
+          <span class="fin-bud-total-val">R$&nbsp;${finFmt(cat.monthlyLimit)}</span>
+        </div>
+      `).join('') + `
+        <div style="height:1px;background:var(--color-border);margin:8px 0"></div>
+        <div class="fin-bud-total-row" style="font-weight:700">
+          <span class="fin-bud-total-name">Total planejado</span>
+          <span class="fin-bud-total-val">R$&nbsp;${finFmt(totalBudget)}</span>
+        </div>
+        ${income > 0 ? `
+          <div class="fin-bud-total-row">
+            <span class="fin-bud-total-name" style="color:var(--color-text-secondary)">Receita do mês</span>
+            <span class="fin-bud-total-val" style="color:var(--color-green)">R$&nbsp;${finFmt(income)}</span>
+          </div>
+          <div class="fin-bud-total-row" style="font-weight:700;border-bottom:none">
+            <span class="fin-bud-total-name">Sobra prevista</span>
+            <span class="fin-bud-total-val" style="color:${income - totalBudget >= 0 ? 'var(--color-green)' : 'var(--color-terracotta)'}">R$&nbsp;${finFmt(Math.abs(income - totalBudget))}</span>
+          </div>
+        ` : ''}
+      `
+    : `<div class="fin-empty">Defina orçamentos para ver o resumo.</div>`;
+
+  // Right panel: fixed items
+  const allFixed = financeState.budgetItems.map(item => {
+    const cat = cats.find(c => c.id === item.categoryId);
+    return { ...item, catName: cat ? cat.name : '' };
+  }).sort((a, b) => Number(b.amount) - Number(a.amount));
+
+  const fixedRowsHtml = allFixed.length
+    ? allFixed.map(item => `
+        <div class="fin-bud-total-row">
+          <span class="fin-bud-total-name">${escapeHtml(item.icon || '📌')} ${escapeHtml(item.description)}</span>
+          <span class="fin-bud-total-val">R$&nbsp;${finFmt(item.amount)}</span>
+        </div>
+      `).join('')
+    : `<div class="fin-empty">Nenhum gasto fixo cadastrado ainda.</div>`;
+
+  // Tips
+  const tips = [];
+  if (totalBudget > 0 && income > 0) {
+    const sobra = income - totalBudget;
+    if (sobra > 0) tips.push({ bg: 'var(--color-green-soft)', icon: '✅', text: `Com a receita atual, você tem <strong>R$&nbsp;${finFmt(sobra)}</strong> de sobra sobre o orçamento.` });
+    else           tips.push({ bg: '#FDECEA',                 icon: '⚠️', text: `O orçamento planejado supera a receita em <strong>R$&nbsp;${finFmt(Math.abs(sobra))}</strong>.` });
+  }
+  if (totalBudget > 0 && pctFixed > 50) {
+    tips.push({ bg: '#E7EEFB', icon: '📊', text: `Fixos representam <strong>${pctFixed}%</strong> do orçamento. Recomendado: menos de 50%.` });
+  }
+  if (daysLeft > 0 && totalBudget > 0 && available > 0) {
+    tips.push({ bg: '#FEF2E4', icon: '💡', text: `Você tem <strong>R$&nbsp;${finFmt(Math.round(available / daysLeft))}/dia</strong> disponíveis até o fim do mês.` });
+  }
+  if (tips.length === 0) {
+    tips.push({ bg: '#EEEBE4', icon: '📋', text: 'Defina orçamentos por categoria e cadastre gastos fixos para ver dicas de planejamento.' });
+  }
+  const tipsHtml = tips.slice(0, 3).map(t => `
+    <div class="fin-bud-tip">
+      <div class="fin-bud-tip-icon" style="background:${t.bg}">${t.icon}</div>
+      <div class="fin-insight-text">${t.text}</div>
+    </div>
+  `).join('');
+
+  return `
+    ${kpiHtml}
+    <div class="fin-bud-body">
+      <div class="fin-bud-left">
+        ${catCards}
+        <button class="fin-bud-add-cat-btn" id="finAddCatBtn">
+          <span style="font-size:16px">+</span> Nova categoria
+        </button>
+      </div>
+      <div class="fin-bud-right">
+        <div class="fin-section">
+          <div class="fin-section-head">
+            <span class="fin-section-title">Resumo</span>
+            <span class="fin-section-sub">${MONTH_NAMES[financeMonth.getMonth()]} ${financeMonth.getFullYear()}</span>
+          </div>
+          <div class="fin-section-body" style="padding-top:8px;padding-bottom:8px">
+            ${summaryRowsHtml}
+          </div>
+        </div>
+        ${allFixed.length > 0 ? `
+          <div class="fin-section">
+            <div class="fin-section-head">
+              <span class="fin-section-title">Fixos do mês</span>
+              <span class="fin-section-sub">R$&nbsp;${finFmt(totalFixed)}</span>
+            </div>
+            <div class="fin-section-body" style="padding-top:8px;padding-bottom:8px">
+              ${fixedRowsHtml}
+            </div>
+          </div>
+        ` : ''}
+        <div class="fin-section">
+          <div class="fin-section-head"><span class="fin-section-title">Dicas</span></div>
+          <div class="fin-section-body" style="padding-top:8px;padding-bottom:8px">
+            ${tipsHtml}
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -5886,19 +6293,23 @@ function renderFinancePlanejados(summary) {
 }
 
 // --- Modal de transação ---
-function openFinTransactionModal() {
-  finTransactionType   = 'expense';
-  finTransactionNature = 'variable';
-  finTransactionCatId  = null;
+function openFinTransactionModal(txn) {
+  finEditingTxnId       = txn ? txn.id : null;
+  finTransactionType    = txn ? txn.type : 'expense';
+  finTransactionNature  = txn ? txn.nature : 'variable';
+  finTransactionCatId   = txn ? txn.categoryId : null;
+  finTransactionWalletId = txn ? txn.walletId : null;
   renderFinTransactionModal();
   document.getElementById('finTransactionModal').classList.remove('hidden');
-  document.getElementById('finTxnDate').value = toKey(new Date());
-  document.getElementById('finTxnDesc').value = '';
-  document.getElementById('finTxnAmount').value = '';
+  document.getElementById('finTxnDate').value   = txn ? txn.date : toKey(new Date());
+  document.getElementById('finTxnDesc').value   = txn ? txn.description : '';
+  document.getElementById('finTxnAmount').value = txn ? txn.amount : '';
   document.getElementById('finTxnDesc').focus();
 }
 
 function renderFinTransactionModal() {
+  document.getElementById('finModalTitle').textContent = finEditingTxnId ? 'Editar lançamento' : 'Novo lançamento';
+
   // Type tabs
   document.querySelectorAll('#finTypeTabs .fin-type-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.type === finTransactionType);
@@ -5928,6 +6339,24 @@ function renderFinTransactionModal() {
   document.querySelectorAll('.fin-nature-btn[data-nature]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.nature === finTransactionNature);
   });
+
+  // Wallet pills
+  const walletField = document.getElementById('finWalletField');
+  if (walletField) walletField.style.display = financeState.wallets.length > 0 ? '' : 'none';
+  const walletPills = document.getElementById('finWalletPills');
+  if (walletPills) {
+    walletPills.innerHTML = financeState.wallets.map(w => `
+      <button type="button" class="fin-cat-pill ${finTransactionWalletId === w.id ? 'selected' : ''}" data-wallet="${w.id}">
+        ${escapeHtml(w.icon)} ${escapeHtml(w.name)}
+      </button>
+    `).join('');
+    walletPills.querySelectorAll('.fin-cat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        finTransactionWalletId = finTransactionWalletId === btn.dataset.wallet ? null : btn.dataset.wallet;
+        renderFinTransactionModal();
+      });
+    });
+  }
 }
 
 function saveFinTransaction() {
@@ -5939,16 +6368,24 @@ function saveFinTransaction() {
   if (!amount || amount <= 0) { alert('Informe um valor válido.'); return; }
   if (!date)        { alert('Informe a data.'); return; }
 
-  financeState.transactions.push({
-    id:          uid(),
+  const txnData = {
     type:        finTransactionType,
     nature:      finTransactionType === 'expense' ? finTransactionNature : 'variable',
     description: desc,
     amount:      amount,
     date:        date,
     categoryId:  finTransactionType === 'expense' ? finTransactionCatId : null,
-  });
+    walletId:    finTransactionWalletId,
+  };
 
+  if (finEditingTxnId) {
+    const idx = financeState.transactions.findIndex(t => t.id === finEditingTxnId);
+    if (idx !== -1) financeState.transactions[idx] = { ...financeState.transactions[idx], ...txnData };
+  } else {
+    financeState.transactions.push({ id: uid(), ...txnData });
+  }
+
+  finEditingTxnId = null;
   saveFinance();
   document.getElementById('finTransactionModal').classList.add('hidden');
   renderFinanceView();
@@ -6049,6 +6486,120 @@ function saveFinPurchase() {
   });
 })();
 
+// --- Modais de Planejamento ---
+function openFinNewCatModal() {
+  finNewCatIcon  = '📦';
+  finNewCatColor = 'gray';
+  document.getElementById('finNewCatName').value   = '';
+  document.getElementById('finNewCatBudget').value = '';
+  // Reset icon picker
+  document.querySelectorAll('#finNewCatIconPicker .fin-icon-opt').forEach(b => b.classList.toggle('selected', b.dataset.icon === '📦'));
+  // Reset color picker
+  document.querySelectorAll('#finNewCatColorPicker .fin-color-opt').forEach(b => b.classList.toggle('selected', b.dataset.color === 'gray'));
+  document.getElementById('finNewCatModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('finNewCatName').focus(), 80);
+}
+
+function closeFinNewCatModal() {
+  document.getElementById('finNewCatModal').classList.add('hidden');
+}
+
+function saveFinNewCat() {
+  const name   = document.getElementById('finNewCatName').value.trim();
+  if (!name) { document.getElementById('finNewCatName').focus(); return; }
+  const budget = parseFloat(document.getElementById('finNewCatBudget').value);
+  const newCat = {
+    id:           uid(),
+    name,
+    icon:         finNewCatIcon,
+    color:        finNewCatColor,
+    monthlyLimit: (!isNaN(budget) && budget > 0) ? budget : null,
+    sortOrder:    financeState.categories.length,
+  };
+  financeState.categories.push(newCat);
+  saveFinance();
+  closeFinNewCatModal();
+  financeTab = 'planejamento';
+  renderFinanceView();
+}
+
+function openFinAddFixedModal() {
+  finAddFixedIcon = '📌';
+  document.getElementById('finAddFixedDesc').value   = '';
+  document.getElementById('finAddFixedAmount').value = '';
+  document.querySelectorAll('#finAddFixedIconPicker .fin-icon-opt').forEach(b => b.classList.toggle('selected', b.dataset.icon === '📌'));
+  document.getElementById('finAddFixedModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('finAddFixedDesc').focus(), 80);
+}
+
+function closeFinAddFixedModal() {
+  document.getElementById('finAddFixedModal').classList.add('hidden');
+}
+
+function saveFinAddFixed() {
+  const desc   = document.getElementById('finAddFixedDesc').value.trim();
+  if (!desc) { document.getElementById('finAddFixedDesc').focus(); return; }
+  const amount = parseFloat(document.getElementById('finAddFixedAmount').value) || 0;
+  const newItem = {
+    id:          uid(),
+    categoryId:  finAddFixedCatId,
+    description: desc,
+    icon:        finAddFixedIcon,
+    amount,
+    sortOrder:   financeState.budgetItems.filter(i => i.categoryId === finAddFixedCatId).length,
+  };
+  financeState.budgetItems.push(newItem);
+  saveFinance();
+  closeFinAddFixedModal();
+  renderFinanceView();
+}
+
+(function initPlanModalHandlers() {
+  // New category modal
+  document.getElementById('finNewCatClose').addEventListener('click', closeFinNewCatModal);
+  document.getElementById('finNewCatCancel').addEventListener('click', closeFinNewCatModal);
+  document.getElementById('finNewCatSave').addEventListener('click', saveFinNewCat);
+  document.getElementById('finNewCatModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('finNewCatModal')) closeFinNewCatModal();
+  });
+  // Icon picker — new cat
+  document.querySelectorAll('#finNewCatIconPicker .fin-icon-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finNewCatIcon = btn.dataset.icon;
+      document.querySelectorAll('#finNewCatIconPicker .fin-icon-opt').forEach(b => b.classList.toggle('selected', b === btn));
+    });
+  });
+  // Color picker — new cat
+  document.querySelectorAll('#finNewCatColorPicker .fin-color-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finNewCatColor = btn.dataset.color;
+      document.querySelectorAll('#finNewCatColorPicker .fin-color-opt').forEach(b => b.classList.toggle('selected', b === btn));
+    });
+  });
+
+  // Add fixed modal
+  document.getElementById('finAddFixedClose').addEventListener('click', closeFinAddFixedModal);
+  document.getElementById('finAddFixedCancel').addEventListener('click', closeFinAddFixedModal);
+  document.getElementById('finAddFixedSave').addEventListener('click', saveFinAddFixed);
+  document.getElementById('finAddFixedModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('finAddFixedModal')) closeFinAddFixedModal();
+  });
+  // Icon picker — add fixed
+  document.querySelectorAll('#finAddFixedIconPicker .fin-icon-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finAddFixedIcon = btn.dataset.icon;
+      document.querySelectorAll('#finAddFixedIconPicker .fin-icon-opt').forEach(b => b.classList.toggle('selected', b === btn));
+    });
+  });
+  // Enter key on inputs
+  ['finNewCatName', 'finNewCatBudget'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') saveFinNewCat(); });
+  });
+  ['finAddFixedDesc', 'finAddFixedAmount'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') saveFinAddFixed(); });
+  });
+})();
+
 // --- Sidebar item e mês nav ---
 document.getElementById('sidebarFinanceItem').addEventListener('click', () => setView('finance'));
 
@@ -6062,7 +6613,98 @@ document.getElementById('finNextMonth').addEventListener('click', () => {
 });
 
 // Botão "Lançar" no topbar
-document.getElementById('financeLancarBtn').addEventListener('click', openFinTransactionModal);
+document.getElementById('financeLancarBtn').addEventListener('click', () => openFinTransactionModal());
 
-load();
-loadFinance();
+// ---------- autenticação ----------
+function showLoginScreen() {
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('userMenu').classList.add('hidden');
+}
+
+function hideLoginScreen() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+}
+
+function updateUserMenu(user) {
+  const menu = document.getElementById('userMenu');
+  const avatar = document.getElementById('userAvatar');
+  if (user) {
+    menu.classList.remove('hidden');
+    avatar.src = user.user_metadata?.avatar_url || '';
+    avatar.alt = user.user_metadata?.full_name || user.email || '';
+  } else {
+    menu.classList.add('hidden');
+  }
+}
+
+async function initAuth() {
+  // Busca config pública do servidor (URL e anon key do Supabase)
+  let cfg;
+  try {
+    const res = await fetch('/api/config');
+    cfg = await res.json();
+  } catch (err) {
+    console.error('Falha ao buscar config:', err);
+    // Sem auth (dev local sem .env): carrega direto
+    await load();
+    await loadFinance();
+    return;
+  }
+
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+    // Dev mode sem Supabase: carrega direto sem login
+    await load();
+    await loadFinance();
+    return;
+  }
+
+  supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+  // Escuta mudanças de auth (login, logout, refresh de token)
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if (session) {
+      currentUser = session.user;
+      authToken = session.access_token;
+      updateUserMenu(currentUser);
+      hideLoginScreen();
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        await load();
+        await loadFinance();
+      }
+    } else {
+      currentUser = null;
+      authToken = null;
+      updateUserMenu(null);
+      showLoginScreen();
+    }
+  });
+
+  // Verifica sessão atual (caso o usuário já estava logado)
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) {
+    showLoginScreen();
+  }
+  // onAuthStateChange cuida do resto quando há sessão
+
+  // Botão de login com Google
+  document.getElementById('googleSignInBtn').addEventListener('click', async () => {
+    document.getElementById('loginError').classList.add('hidden');
+    try {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Erro no login:', err);
+      document.getElementById('loginError').classList.remove('hidden');
+    }
+  });
+
+  // Botão de logout
+  document.getElementById('signOutBtn').addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+  });
+}
+
+initAuth();
