@@ -41,8 +41,14 @@ function makeMemorySupabaseClient() {
         delete() {
           return {
             // Reproduz `.not(column, 'in', '(v1,v2,...)')`: mantém apenas as linhas cujo valor
-            // está no padrão informado (equivalente a deletar as que NÃO estão).
-            not(column, _op, pattern) {
+            // está no padrão informado (equivalente a deletar as que NÃO estão). Também reproduz
+            // `.not(column, 'is', null)`, usado para apagar todas as linhas da tabela (coluna é
+            // sempre NOT NULL por ser a primary key).
+            not(column, op, pattern) {
+              if (op === 'is') {
+                memoryDb[table] = [];
+                return Promise.resolve({ error: null });
+              }
               const inner = String(pattern).replace(/^\(|\)$/g, '');
               const allowed = new Set(inner.split(',').filter(Boolean));
               memoryDb[table] = memoryDb[table].filter(r => allowed.has(String(r[column])));
@@ -206,11 +212,14 @@ async function saveState(state) {
     if (error) throw error;
   }
 
-  // 4.5. Deletar activities removidas (só se vieram activities no payload — mesmo padrão de
-  // guard usado para boards/tasks/eventos/pessoas; evita wipe acidental)
+  // 4.5. Deletar activities removidas (só se o campo veio no payload — evita wipe acidental
+  // quando o campo está ausente por erro, mas permite deletar a última activity restante)
   const activityIds = activities.map(a => a.id);
-  if (activityIds.length > 0) {
-    const { error } = await supabase.from('activities').delete().not('id', 'in', `(${activityIds.join(',')})`);
+  if (Array.isArray(state.activities)) {
+    const query = supabase.from('activities').delete();
+    const { error } = activityIds.length > 0
+      ? await query.not('id', 'in', `(${activityIds.join(',')})`)
+      : await query.not('id', 'is', null);
     if (error) throw error;
   }
 

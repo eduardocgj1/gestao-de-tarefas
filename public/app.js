@@ -3531,7 +3531,7 @@ document.getElementById('activityDetailOverlay').addEventListener('click', e => 
     const a = findActivity(activityDetailId);
     const t = a && (a.checklistTasks || []).find(x => x.id === chk.dataset.id);
     if (t) {
-      setCompleted(t, chk.checked, { tasks: a.checklistTasks });
+      setCompleted(t, chk.checked, t.boardId ? boards.find(b => b.id === t.boardId) : null);
       patchActivity(a, () => {});
       openActivityDetail(activityDetailId);
     }
@@ -4299,7 +4299,7 @@ function renderActivityFormStep5(a) {
     if (e.target.classList.contains('checklist-chk-done')) {
       const t = (a.checklistTasks || []).find(x => x.id === e.target.dataset.id);
       if (t) {
-        setCompleted(t, e.target.checked, { tasks: a.checklistTasks });
+        setCompleted(t, e.target.checked, t.boardId ? boards.find(b => b.id === t.boardId) : null);
         patchActivity(a, () => {});
         renderActivityFormStep5(a);
       }
