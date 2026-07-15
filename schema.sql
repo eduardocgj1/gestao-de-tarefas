@@ -164,6 +164,14 @@ CREATE TABLE IF NOT EXISTS finance_categories (
   sort_order    INTEGER NOT NULL DEFAULT 0
 );
 
+-- Carteiras (cartões/contas usados nos lançamentos)
+CREATE TABLE IF NOT EXISTS finance_wallets (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  icon        TEXT NOT NULL DEFAULT '💳',
+  sort_order  INTEGER NOT NULL DEFAULT 0
+);
+
 -- Transações (receitas e despesas)
 CREATE TABLE IF NOT EXISTS finance_transactions (
   id          TEXT PRIMARY KEY,
@@ -172,8 +180,12 @@ CREATE TABLE IF NOT EXISTS finance_transactions (
   description TEXT NOT NULL,
   amount      NUMERIC(12,2) NOT NULL,
   date        DATE NOT NULL,
-  category_id TEXT REFERENCES finance_categories(id) ON DELETE SET NULL
+  category_id TEXT REFERENCES finance_categories(id) ON DELETE SET NULL,
+  wallet_id   TEXT REFERENCES finance_wallets(id) ON DELETE SET NULL
 );
+
+-- Migração para bancos já existentes (rodar se a tabela finance_transactions já existia sem a coluna):
+-- ALTER TABLE finance_transactions ADD COLUMN IF NOT EXISTS wallet_id TEXT REFERENCES finance_wallets(id) ON DELETE SET NULL;
 
 -- Compras planejadas
 CREATE TABLE IF NOT EXISTS finance_planned_purchases (
@@ -187,7 +199,48 @@ CREATE TABLE IF NOT EXISTS finance_planned_purchases (
   created_at     BIGINT
 );
 
+-- Itens de orçamento fixo por categoria (Planejamento do Mês)
+CREATE TABLE IF NOT EXISTS finance_budget_items (
+  id          TEXT PRIMARY KEY,
+  category_id TEXT REFERENCES finance_categories(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  icon        TEXT NOT NULL DEFAULT '📌',
+  amount      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  sort_order  INTEGER NOT NULL DEFAULT 0
+);
+
 -- Índices
 CREATE INDEX IF NOT EXISTS fin_txn_date_idx    ON finance_transactions(date);
 CREATE INDEX IF NOT EXISTS fin_txn_type_idx    ON finance_transactions(type);
 CREATE INDEX IF NOT EXISTS fin_txn_cat_idx     ON finance_transactions(category_id);
+CREATE INDEX IF NOT EXISTS fin_txn_wallet_idx  ON finance_transactions(wallet_id);
+CREATE INDEX IF NOT EXISTS fin_budget_cat_idx  ON finance_budget_items(category_id);
+
+-- ============================================================
+-- Feature: Multi-usuário com login Google
+-- Rodar no SQL Editor do Supabase após deploy desta versão
+-- ============================================================
+
+-- Adiciona user_id em todas as tabelas de dados
+ALTER TABLE boards                   ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE tasks                    ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE calendar_events          ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE people                   ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE activities               ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE finance_categories       ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE finance_wallets          ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE finance_transactions     ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE finance_planned_purchases ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE finance_budget_items     ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+-- Índices de performance por usuário
+CREATE INDEX IF NOT EXISTS boards_user_id_idx         ON boards(user_id);
+CREATE INDEX IF NOT EXISTS tasks_user_id_idx          ON tasks(user_id);
+CREATE INDEX IF NOT EXISTS cal_events_user_id_idx     ON calendar_events(user_id);
+CREATE INDEX IF NOT EXISTS people_user_id_idx         ON people(user_id);
+CREATE INDEX IF NOT EXISTS activities_user_id_idx     ON activities(user_id);
+CREATE INDEX IF NOT EXISTS fin_cat_user_id_idx        ON finance_categories(user_id);
+CREATE INDEX IF NOT EXISTS fin_wallet_user_id_idx     ON finance_wallets(user_id);
+CREATE INDEX IF NOT EXISTS fin_txn_user_id_idx        ON finance_transactions(user_id);
+CREATE INDEX IF NOT EXISTS fin_purchase_user_id_idx   ON finance_planned_purchases(user_id);
+CREATE INDEX IF NOT EXISTS fin_budget_user_id_idx     ON finance_budget_items(user_id);

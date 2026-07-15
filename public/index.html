@@ -109,6 +109,10 @@
       </div>
       <button type="button" id="financeLancarBtn" class="btn-brand-sm hidden" title="Lançar transação">+ Lançar</button>
       <button type="button" id="exportReportBtn" class="export-report-btn" title="Exportar report">Exportar report ↗</button>
+      <div id="userMenu" class="user-menu hidden">
+        <img id="userAvatar" class="user-avatar" src="" alt="">
+        <button id="signOutBtn" class="icon-btn" title="Sair">Sair</button>
+      </div>
       <button id="settingsBtn" class="icon-btn settings-btn" title="Configurações">⚙</button>
     </header>
 
@@ -414,6 +418,19 @@
         </div>
       </div>
     </div>
+
+    <div class="settings-section">
+      <h3>Carteiras (cartões / contas)</h3>
+      <div id="walletList" class="people-list"></div>
+      <button type="button" id="addWalletBtn" class="add-person-btn">+ Adicionar carteira</button>
+      <div id="addWalletForm" class="add-person-form hidden">
+        <input type="text" id="newWalletName" placeholder="Nome (ex.: Nubank, Itaú, Dinheiro)" autocomplete="off">
+        <div class="add-person-form-actions">
+          <button type="button" id="confirmAddWallet" class="btn-brand-sm">Adicionar</button>
+          <button type="button" id="cancelAddWallet" class="btn-neutral-sm">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -658,6 +675,11 @@
       <div id="finCatPills" class="fin-cat-pills-row"></div>
     </div>
 
+    <div id="finWalletField">
+      <label>Carteira</label>
+      <div id="finWalletPills" class="fin-cat-pills-row"></div>
+    </div>
+
     <div id="finNatureField">
       <label>Natureza</label>
       <div class="fin-nature-row">
@@ -713,6 +735,91 @@
   </div>
 </div>
 
+<!-- Finance: Nova Categoria Modal -->
+<div id="finNewCatModal" class="modal-overlay hidden">
+  <div class="modal fin-modal">
+    <button id="finNewCatClose" class="close-btn">&times;</button>
+    <h2>Nova categoria</h2>
+
+    <label>Nome
+      <input type="text" id="finNewCatName" class="f-name" placeholder="Ex.: Educação, Pets, Streaming...">
+    </label>
+
+    <label style="margin-top:4px">Ícone</label>
+    <div id="finNewCatIconPicker" class="fin-icon-picker">
+      <button type="button" class="fin-icon-opt selected" data-icon="📦">📦</button>
+      <button type="button" class="fin-icon-opt" data-icon="📚">📚</button>
+      <button type="button" class="fin-icon-opt" data-icon="🐾">🐾</button>
+      <button type="button" class="fin-icon-opt" data-icon="✈️">✈️</button>
+      <button type="button" class="fin-icon-opt" data-icon="🏋️">🏋️</button>
+      <button type="button" class="fin-icon-opt" data-icon="💻">💻</button>
+      <button type="button" class="fin-icon-opt" data-icon="👕">👕</button>
+      <button type="button" class="fin-icon-opt" data-icon="🎓">🎓</button>
+      <button type="button" class="fin-icon-opt" data-icon="🌿">🌿</button>
+      <button type="button" class="fin-icon-opt" data-icon="🎁">🎁</button>
+      <button type="button" class="fin-icon-opt" data-icon="⚡">⚡</button>
+      <button type="button" class="fin-icon-opt" data-icon="🔧">🔧</button>
+    </div>
+
+    <label style="margin-top:4px">Cor</label>
+    <div id="finNewCatColorPicker" class="fin-color-picker">
+      <button type="button" class="fin-color-opt selected" data-color="gray"   style="background:#9A9488"  title="Cinza"></button>
+      <button type="button" class="fin-color-opt"          data-color="blue"   style="background:#3E6FBD"  title="Azul"></button>
+      <button type="button" class="fin-color-opt"          data-color="green"  style="background:#3A6604"  title="Verde"></button>
+      <button type="button" class="fin-color-opt"          data-color="amber"  style="background:#C07C30"  title="Âmbar"></button>
+      <button type="button" class="fin-color-opt"          data-color="teal"   style="background:#1F7A6E"  title="Teal"></button>
+      <button type="button" class="fin-color-opt"          data-color="red"    style="background:#C1622D"  title="Vermelho"></button>
+      <button type="button" class="fin-color-opt"          data-color="purple" style="background:#7B4FA0"  title="Roxo"></button>
+    </div>
+
+    <label>Orçamento mensal <span style="font-weight:500;font-size:11px;color:var(--color-text-tertiary)">(opcional)</span>
+      <input type="number" id="finNewCatBudget" min="0" step="0.01" placeholder="0,00">
+    </label>
+
+    <div class="modal-footer" style="margin-top:20px">
+      <button type="button" id="finNewCatCancel" class="btn-neutral">Cancelar</button>
+      <button type="button" id="finNewCatSave"   class="btn-primary">Criar categoria</button>
+    </div>
+  </div>
+</div>
+
+<!-- Finance: Adicionar Gasto Fixo Modal -->
+<div id="finAddFixedModal" class="modal-overlay hidden">
+  <div class="modal fin-modal">
+    <button id="finAddFixedClose" class="close-btn">&times;</button>
+    <h2>Novo gasto fixo</h2>
+
+    <label>Descrição
+      <input type="text" id="finAddFixedDesc" class="f-name" placeholder="Ex.: Netflix, Academia, Plano de saúde...">
+    </label>
+
+    <label>Valor mensal (R$)
+      <input type="number" id="finAddFixedAmount" min="0" step="0.01" placeholder="0,00">
+    </label>
+
+    <label style="margin-top:4px">Ícone <span style="font-weight:500;font-size:11px;color:var(--color-text-tertiary)">(opcional)</span></label>
+    <div id="finAddFixedIconPicker" class="fin-icon-picker">
+      <button type="button" class="fin-icon-opt selected" data-icon="📌">📌</button>
+      <button type="button" class="fin-icon-opt" data-icon="🏠">🏠</button>
+      <button type="button" class="fin-icon-opt" data-icon="📺">📺</button>
+      <button type="button" class="fin-icon-opt" data-icon="🎵">🎵</button>
+      <button type="button" class="fin-icon-opt" data-icon="🎮">🎮</button>
+      <button type="button" class="fin-icon-opt" data-icon="🏥">🏥</button>
+      <button type="button" class="fin-icon-opt" data-icon="🚌">🚌</button>
+      <button type="button" class="fin-icon-opt" data-icon="🍱">🍱</button>
+      <button type="button" class="fin-icon-opt" data-icon="☕">☕</button>
+      <button type="button" class="fin-icon-opt" data-icon="💳">💳</button>
+      <button type="button" class="fin-icon-opt" data-icon="📱">📱</button>
+      <button type="button" class="fin-icon-opt" data-icon="🔒">🔒</button>
+    </div>
+
+    <div class="modal-footer" style="margin-top:20px">
+      <button type="button" id="finAddFixedCancel" class="btn-neutral">Cancelar</button>
+      <button type="button" id="finAddFixedSave"   class="btn-primary">Adicionar</button>
+    </div>
+  </div>
+</div>
+
 <div id="weatherCityPopover" class="weather-city-popover hidden">
   <div class="day-popup-weather-search-row">
     <input type="text" id="weatherPopoverInput" class="weather-city-input" placeholder="Buscar cidade..." autocomplete="off">
@@ -720,7 +827,115 @@
   <div class="weather-city-results" id="weatherPopoverResults"></div>
 </div>
 
+<!-- Overlay de login -->
+<div id="loginOverlay" class="login-overlay hidden">
+  <div class="login-card">
+    <div class="login-logo">T</div>
+    <h1 class="login-title">Tarefas</h1>
+    <p class="login-subtitle">Seu app pessoal de gestão de tarefas</p>
+    <button id="googleSignInBtn" class="login-google-btn">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.64 9.2045c0-.638-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.8741 2.6836-6.6151z" fill="#4285F4"/>
+        <path d="M9 18c2.43 0 4.4673-.8059 5.9564-2.1805l-2.9087-2.2581c-.8059.54-1.8368.8591-3.0477.8591-2.3441 0-4.3282-1.5832-5.036-3.7105H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z" fill="#34A853"/>
+        <path d="M3.964 10.71c-.18-.54-.2827-1.1168-.2827-1.71s.1027-1.17.2827-1.71V4.9582H.9574C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9574 4.0418L3.964 10.71z" fill="#FBBC05"/>
+        <path d="M9 3.5795c1.3214 0 2.5077.4545 3.4405 1.346l2.5813-2.5814C13.4627.8918 11.4255 0 9 0 5.4818 0 2.4382 2.0168.9574 4.9582L3.964 7.29C4.6718 5.1627 6.6559 3.5795 9 3.5795z" fill="#EA4335"/>
+      </svg>
+      Entrar com Google
+    </button>
+    <p id="loginError" class="login-error hidden">Falha ao entrar. Tente novamente.</p>
+  </div>
+</div>
+
+<style>
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg, #f5f5f5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.login-overlay.hidden { display: none; }
+.login-card {
+  background: var(--surface, #fff);
+  border-radius: 16px;
+  padding: 48px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.12);
+  min-width: 320px;
+}
+.login-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #222;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Sora', sans-serif;
+  margin-bottom: 4px;
+}
+.login-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary, #111);
+  font-family: 'Sora', sans-serif;
+}
+.login-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary, #888);
+  margin: 0 0 12px;
+  text-align: center;
+}
+.login-google-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  padding: 11px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: 'Sora', sans-serif;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.login-google-btn:hover { background: #f8f8f8; border-color: #bbb; }
+.login-google-btn:active { background: #f0f0f0; }
+.login-error {
+  color: #e53e3e;
+  font-size: 13px;
+  margin: 0;
+}
+.login-error.hidden { display: none; }
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.user-menu.hidden { display: none; }
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #ddd;
+}
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 </body>
 </html>
