@@ -34,6 +34,18 @@
         <span class="icon-activities-wrap"><span class="icon-activities"></span></span>
         <span class="sidebar-activities-label">Atividades</span>
       </button>
+      <button type="button" id="sidebarFinanceItem" class="sidebar-finance-item">
+        <span class="icon-finance-wrap">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-finance-svg">
+            <rect x="1" y="3" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.35" fill="none"/>
+            <path d="M1 6h12" stroke="currentColor" stroke-width="1.35"/>
+            <path d="M4 9.5h2M8 9.5h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M4 2V3" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
+            <path d="M10 2V3" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="sidebar-finance-label">Finanças</span>
+      </button>
     </nav>
     <div class="sidebar-pomodoro-wrap">
       <div class="pomodoro" id="pomodoroWidget">
@@ -76,6 +88,11 @@
           <span id="monthRange"></span>
           <button id="calendarTodayBtn">Hoje</button>
         </div>
+        <div class="nav-finance hidden" id="navFinanceControls">
+          <button type="button" id="finPrevMonth" class="icon-btn" title="Mês anterior">‹</button>
+          <span id="financeMonthLabel" class="finance-month-label">Julho 2026</span>
+          <button type="button" id="finNextMonth" class="icon-btn" title="Próximo mês">›</button>
+        </div>
         <div class="nav-activities hidden" id="navActivitiesControls">
           <div class="view-toggle">
             <button type="button" id="viewByCategoryBtn" class="view-toggle-btn active">Por categoria</button>
@@ -90,6 +107,7 @@
           <button type="button" id="activityNewBtn" class="btn-brand-sm" title="Nova atividade">+ Nova atividade</button>
         </div>
       </div>
+      <button type="button" id="financeLancarBtn" class="btn-brand-sm hidden" title="Lançar transação">+ Lançar</button>
       <button type="button" id="exportReportBtn" class="export-report-btn" title="Exportar report">Exportar report ↗</button>
       <button id="settingsBtn" class="icon-btn settings-btn" title="Configurações">⚙</button>
     </header>
@@ -107,6 +125,8 @@
     </main>
 
     <main id="activitiesView" class="activities-view hidden"></main>
+
+    <main id="financeView" class="finance-view hidden"></main>
   </div>
 
   <div id="dayDrawerDocked" class="day-drawer-docked hidden">
@@ -606,6 +626,89 @@
     <div style="display:flex;gap:10px;">
       <button type="button" id="activityKeepNoBtn"  class="btn-neutral" style="flex:1;">Não, só registrar</button>
       <button type="button" id="activityKeepYesBtn" class="btn-primary"  style="flex:1;">Sim, manter 📌</button>
+    </div>
+  </div>
+</div>
+
+<!-- Finance: Transaction Modal -->
+<div id="finTransactionModal" class="modal-overlay hidden">
+  <div class="modal fin-modal">
+    <button id="finModalClose" class="close-btn">&times;</button>
+    <h2 id="finModalTitle">Novo lançamento</h2>
+
+    <div class="fin-type-tabs" id="finTypeTabs">
+      <button type="button" class="fin-type-tab active" data-type="expense">Gasto</button>
+      <button type="button" class="fin-type-tab" data-type="income">Receita</button>
+    </div>
+
+    <label>Descrição
+      <input type="text" id="finTxnDesc" class="f-name" placeholder="Ex.: Mercado, Aluguel, Salário...">
+    </label>
+
+    <label>Valor (R$)
+      <input type="number" id="finTxnAmount" min="0" step="0.01" placeholder="0,00">
+    </label>
+
+    <label>Data
+      <input type="date" id="finTxnDate">
+    </label>
+
+    <div id="finCatField">
+      <label>Categoria</label>
+      <div id="finCatPills" class="fin-cat-pills-row"></div>
+    </div>
+
+    <div id="finNatureField">
+      <label>Natureza</label>
+      <div class="fin-nature-row">
+        <button type="button" class="fin-nature-btn active" data-nature="variable">Variável</button>
+        <button type="button" class="fin-nature-btn" data-nature="fixed">Fixo mensal</button>
+      </div>
+    </div>
+
+    <div class="modal-footer" style="margin-top:20px">
+      <button type="button" id="finModalCancel" class="btn-neutral">Cancelar</button>
+      <button type="button" id="finModalSave" class="btn-primary">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Finance: Planned Purchase Modal -->
+<div id="finPurchaseModal" class="modal-overlay hidden">
+  <div class="modal fin-modal">
+    <button id="finPurchaseModalClose" class="close-btn">&times;</button>
+    <h2>Compra planejada</h2>
+
+    <label>Nome
+      <input type="text" id="finPurchaseName" class="f-name" placeholder="Ex.: iPhone, Viagem, Notebook...">
+    </label>
+
+    <label>Valor alvo (R$)
+      <input type="number" id="finPurchaseTarget" min="0" step="0.01" placeholder="0,00">
+    </label>
+
+    <label>Já guardado (R$)
+      <input type="number" id="finPurchaseSaved" min="0" step="0.01" placeholder="0,00">
+    </label>
+
+    <label>Prioridade</label>
+    <div class="fin-nature-row">
+      <button type="button" class="fin-nature-btn" data-priority="high">Alta</button>
+      <button type="button" class="fin-nature-btn active" data-priority="medium">Média</button>
+      <button type="button" class="fin-nature-btn" data-priority="low">Baixa</button>
+    </div>
+
+    <label style="margin-top:12px">Categoria <span style="font-weight:500;font-size:11px;color:var(--color-text-tertiary)">(opcional)</span>
+      <input type="text" id="finPurchaseCatLabel" placeholder="Ex.: Eletrônicos, Viagem...">
+    </label>
+
+    <label>Descrição <span style="font-weight:500;font-size:11px;color:var(--color-text-tertiary)">(opcional)</span>
+      <textarea id="finPurchaseDesc" style="resize:vertical;min-height:64px;font:500 13px var(--font-sora);border:1px solid var(--color-border);border-radius:var(--radius-btn);padding:9px 10px;width:100%;box-sizing:border-box;" placeholder="Notas sobre a compra..."></textarea>
+    </label>
+
+    <div class="modal-footer" style="margin-top:20px">
+      <button type="button" id="finPurchaseModalCancel" class="btn-neutral">Cancelar</button>
+      <button type="button" id="finPurchaseModalSave" class="btn-primary">Salvar</button>
     </div>
   </div>
 </div>
