@@ -1,0 +1,2244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protótipo — Lista de Atividades</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../public/styles.css">
+<style>
+/* ── Ajustes específicos do protótipo ── */
+body { overflow: hidden; }
+
+/* Garante que o protótipo seja visualizado em "atividades" por padrão */
+#board, #calendarView, #navBoardControls, #navCalendarControls,
+#exportReportBtn, #dayDrawerDocked { display: none !important; }
+#activitiesView { display: flex; flex-direction: column; }
+#navActivitiesControls { display: flex !important; }
+.sidebar { width: 236px; }
+.sidebar-activities-item { background: var(--color-green-soft); color: var(--color-green); }
+.sidebar-app-name, .sidebar-board-name, .sidebar-calendar-label,
+.sidebar-activities-label, .sidebar-section-label, .sidebar-collapse-btn { display: block !important; }
+.sidebar-expand-wrap { display: none !important; }
+#appTitle::after { content: "Atividades"; }
+#appTitle { font-size: 0; }
+#appTitle::after { font: 700 17px var(--font-sora); }
+
+/* Modal overlay ativo */
+.modal-overlay.open { display: flex !important; }
+
+/* Tabs do modal de detalhes */
+.detail-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border-strong);
+  margin-bottom: 16px;
+}
+.detail-tab {
+  border: none;
+  background: none;
+  padding: 10px 16px;
+  font: 600 12px var(--font-sora);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.detail-tab.active {
+  color: var(--color-green);
+  border-bottom-color: var(--color-green);
+}
+.detail-tab-pane { display: none; }
+.detail-tab-pane.active { display: block; }
+
+/* Variação ativa highlight */
+.variation-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--color-green-soft);
+  color: var(--color-green);
+  font: 700 10.5px var(--font-sora);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+}
+.variation-active-chip::before {
+  content: '●';
+  font-size: 8px;
+}
+
+/* Checklist no modal de detalhes */
+.detail-checklist-progress {
+  font: 600 11px var(--font-sora);
+  color: var(--color-text-secondary);
+  background: #FBF9F4;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-checklist-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.detail-checklist-bar-fill {
+  height: 100%;
+  background: var(--color-green);
+  border-radius: 2px;
+}
+
+/* Custo por perfil */
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 500 12px var(--font-sora);
+  margin-top: 4px;
+}
+.cost-table th {
+  text-align: left;
+  font: 700 10.5px var(--font-sora);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.cost-table td {
+  padding: 5px 8px;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.cost-table tr:last-child td { border-bottom: none; }
+.cost-table td:first-child { color: var(--color-text-secondary); font-weight: 600; }
+.cost-table td.highlight { color: var(--color-green); font-weight: 700; }
+
+/* Animação de aparecimento dos modais */
+.modal-overlay { transition: opacity .15s; }
+.modal { animation: slideUp .2s ease; }
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Botão cancelar planejamento */
+.cancel-plan-btn {
+  border: none;
+  background: var(--color-terracotta-soft);
+  color: var(--color-terracotta);
+  font: 700 12.5px var(--font-sora);
+  padding: 10px 18px;
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+}
+.cancel-plan-btn:hover { background: var(--color-terracotta-soft-2); }
+
+/* Chips de modalidade dentro do card */
+.duration-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Próximos feriados */
+.holiday-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #FBF6E9;
+  border: 1px solid #F0E4C0;
+  color: #8B6914;
+  font: 600 11px var(--font-sora);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+/* Step do formulário — override para mostrar números */
+.activity-form-step-dot { position: relative; }
+.activity-form-step-dot .step-num {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 12px var(--font-sora);
+  color: var(--color-text-tertiary);
+}
+.activity-form-step-dot.active .step-num { color: var(--color-green); }
+.activity-form-step-dot.done .step-num { color: #fff; }
+.activity-form-step-dot::before { /* sobrepõe o ::before do step-dot para o número aparecer */
+  content: '';
+}
+
+/* Link preview no detalhe */
+.detail-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #FBF9F4;
+  border-radius: 8px;
+  font: 600 12px var(--font-sora);
+  color: var(--color-blue);
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+.detail-link-row:hover { background: var(--color-neutral-btn-hover); }
+
+/* Realizações */
+.realization-entry {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font: 500 12px var(--font-sora);
+}
+.realization-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.realization-entry-date { font: 700 12.5px var(--font-sora); color: var(--color-text); }
+.realization-stars { color: var(--color-terracotta); font-size: 13px; }
+.realization-entry-meta { color: var(--color-text-secondary); }
+
+/* Toggle de visualização (categoria vs status) */
+.view-toggle {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.view-toggle-btn {
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font: 600 11.5px var(--font-sora);
+  padding: 0 11px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background .1s, color .1s;
+}
+.view-toggle-btn + .view-toggle-btn {
+  border-left: 1px solid var(--color-border);
+}
+.view-toggle-btn.active {
+  background: var(--color-green-soft);
+  color: var(--color-green);
+}
+.view-toggle-btn:hover:not(.active) {
+  background: var(--color-neutral-btn);
+}
+
+/* Botão de editar realização */
+.edit-realization-btn {
+  border: none; background: none;
+  font: 600 11px var(--font-sora);
+  color: var(--color-text-tertiary);
+  cursor: pointer; padding: 0;
+}
+.edit-realization-btn:hover { color: var(--color-green); }
+
+/* Info bar de status planejada */
+.planned-info-bar {
+  background: var(--color-green-soft);
+  border: 1px solid rgba(58,102,4,.15);
+  border-radius: var(--radius-btn);
+  padding: 10px 14px;
+  font: 600 12px var(--font-sora);
+  color: var(--color-green);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.planned-info-bar strong { color: var(--color-green); }
+
+/* Toast de feedback */
+.proto-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-dark);
+  color: #fff;
+  font: 600 13px var(--font-sora);
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+}
+.proto-toast.show { opacity: 1; }
+
+/* Seta de promoção no preview */
+.promote-arrow { color: var(--color-text-tertiary); }
+.promote-date-calc { color: var(--color-green); font-weight: 700; }
+.promote-date-fallback { color: var(--color-terracotta); font-size: 10.5px; }
+.promote-date-none { color: var(--color-text-tertiary); }
+
+/* Banner de rascunho */
+.draft-banner-icon { margin-right: 4px; }
+
+/* Status chip: realizado */
+.activity-status-realizada {
+  background: var(--color-blue-soft);
+  color: var(--color-blue);
+}
+
+/* Drop zone ao receber drag */
+.activity-column-body.drag-over {
+  background: var(--color-green-soft);
+  outline: 2px dashed var(--color-green);
+  outline-offset: -4px;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+.activity-column-body.drag-over-danger {
+  background: var(--color-terracotta-soft);
+  outline: 2px dashed var(--color-terracotta);
+  outline-offset: -4px;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+
+/* Card sendo arrastado */
+.activity-card[draggable="true"] { cursor: grab; }
+.activity-card.is-dragging { opacity: 0.35; transform: scale(.97); }
+
+/* Estado vazio das colunas de status */
+.status-column-empty {
+  flex: 1;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-btn);
+  font: 500 12px var(--font-sora);
+  color: var(--color-text-tertiary);
+  margin: 4px;
+}
+
+/* Modal de realização — estrelas */
+.proto-stars { display: flex; gap: 6px; margin: 8px 0 14px; }
+.proto-star {
+  font-size: 26px; cursor: pointer;
+  color: var(--color-border);
+  transition: color .1s;
+  user-select: none;
+}
+.proto-star.filled { color: var(--color-terracotta); }
+
+/* Subtítulo da atividade no card (variação + data) */
+.activity-card-subtitle {
+  font: 600 11px var(--font-sora);
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="sidebar open">
+    <div class="sidebar-top">
+      <div class="app-logo">T</div>
+      <span class="sidebar-app-name">Tarefas</span>
+      <button type="button" class="sidebar-collapse-btn" title="Recolher">‹</button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Boards</div>
+      <button type="button" class="sidebar-board-item">
+        <span class="sidebar-board-dot" style="background:#3A6604"></span>
+        <span class="sidebar-board-name">Trabalho</span>
+      </button>
+      <button type="button" class="sidebar-board-item">
+        <span class="sidebar-board-dot" style="background:#3E6FBD"></span>
+        <span class="sidebar-board-name">Pessoal</span>
+      </button>
+      <button type="button" class="sidebar-board-item">
+        <span class="sidebar-board-dot" style="background:#C1622D"></span>
+        <span class="sidebar-board-name">Freelance</span>
+      </button>
+      <div class="sidebar-separator"></div>
+      <button type="button" class="sidebar-calendar-item">
+        <span class="icon-calendar-wrap"><span class="icon-calendar"></span></span>
+        <span class="sidebar-calendar-label">Calendário</span>
+      </button>
+      <button type="button" class="sidebar-activities-item" id="sidebarActivitiesItem">
+        <span class="icon-activities-wrap"><span class="icon-activities"></span></span>
+        <span class="sidebar-activities-label">Atividades</span>
+      </button>
+    </nav>
+    <div class="sidebar-pomodoro-wrap">
+      <div class="pomodoro">
+        <div class="pomo-header">
+          <span class="dot" style="background:#3A6604; width:8px;height:8px;border-radius:50%"></span>
+          <span class="pomo-header-label">Foco</span>
+          <span class="pomo-header-time">25:00</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-content">
+    <header class="topbar">
+      <h1 id="appTitle"></h1>
+      <div class="spacer"></div>
+      <div class="nav">
+        <div class="nav-activities" id="navActivitiesControls">
+          <input type="text" id="activitySearchInput" class="activity-search-input" placeholder="🔍 Buscar atividades...">
+          <div class="activity-filters-wrap">
+            <button type="button" class="icon-btn" style="height:32px;padding:0 12px;font:700 12px var(--font-sora);" onclick="toggleFiltersPanel()">Filtros ▾</button>
+            <div id="activityFiltersPanel" class="activity-filters-panel hidden">
+              <label>Categoria<select style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);color:var(--color-text);background:var(--color-bg);"><option value="">Todas</option><option>Explorar a cidade</option><option>Viagem de final de semana</option><option>Natureza &amp; aventura</option><option>Social &amp; cultural</option></select></label>
+              <label>Status<select style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);color:var(--color-text);background:var(--color-bg);"><option value="">Todos</option><option>rascunho</option><option>quero_fazer</option><option>planejada</option></select></label>
+              <label>Vibe<select style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);color:var(--color-text);background:var(--color-bg);"><option value="">Todas</option><option>Relaxamento</option><option>Gastronômico</option><option>Cultural</option><option>Natureza &amp; contemplação</option><option>Aventura</option><option>Fotográfico</option></select></label>
+              <label>Modalidade<select style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);color:var(--color-text);background:var(--color-bg);"><option value="">Todas</option><option>Parada rápida</option><option>Meio período</option><option>Dia inteiro</option><option>Bate volta</option><option>Final de semana</option></select></label>
+              <button type="button" class="btn-neutral" id="filter-clear-btn" style="margin-top:14px;width:100%">Limpar filtros</button>
+            </div>
+          </div>
+          <!-- Toggle de visualização -->
+          <div class="view-toggle">
+            <button type="button" class="view-toggle-btn active" id="viewByCategory" onclick="setView('category')" title="Agrupar por categoria">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="0" y="0" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="7.5" y="0" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="0" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="7.5" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor"/></svg>
+              Categoria
+            </button>
+            <button type="button" class="view-toggle-btn" id="viewByStatus" onclick="setView('status')" title="Agrupar por status">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="0" y="0" width="3" height="13" rx="1.5" fill="currentColor"/><rect x="5" y="0" width="3" height="10" rx="1.5" fill="currentColor"/><rect x="10" y="0" width="3" height="7" rx="1.5" fill="currentColor"/></svg>
+              Status
+            </button>
+          </div>
+          <button type="button" class="icon-btn" style="height:32px;padding:0 12px;font:700 12px var(--font-sora);" onclick="openImportModal()">Importar</button>
+          <button type="button" class="btn-brand-sm" id="activityNewBtn" style="height:32px;padding:0 14px;" onclick="openQuickCreate()">+ Nova atividade</button>
+        </div>
+      </div>
+      <button class="icon-btn settings-btn" title="Configurações">⚙</button>
+    </header>
+
+    <!-- ACTIVITIES VIEW -->
+    <main id="activitiesView" class="activities-view">
+
+      <!-- Banner de rascunhos -->
+      <div class="activity-draft-banner">
+        <span class="draft-banner-icon">⚠️</span> 1 atividade aguardando detalhamento —
+        <a href="#" style="color:inherit;text-decoration:underline;font-weight:800;" onclick="openDetail('teatro');return false;">ver rascunhos</a>
+      </div>
+
+      <!-- Board por categoria -->
+      <div class="activities-board" id="activitiesBoard">
+
+        <!-- Coluna: Explorar a cidade -->
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:#E8EFF9;color:#3E6FBD;">Explorar a cidade</span>
+            <span class="activity-column-count">2</span>
+          </div>
+          <div class="activity-column-body">
+
+            <!-- Card: Mercado Municipal -->
+            <div class="activity-card" onclick="openDetail('mercado')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Mercado Municipal</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-vibe">Gastronômico</span>
+                <span class="tag activity-tag-vibe">Fotográfico</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Parada rápida</span>
+                <span class="tag activity-tag-duracao">Meio período</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚇 Metro / CPTM</span>
+                <span class="activity-card-cost">R$ 40–120/pessoa</span>
+              </div>
+            </div>
+
+            <!-- Card: Passeio pela Mooca -->
+            <div class="activity-card" onclick="openDetail('mooca')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Passeio pelo bairro da Mooca</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-vibe">Cultural</span>
+                <span class="tag activity-tag-vibe">Fotográfico</span>
+                <span class="tag activity-tag-more">+1</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Meio período</span>
+                <span class="tag activity-tag-duracao">Dia inteiro</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚇 Metro / CPTM • 🚶 A pé</span>
+                <span class="activity-card-cost">R$ 0–50/pessoa</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Coluna: Viagem de final de semana -->
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:#EAF0DE;color:#3A6604;">Viagem de final de semana</span>
+            <span class="activity-column-count">2</span>
+          </div>
+          <div class="activity-column-body">
+
+            <!-- Card: Ubatuba (planejada) -->
+            <div class="activity-card" onclick="openDetail('ubatuba')">
+              <div class="activity-card-cover" style="background-image:linear-gradient(135deg,#4B9A7A 0%,#2D6B50 100%);position:relative;">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.35);font-size:32px;">🏖</div>
+              </div>
+              <div class="activity-card-top">
+                <div class="activity-card-name">Ubatuba</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-planejada">planejada</span>
+                <span class="variation-active-chip">Fora de temporada</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-vibe">Relaxamento</span>
+                <span class="tag activity-tag-vibe">Natureza &amp; contemplação</span>
+                <span class="tag activity-tag-more">+1</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Bate volta</span>
+                <span class="tag activity-tag-duracao">Final de semana</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>📅 Início: 02/08</span>
+                <span class="activity-card-cost">R$ 350–550/pessoa</span>
+              </div>
+            </div>
+
+            <!-- Card: Campos do Jordão (quero_fazer, realizada 1x) -->
+            <div class="activity-card" onclick="openDetail('campos')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Campos do Jordão</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-realized">Realizada 1×</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-vibe">Relaxamento</span>
+                <span class="tag activity-tag-vibe">Gastronômico</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Final de semana</span>
+                <span class="tag activity-tag-duracao">Feriado prolongado</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚗 Carro próprio</span>
+                <span class="activity-card-cost">R$ 450–750/pessoa</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Coluna: Natureza & aventura -->
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:#EAF0DE;color:#3A6604;">Natureza &amp; aventura</span>
+            <span class="activity-column-count">1</span>
+          </div>
+          <div class="activity-column-body">
+
+            <!-- Card: Trilha do Jaraguá -->
+            <div class="activity-card" onclick="openDetail('jaragua')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Trilha do Pico do Jaraguá</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-vibe">Natureza &amp; contemplação</span>
+                <span class="tag activity-tag-vibe">Aventura</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Meio período</span>
+                <span class="tag activity-tag-duracao">Dia inteiro</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚗 Carro • 📱 Uber/99</span>
+                <span class="activity-card-cost">R$ 0–30/pessoa</span>
+              </div>
+            </div>
+
+            <div class="activity-column-empty">+ Adicionar atividade</div>
+
+          </div>
+        </div>
+
+        <!-- Coluna: Social & cultural -->
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:var(--color-neutral-btn);color:var(--color-text-secondary);">Social &amp; cultural</span>
+            <span class="activity-column-count">1</span>
+          </div>
+          <div class="activity-column-body">
+
+            <!-- Card: Teatro Municipal (rascunho) -->
+            <div class="activity-card" onclick="openDetail('teatro')" style="opacity:.8;border-style:dashed;">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Teatro Municipal</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-rascunho">rascunho</span>
+              </div>
+              <div class="activity-card-meta" style="margin-top:8px;">
+                <span style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);">Aguardando detalhamento</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div><!-- /activities-board (por categoria) -->
+
+      <!-- Board por STATUS -->
+      <div class="activities-board hidden" id="activitiesBoardStatus">
+
+        <!-- Coluna: Rascunho -->
+        <div class="activity-column" data-status-col="rascunho">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:var(--color-neutral-btn);color:var(--color-text-secondary);">Rascunho</span>
+            <span class="activity-column-count" data-count-for="rascunho">1</span>
+          </div>
+          <div class="activity-column-body"
+               id="scol-rascunho"
+               ondragover="colDragOver(event,'rascunho')"
+               ondragleave="colDragLeave(event,'rascunho')"
+               ondrop="colDrop(event,'rascunho')">
+
+            <div class="activity-card" id="sc-teatro" draggable="true"
+                 ondragstart="cardDragStart(event,'teatro')"
+                 ondragend="cardDragEnd(event)"
+                 onclick="openDetail('teatro')"
+                 style="border-style:dashed;opacity:.85;">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Teatro Municipal</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-rascunho sc-status-chip">rascunho</span>
+                <span class="tag activity-tag-categoria">Social &amp; cultural</span>
+              </div>
+              <div class="activity-card-meta" style="margin-top:8px;">
+                <span style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);">Aguardando detalhamento</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Coluna: Quero fazer -->
+        <div class="activity-column" data-status-col="quero_fazer">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:var(--color-terracotta-soft);color:var(--color-terracotta);">Quero fazer</span>
+            <span class="activity-column-count" data-count-for="quero_fazer">4</span>
+          </div>
+          <div class="activity-column-body"
+               id="scol-quero_fazer"
+               ondragover="colDragOver(event,'quero_fazer')"
+               ondragleave="colDragLeave(event,'quero_fazer')"
+               ondrop="colDrop(event,'quero_fazer')">
+
+            <div class="activity-card" id="sc-mercado" draggable="true"
+                 ondragstart="cardDragStart(event,'mercado')"
+                 ondragend="cardDragEnd(event)"
+                 onclick="openDetail('mercado')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Mercado Municipal</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer sc-status-chip">quero fazer</span>
+                <span class="tag activity-tag-categoria">Explorar a cidade</span>
+                <span class="tag activity-tag-vibe">Gastronômico</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Parada rápida</span>
+                <span class="tag activity-tag-duracao">Meio período</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚇 Metro / CPTM</span>
+                <span class="activity-card-cost">R$ 40–120/pessoa</span>
+              </div>
+            </div>
+
+            <div class="activity-card" id="sc-mooca" draggable="true"
+                 ondragstart="cardDragStart(event,'mooca')"
+                 ondragend="cardDragEnd(event)"
+                 onclick="openDetail('mooca')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Passeio pelo bairro da Mooca</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer sc-status-chip">quero fazer</span>
+                <span class="tag activity-tag-categoria">Explorar a cidade</span>
+                <span class="tag activity-tag-vibe">Cultural</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Meio período</span>
+                <span class="tag activity-tag-duracao">Dia inteiro</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚇 Metro • 🚶 A pé</span>
+                <span class="activity-card-cost">R$ 0–50/pessoa</span>
+              </div>
+            </div>
+
+            <div class="activity-card" id="sc-campos" draggable="true"
+                 ondragstart="cardDragStart(event,'campos')"
+                 ondragend="cardDragEnd(event)"
+                 onclick="openDetail('campos')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Campos do Jordão</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer sc-status-chip">quero fazer</span>
+                <span class="tag activity-tag-categoria">Viagem de final de semana</span>
+                <span class="tag activity-tag-realized">Realizada 1×</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Final de semana</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚗 Carro próprio</span>
+                <span class="activity-card-cost">R$ 450–750/pessoa</span>
+              </div>
+            </div>
+
+            <div class="activity-card" id="sc-jaragua" draggable="true"
+                 ondragstart="cardDragStart(event,'jaragua')"
+                 ondragend="cardDragEnd(event)"
+                 onclick="openDetail('jaragua')">
+              <div class="activity-card-top">
+                <div class="activity-card-name">Trilha do Pico do Jaraguá</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-quero_fazer sc-status-chip">quero fazer</span>
+                <span class="tag activity-tag-categoria">Natureza &amp; aventura</span>
+                <span class="tag activity-tag-vibe">Aventura</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Meio período</span>
+                <span class="tag activity-tag-duracao">Dia inteiro</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>🚗 Carro • 📱 Uber/99</span>
+                <span class="activity-card-cost">R$ 0–30/pessoa</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Coluna: Planejada -->
+        <div class="activity-column" data-status-col="planejada">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:var(--color-green-soft);color:var(--color-green);">Planejada</span>
+            <span class="activity-column-count" data-count-for="planejada">1</span>
+          </div>
+          <div class="activity-column-body"
+               id="scol-planejada"
+               ondragover="colDragOver(event,'planejada')"
+               ondragleave="colDragLeave(event,'planejada')"
+               ondrop="colDrop(event,'planejada')">
+
+            <div class="activity-card" id="sc-ubatuba" draggable="true"
+                 ondragstart="cardDragStart(event,'ubatuba')"
+                 ondragend="cardDragEnd(event)"
+                 onclick="openDetail('ubatuba')">
+              <div class="activity-card-cover" style="background:linear-gradient(135deg,#4B9A7A 0%,#2D6B50 100%);position:relative;">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.35);font-size:32px;">🏖</div>
+              </div>
+              <div class="activity-card-top">
+                <div class="activity-card-name">Ubatuba</div>
+              </div>
+              <div class="activity-card-chips">
+                <span class="tag activity-tag-status activity-status-planejada sc-status-chip">planejada</span>
+                <span class="tag activity-tag-categoria">Viagem de final de semana</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="variation-active-chip">Fora de temporada</span>
+                <span class="tag activity-tag-vibe">Relaxamento</span>
+              </div>
+              <div class="activity-card-chips" style="margin-top:6px;">
+                <span class="tag activity-tag-duracao">Final de semana</span>
+              </div>
+              <div class="activity-card-meta">
+                <span>📅 Início: 02/08</span>
+                <span class="activity-card-cost">R$ 350–550/pessoa</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Coluna: Realizado -->
+        <div class="activity-column" data-status-col="realizada">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:var(--color-blue-soft);color:var(--color-blue);">Realizado</span>
+            <span class="activity-column-count" data-count-for="realizada">0</span>
+          </div>
+          <div class="activity-column-body"
+               id="scol-realizada"
+               ondragover="colDragOver(event,'realizada')"
+               ondragleave="colDragLeave(event,'realizada')"
+               ondrop="colDrop(event,'realizada')">
+            <div class="status-column-empty" id="scol-realizada-empty">Arraste aqui ou clique em "Marcar como realizada"</div>
+          </div>
+        </div>
+
+      </div><!-- /activities-board (por status) -->
+    </main>
+  </div>
+</div><!-- /app-shell -->
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: CRIAÇÃO RÁPIDA
+═══════════════════════════════════════════════════ -->
+<div id="quickCreateOverlay" class="modal-overlay hidden">
+  <div class="modal activity-quick-create-modal">
+    <button class="close-btn" onclick="closeModal('quickCreateOverlay')">&times;</button>
+    <h2 style="margin:0 0 14px;font:800 17px var(--font-sora);">Nova atividade</h2>
+    <div style="font:500 12px var(--font-sora);color:var(--color-text-secondary);margin-bottom:12px;">Capture rápido e detalhe depois, ou use o modo detalhado para preencher tudo de uma vez.</div>
+    <input type="text" id="activityQuickName" style="width:100%;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:10px 12px;font:600 15px var(--font-sora);background:#FBF9F4;margin-bottom:12px;" placeholder="O que você quer fazer? Ex.: ir para Ubatuba, cafezinho no Mercadão...">
+    <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Categoria</label>
+    <select style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+      <option>Explorar a cidade</option>
+      <option>Viagem de final de semana</option>
+      <option>Viagem longa</option>
+      <option>Natureza &amp; aventura</option>
+      <option>Hobbies &amp; aprendizado</option>
+      <option>Social &amp; cultural</option>
+      <option>Descanso intencional</option>
+      <option>Personalizada</option>
+    </select>
+    <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end;align-items:center;">
+      <span style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);flex:1;">Modo rascunho — detalhe depois</span>
+      <button type="button" class="btn-neutral" onclick="closeModal('quickCreateOverlay')">Cancelar</button>
+      <button type="button" class="btn-neutral" onclick="openFormModal();closeModal('quickCreateOverlay')">Detalhado →</button>
+      <button type="button" class="btn-primary" onclick="showToast('Atividade criada como rascunho!');closeModal('quickCreateOverlay')">Criar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: FORMULÁRIO EM ETAPAS
+═══════════════════════════════════════════════════ -->
+<div id="formOverlay" class="modal-overlay hidden">
+  <div class="modal activity-form-modal" style="max-height:88vh;overflow-y:auto;">
+    <button class="close-btn" onclick="closeModal('formOverlay')">&times;</button>
+
+    <!-- Stepper -->
+    <div class="activity-form-stepper" id="formStepper">
+      <div class="activity-form-step-dot" data-step="1" onclick="goStep(1)">
+        <span class="step-num">1</span>
+        <span class="activity-form-step-label">Identidade</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="2" onclick="goStep(2)">
+        <span class="step-num">2</span>
+        <span class="activity-form-step-label">Logística</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="3" onclick="goStep(3)">
+        <span class="step-num">3</span>
+        <span class="activity-form-step-label">Condições</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="4" onclick="goStep(4)">
+        <span class="step-num">4</span>
+        <span class="activity-form-step-label">Variações</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="5" onclick="goStep(5)">
+        <span class="step-num">5</span>
+        <span class="activity-form-step-label">Planejamento</span>
+      </div>
+    </div>
+
+    <!-- Etapa 1: Identidade -->
+    <div id="formStep1" class="activity-form-step">
+      <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Nome da atividade *</label>
+      <input type="text" value="Ubatuba" style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:600 15px var(--font-sora);background:#FBF9F4;">
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Categoria *</label>
+      <select style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+        <option>Explorar a cidade</option>
+        <option selected>Viagem de final de semana</option>
+        <option>Viagem longa</option>
+        <option>Natureza &amp; aventura</option>
+        <option>Social &amp; cultural</option>
+      </select>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Vibe (multisseleção)</label>
+      <div class="chip-select-group">
+        <span class="chip-select-option" onclick="toggleChip(this)">Romântico</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Relaxamento</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Aventura</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Cultural</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Agito social</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Mochilão</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Natureza &amp; contemplação</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Fotográfico</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Gastronômico</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Desconexão digital</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Solo</span>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Descrição</label>
+      <textarea style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;min-height:80px;resize:vertical;">Destino clássico do litoral norte de SP. Praias paradisíacas fora de temporada, Mata Atlântica preservada e pousadas charmosas.</textarea>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Localidade (para geocodificação)</label>
+      <input type="text" value="Ubatuba" placeholder="Ex.: Cantareira, Ubatuba, Mercadão" style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+      <div style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);margin-top:4px;">Usado para calcular distância automaticamente via OpenStreetMap.</div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Foto de capa</label>
+      <div style="margin-top:6px;border:2px dashed var(--color-border);border-radius:var(--radius-btn);padding:16px;text-align:center;color:var(--color-text-tertiary);font:500 12px var(--font-sora);cursor:pointer;">
+        📷 Clique para selecionar uma imagem
+      </div>
+    </div>
+
+    <!-- Etapa 2: Logística -->
+    <div id="formStep2" class="activity-form-step hidden">
+      <div style="background:var(--color-green-soft);border:1px solid rgba(58,102,4,.15);border-radius:var(--radius-btn-sm);padding:8px 12px;font:500 11.5px var(--font-sora);color:var(--color-green);margin-bottom:10px;">
+        📍 Distância calculada via Nominatim: <strong>~230 km de SP</strong> — classificado como 150–400 km
+      </div>
+
+      <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Modalidades de duração * (multisseleção)</label>
+      <div class="chip-select-group">
+        <span class="chip-select-option" onclick="toggleChip(this)">Parada rápida</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Meio período</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Dia inteiro</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Bate volta</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Final de semana</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Feriado prolongado</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Semana+</span>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Meios de transporte compatíveis</label>
+      <div class="chip-select-group">
+        <span class="chip-select-option" onclick="toggleChip(this)">A pé</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Metro / CPTM</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Ônibus interestadual</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Carro próprio</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Avião</span>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Perfis de custo (R$/pessoa)</label>
+      <div style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);margin-bottom:8px;">Preencha ao menos um range completo (mín + máx) em baixa temporada para sair do Rascunho.</div>
+
+      <div class="cost-profile-section">
+        <h4 style="margin:0 0 8px;font:700 12px var(--font-sora);color:var(--color-text);">🎒 Econômico</h4>
+        <div class="cost-range-row">
+          <span class="cost-range-label">Baixa temporada</span>
+          <span style="font:500 12px var(--font-sora);color:var(--color-text-secondary);">R$</span>
+          <input type="number" value="150" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+          <span style="color:var(--color-text-tertiary);">–</span>
+          <input type="number" value="280" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+        </div>
+        <div class="cost-range-row">
+          <span class="cost-range-label">Alta temporada</span>
+          <span style="font:500 12px var(--font-sora);color:var(--color-text-secondary);">R$</span>
+          <input type="number" value="350" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+          <span style="color:var(--color-text-tertiary);">–</span>
+          <input type="number" value="500" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+        </div>
+      </div>
+
+      <div class="cost-profile-section" style="margin-top:10px;">
+        <h4 style="margin:0 0 8px;font:700 12px var(--font-sora);color:var(--color-text);">🏨 Padrão</h4>
+        <div class="cost-range-row">
+          <span class="cost-range-label">Baixa temporada</span>
+          <span style="font:500 12px var(--font-sora);color:var(--color-text-secondary);">R$</span>
+          <input type="number" value="350" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+          <span style="color:var(--color-text-tertiary);">–</span>
+          <input type="number" value="550" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+        </div>
+        <div class="cost-range-row">
+          <span class="cost-range-label">Alta temporada</span>
+          <span style="font:500 12px var(--font-sora);color:var(--color-text-secondary);">R$</span>
+          <input type="number" value="700" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+          <span style="color:var(--color-text-tertiary);">–</span>
+          <input type="number" value="1200" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+        </div>
+      </div>
+
+      <div class="cost-profile-section" style="margin-top:10px;">
+        <h4 style="margin:0 0 8px;font:700 12px var(--font-sora);color:var(--color-text);">✨ Conforto</h4>
+        <div class="cost-range-row">
+          <span class="cost-range-label">Baixa temporada</span>
+          <span style="font:500 12px var(--font-sora);color:var(--color-text-secondary);">R$</span>
+          <input type="number" placeholder="mín" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+          <span style="color:var(--color-text-tertiary);">–</span>
+          <input type="number" placeholder="máx" style="width:80px;padding:6px 8px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);font:500 12.5px var(--font-sora);">
+        </div>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Nível de planejamento</label>
+      <select style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+        <option>Espontâneo</option>
+        <option selected>Planejado</option>
+        <option>Requer reserva antecipada</option>
+      </select>
+
+      <div style="display:flex;gap:12px;margin-top:14px;">
+        <div style="flex:1;">
+          <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Antecedência mínima (dias)</label>
+          <input type="number" value="7" style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+        </div>
+        <div style="flex:1;display:flex;align-items:flex-end;padding-bottom:2px;">
+          <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);color:var(--color-text);cursor:pointer;">
+            <input type="checkbox" style="width:auto;margin:0;"> Decisão de última hora possível
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Etapa 3: Condições -->
+    <div id="formStep3" class="activity-form-step hidden">
+      <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Condição climática ideal</label>
+      <div class="chip-select-group">
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Ensolarado</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Nublado (ok)</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Chuva (ok)</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Frio</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Qualquer</span>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Temperatura mínima ideal (°C)</label>
+      <input type="number" value="18" style="width:120px;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Época ideal do ano</label>
+      <div class="chip-select-group">
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Abr–Jun</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Jul–Set</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Out–Dez</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Jan–Mar</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Qualquer</span>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Perfil de grupo</label>
+      <div class="chip-select-group">
+        <span class="chip-select-option" onclick="toggleChip(this)">Solo</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Dupla (casal)</span>
+        <span class="chip-select-option selected" onclick="toggleChip(this)">Amigos</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Família</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Qualquer</span>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Tamanho do grupo</label>
+      <select style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+        <option>Solo</option>
+        <option selected>Dupla</option>
+        <option>Pequeno (3–5)</option>
+        <option>Grande</option>
+        <option>Qualquer</option>
+      </select>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Condicionamento físico exigido</label>
+      <select style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+        <option selected>Não</option>
+        <option>Leve</option>
+        <option>Moderado</option>
+        <option>Intenso</option>
+      </select>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+        <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);color:var(--color-text);cursor:pointer;">
+          <input type="checkbox" style="width:auto;margin:0;"> Evitar alta temporada
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);color:var(--color-text);cursor:pointer;">
+          <input type="checkbox" checked style="width:auto;margin:0;"> Repetível
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);color:var(--color-text);cursor:pointer;">
+          <input type="checkbox" style="width:auto;margin:0;"> Pet-friendly
+        </label>
+      </div>
+    </div>
+
+    <!-- Etapa 4: Variações sazonais -->
+    <div id="formStep4" class="activity-form-step hidden">
+      <div style="font:500 12px var(--font-sora);color:var(--color-text-secondary);margin-bottom:12px;">
+        Variações sazonais permitem que a mesma atividade tenha vibes, custos e condições diferentes dependendo da época do ano.
+      </div>
+
+      <!-- Variação existente: Alta temporada -->
+      <div class="activity-variation-card">
+        <div class="activity-variation-card-header">
+          <div>
+            <div style="font:700 13px var(--font-sora);color:var(--color-text);">Alta temporada</div>
+            <div class="activity-variation-card-epocas">Out–Dez · Jan–Mar · inclui feriados prolongados</div>
+          </div>
+          <div class="activity-variation-list-actions">
+            <button type="button" class="btn-neutral-sm">Editar</button>
+            <button type="button" class="btn-neutral-sm" style="color:var(--color-terracotta);">Remover</button>
+          </div>
+        </div>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+          <span class="tag" style="background:var(--color-blue-soft);color:var(--color-blue);padding:3px 10px;border-radius:var(--radius-pill);font:600 10.5px var(--font-sora);">Vibe: Agito social</span>
+          <span class="tag" style="background:var(--color-terracotta-soft);color:var(--color-terracotta);padding:3px 10px;border-radius:var(--radius-pill);font:600 10.5px var(--font-sora);">Antecedência: 21 dias</span>
+          <span class="tag" style="background:var(--color-terracotta-soft);color:var(--color-terracotta);padding:3px 10px;border-radius:var(--radius-pill);font:600 10.5px var(--font-sora);">Padrão: R$700–1.200</span>
+        </div>
+      </div>
+
+      <!-- Variação existente: Fora de temporada -->
+      <div class="activity-variation-card active">
+        <div class="activity-variation-card-header">
+          <div>
+            <div style="font:700 13px var(--font-sora);color:var(--color-green);">Fora de temporada <span style="font:600 10.5px var(--font-sora);background:var(--color-green);color:#fff;padding:2px 7px;border-radius:var(--radius-pill);margin-left:6px;">ATIVA AGORA</span></div>
+            <div class="activity-variation-card-epocas">Abr–Jun · Jul–Set</div>
+          </div>
+          <div class="activity-variation-list-actions">
+            <button type="button" class="btn-neutral-sm">Editar</button>
+            <button type="button" class="btn-neutral-sm" style="color:var(--color-terracotta);">Remover</button>
+          </div>
+        </div>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+          <span class="tag" style="background:var(--color-blue-soft);color:var(--color-blue);padding:3px 10px;border-radius:var(--radius-pill);font:600 10.5px var(--font-sora);">Natureza &amp; contemplação</span>
+          <span class="tag" style="background:var(--color-blue-soft);color:var(--color-blue);padding:3px 10px;border-radius:var(--radius-pill);font:600 10.5px var(--font-sora);">Fotográfico</span>
+          <span class="tag" style="background:var(--color-green-soft);color:var(--color-green);padding:3px 10px;border-radius:var(--radius-pill);font:600 10.5px var(--font-sora);">Antecedência: 3 dias</span>
+        </div>
+        <div style="margin-top:8px;font:500 11.5px var(--font-sora);color:var(--color-text-secondary);font-style:italic;">"Praias desertas. Ótimo para fotografia."</div>
+      </div>
+
+      <button type="button" class="btn-neutral" style="width:100%;margin-top:6px;" onclick="showToast('Editor de variação abriria aqui')">+ Nova variação sazonal</button>
+    </div>
+
+    <!-- Etapa 5: Planejamento -->
+    <div id="formStep5" class="activity-form-step hidden">
+
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Próximos feriados compatíveis</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+        <span class="holiday-chip">📅 Tiradentes · 21/04 · 3 dias</span>
+        <span class="holiday-chip">📅 Corpus Christi · 19/06 · 4 dias</span>
+        <span class="holiday-chip">📅 Nossa Sra. Aparecida · 12/10 · 3 dias</span>
+      </div>
+
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Checklist de planejamento</div>
+      <div class="activity-checklist-progress">
+        <span>2 de 5 concluídos</span>
+        <div class="detail-checklist-bar"><div class="detail-checklist-bar-fill" style="width:40%"></div></div>
+      </div>
+
+      <div class="activity-detail-checklist">
+        <div class="checklist-task-row completed">
+          <input type="checkbox" checked style="width:auto;margin:0;">
+          <button class="checklist-task-name" style="text-decoration:line-through;color:var(--color-text-tertiary);">Pesquisar pousadas</button>
+          <span class="checklist-task-antecedencias">rec: 21d</span>
+        </div>
+        <div class="checklist-task-row completed">
+          <input type="checkbox" checked style="width:auto;margin:0;">
+          <button class="checklist-task-name" style="text-decoration:line-through;color:var(--color-text-tertiary);">Definir datas</button>
+          <span class="checklist-task-antecedencias">mín: 7d</span>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Reservar pousada</button>
+          <span class="checklist-task-antecedencias">mín: 7d · rec: 21d</span>
+          <button class="checklist-task-remove">×</button>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Separar equipamentos de praia</button>
+          <span class="checklist-task-antecedencias">mín: 1d</span>
+          <button class="checklist-task-remove">×</button>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Abastecer o carro</button>
+          <span class="checklist-task-antecedencias">mín: 1d</span>
+          <button class="checklist-task-remove">×</button>
+        </div>
+      </div>
+
+      <div class="checklist-add-form">
+        <input type="text" id="af-checklist-name" placeholder="Nova tarefa do checklist">
+        <input type="number" placeholder="Mín (dias)" style="width:90px;">
+        <input type="number" placeholder="Rec (dias)" style="width:90px;">
+        <button type="button" onclick="showToast('Tarefa adicionada!')">+</button>
+      </div>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Notas pessoais</label>
+      <textarea style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;min-height:70px;resize:vertical;" placeholder="Observações, dicas, lembretes..."></textarea>
+
+      <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Links úteis</label>
+      <div class="activity-link-row">
+        <span>🔗</span>
+        <a href="#" onclick="return false;" style="color:var(--color-blue);font:600 12px var(--font-sora);">TripAdvisor — Ubatuba praias</a>
+        <button class="af-link-remove" style="margin-left:auto;">×</button>
+      </div>
+      <div class="checklist-add-form">
+        <input type="text" id="af-link-url" placeholder="https://">
+        <input type="text" placeholder="Título (opcional)" style="flex:1;min-width:120px;">
+        <button type="button" onclick="showToast('Link adicionado!')">+</button>
+      </div>
+    </div>
+
+    <!-- Footer do formulário -->
+    <div class="activity-form-footer">
+      <span class="activity-form-autosave-hint" id="formAutosaveHint">Rascunho salvo automaticamente</span>
+      <div class="activity-form-footer-actions">
+        <button type="button" class="btn-neutral" id="formBackBtn" onclick="formStepBack()" style="display:none;">← Voltar</button>
+        <button type="button" class="btn-neutral" onclick="showToast('Rascunho salvo!')">Salvar rascunho</button>
+        <button type="button" class="btn-primary" id="formNextBtn" onclick="formStepNext()">Próximo →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: DETALHES — UBATUBA (planejada)
+═══════════════════════════════════════════════════ -->
+<div id="detailUbatubaOverlay" class="modal-overlay hidden">
+  <div class="modal activity-detail-modal" style="max-height:88vh;overflow-y:auto;">
+    <div class="activity-detail-header">
+      <div id="activityDetailTitle" class="activity-detail-title">Ubatuba</div>
+      <span class="tag activity-tag-status activity-status-planejada">planejada</span>
+      <span class="variation-active-chip" style="font-size:11px;">Fora de temporada</span>
+      <button type="button" class="btn-neutral-sm" onclick="openFormModal();closeModal('detailUbatubaOverlay')">Editar</button>
+      <button class="close-btn" onclick="closeModal('detailUbatubaOverlay')" style="position:static;margin-left:auto;">&times;</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="detail-tabs">
+      <button class="detail-tab active" onclick="switchTab(this,'tab-overview')">Visão geral</button>
+      <button class="detail-tab" onclick="switchTab(this,'tab-logistics')">Logística</button>
+      <button class="detail-tab" onclick="switchTab(this,'tab-conditions')">Condições</button>
+      <button class="detail-tab" onclick="switchTab(this,'tab-variations')">Variações</button>
+      <button class="detail-tab" onclick="switchTab(this,'tab-planning')">Planejamento</button>
+      <button class="detail-tab" onclick="switchTab(this,'tab-history')">Histórico</button>
+    </div>
+
+    <!-- Tab: Visão geral -->
+    <div id="tab-overview" class="detail-tab-pane active">
+      <div class="activity-detail-cover" style="background:linear-gradient(135deg,#4B9A7A 0%,#2D6B50 100%);display:flex;align-items:center;justify-content:center;font-size:48px;">🏖</div>
+
+      <div class="planned-info-bar">
+        📅 Planejada para <strong>02/08/2026</strong> · Board: <strong>Pessoal</strong>
+      </div>
+
+      <div class="activity-detail-sections">
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Categoria</span>
+          <span class="activity-detail-row-value"><span class="tag activity-tag-categoria">Viagem de final de semana</span></span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Vibes (base)</span>
+          <span class="activity-detail-row-value">
+            <span class="tag activity-tag-vibe">Relaxamento</span>
+            <span class="tag activity-tag-vibe">Natureza &amp; contemplação</span>
+            <span class="tag activity-tag-vibe">Fotográfico</span>
+          </span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Vibes (variação ativa)</span>
+          <span class="activity-detail-row-value" style="color:var(--color-green);">↳ Relaxamento · Natureza &amp; contemplação · Fotográfico</span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Descrição</span>
+          <span class="activity-detail-row-value">Destino clássico do litoral norte de SP. Praias paradisíacas fora de temporada, Mata Atlântica preservada e pousadas charmosas.</span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Distância de SP</span>
+          <span class="activity-detail-row-value">150–400 km (~230 km)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Logística -->
+    <div id="tab-logistics" class="detail-tab-pane">
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Modalidades</span>
+        <span class="activity-detail-row-value">
+          <span class="tag activity-tag-duracao">Bate volta</span>
+          <span class="tag activity-tag-duracao">Final de semana</span>
+        </span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Transporte</span>
+        <span class="activity-detail-row-value">Ônibus interestadual · Carro próprio</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Nível de planejamento</span>
+        <span class="activity-detail-row-value">Planejado</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Antecedência mínima</span>
+        <span class="activity-detail-row-value">7 dias (variação ativa: 3 dias)</span>
+      </div>
+
+      <h4 style="margin:14px 0 6px;font:700 11px var(--font-sora);color:var(--color-text-secondary);">PERFIS DE CUSTO — variação ativa: Fora de temporada</h4>
+      <table class="cost-table">
+        <thead><tr><th>Perfil</th><th>Baixa temporada</th><th>Alta temporada</th></tr></thead>
+        <tbody>
+          <tr><td>🎒 Econômico</td><td class="highlight">R$ 150–280</td><td>R$ 350–500</td></tr>
+          <tr><td>🏨 Padrão</td><td class="highlight">R$ 350–550</td><td>R$ 700–1.200</td></tr>
+          <tr><td>✨ Conforto</td><td>–</td><td>–</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tab: Condições -->
+    <div id="tab-conditions" class="detail-tab-pane">
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Clima ideal</span>
+        <span class="activity-detail-row-value">Ensolarado · Nublado (ok) — variação: 18°C+</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Época ideal</span>
+        <span class="activity-detail-row-value">Abr–Jun · Jul–Set (fora de temporada)</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Perfil de grupo</span>
+        <span class="activity-detail-row-value">Dupla (casal) · Amigos</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Tamanho do grupo</span>
+        <span class="activity-detail-row-value">Dupla</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Condicionamento físico</span>
+        <span class="activity-detail-row-value">Não exigido</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Repetível</span>
+        <span class="activity-detail-row-value">✅ Sim</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Pet-friendly</span>
+        <span class="activity-detail-row-value">—</span>
+      </div>
+    </div>
+
+    <!-- Tab: Variações -->
+    <div id="tab-variations" class="detail-tab-pane">
+      <div class="activity-variation-card">
+        <div class="activity-variation-card-header">
+          <div>
+            <div style="font:700 13px var(--font-sora);color:var(--color-text);">Alta temporada</div>
+            <div class="activity-variation-card-epocas">Out–Dez · Jan–Mar · inclui feriados prolongados</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;font:500 12px var(--font-sora);color:var(--color-text-secondary);">
+          Vibe: Agito social · Antecedência: 21 dias · Padrão: R$700–1.200
+        </div>
+        <div style="margin-top:4px;font:500 11.5px var(--font-sora);color:var(--color-text-secondary);font-style:italic;">"Trânsito brutal na sexta. Reservar com 3+ semanas."</div>
+      </div>
+
+      <div class="activity-variation-card active">
+        <div class="activity-variation-card-header">
+          <div>
+            <div style="font:700 13px var(--font-sora);color:var(--color-green);">Fora de temporada <span style="font:600 10.5px var(--font-sora);background:var(--color-green);color:#fff;padding:2px 7px;border-radius:var(--radius-pill);margin-left:6px;">ATIVA AGORA</span></div>
+            <div class="activity-variation-card-epocas">Abr–Jun · Jul–Set</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;font:500 12px var(--font-sora);color:var(--color-text-secondary);">
+          Vibes: Relaxamento · Natureza &amp; contemplação · Fotográfico · Antecedência: 3 dias
+        </div>
+        <div style="margin-top:4px;font:500 11.5px var(--font-sora);color:var(--color-text-secondary);font-style:italic;">"Praias desertas. Ótimo para fotografia."</div>
+      </div>
+    </div>
+
+    <!-- Tab: Planejamento -->
+    <div id="tab-planning" class="detail-tab-pane">
+      <div class="planned-info-bar" style="margin-bottom:12px;">
+        📅 Início: <strong>02/08/2026 (dom)</strong> · Board: <strong>Pessoal</strong>
+      </div>
+
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Próximos feriados compatíveis</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+        <span class="holiday-chip">📅 Corpus Christi · 19/06 · 4 dias</span>
+        <span class="holiday-chip">📅 Nossa Sra. Aparecida · 12/10 · 3 dias</span>
+      </div>
+
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Checklist — 2 de 5 concluídos</div>
+      <div class="detail-checklist-progress">
+        <span>40%</span>
+        <div class="detail-checklist-bar"><div class="detail-checklist-bar-fill" style="width:40%"></div></div>
+      </div>
+
+      <div class="activity-detail-checklist">
+        <div class="checklist-task-row completed">
+          <input type="checkbox" checked style="width:auto;margin:0;">
+          <button class="checklist-task-name" style="text-decoration:line-through;color:var(--color-text-tertiary);">Pesquisar pousadas</button>
+          <span class="checklist-task-antecedencias">19/07 (dom)</span>
+        </div>
+        <div class="checklist-task-row completed">
+          <input type="checkbox" checked style="width:auto;margin:0;">
+          <button class="checklist-task-name" style="text-decoration:line-through;color:var(--color-text-tertiary);">Definir datas</button>
+          <span class="checklist-task-antecedencias">26/07 (dom)</span>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Reservar pousada</button>
+          <span class="checklist-task-antecedencias" style="color:var(--color-terracotta);">Hoje ⚠️ (passou mín)</span>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Separar equipamentos de praia</button>
+          <span class="checklist-task-antecedencias">01/08 (sáb)</span>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Abastecer o carro</button>
+          <span class="checklist-task-antecedencias">01/08 (sáb)</span>
+        </div>
+      </div>
+
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 6px;">Links úteis</div>
+      <a class="detail-link-row" href="#" onclick="return false;">🔗 TripAdvisor — Ubatuba praias</a>
+    </div>
+
+    <!-- Tab: Histórico -->
+    <div id="tab-history" class="detail-tab-pane">
+      <div class="activity-detail-empty">Nenhuma realização registrada ainda.</div>
+    </div>
+
+    <!-- Footer do modal de detalhes -->
+    <div class="activity-detail-footer">
+      <button type="button" class="cancel-plan-btn" onclick="openCancelPlanDialog()">Cancelar planejamento</button>
+      <div style="flex:1;"></div>
+      <button type="button" class="btn-neutral" onclick="closeModal('detailUbatubaOverlay')">Fechar</button>
+      <button type="button" class="btn-primary" onclick="openRealizationModal('ubatuba')">Marcar como realizada</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: DETALHES — CAMPOS DO JORDÃO (com realização)
+═══════════════════════════════════════════════════ -->
+<div id="detailCamposOverlay" class="modal-overlay hidden">
+  <div class="modal activity-detail-modal" style="max-height:88vh;overflow-y:auto;">
+    <div class="activity-detail-header">
+      <div class="activity-detail-title">Campos do Jordão</div>
+      <span class="tag activity-tag-status activity-status-quero_fazer">quero fazer</span>
+      <span class="tag activity-tag-realized">Realizada 1×</span>
+      <button type="button" class="btn-neutral-sm" onclick="showToast('Formulário de edição abriria aqui')">Editar</button>
+      <button class="close-btn" onclick="closeModal('detailCamposOverlay')" style="position:static;margin-left:auto;">&times;</button>
+    </div>
+
+    <div class="detail-tabs">
+      <button class="detail-tab active" onclick="switchTab(this,'tab-campos-overview')">Visão geral</button>
+      <button class="detail-tab" onclick="switchTab(this,'tab-campos-planning')">Planejamento</button>
+      <button class="detail-tab" onclick="switchTab(this,'tab-campos-history')">Histórico</button>
+    </div>
+
+    <div id="tab-campos-overview" class="detail-tab-pane active">
+      <div class="activity-detail-sections">
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Categoria</span>
+          <span class="activity-detail-row-value"><span class="tag activity-tag-categoria">Viagem de final de semana</span></span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Vibes</span>
+          <span class="activity-detail-row-value">
+            <span class="tag activity-tag-vibe">Relaxamento</span>
+            <span class="tag activity-tag-vibe">Gastronômico</span>
+            <span class="tag activity-tag-vibe">Romântico</span>
+          </span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Modalidades</span>
+          <span class="activity-detail-row-value">
+            <span class="tag activity-tag-duracao">Final de semana</span>
+            <span class="tag activity-tag-duracao">Feriado prolongado</span>
+          </span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Custo padrão</span>
+          <span class="activity-detail-row-value" style="color:var(--color-green);font-weight:700;">R$ 450–750/pessoa (baixa temp.)</span>
+        </div>
+        <div class="activity-detail-row">
+          <span class="activity-detail-row-label">Distância de SP</span>
+          <span class="activity-detail-row-value">150–400 km (~180 km)</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-campos-planning" class="detail-tab-pane">
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Checklist</div>
+      <div class="activity-detail-checklist">
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Reservar pousada (Campos tem muita opção)</button>
+          <span class="checklist-task-antecedencias">mín: 14d · rec: 30d</span>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Verificar cardápio do restaurante Baden Baden</button>
+          <span class="checklist-task-antecedencias">sem data</span>
+        </div>
+        <div class="checklist-task-row">
+          <input type="checkbox" style="width:auto;margin:0;">
+          <button class="checklist-task-name">Levar agasalho — faz frio mesmo no verão</button>
+          <span class="checklist-task-antecedencias">mín: 1d</span>
+        </div>
+      </div>
+      <button type="button" class="btn-primary" onclick="openPlanModal('campos')">Mover para Planejada →</button>
+    </div>
+
+    <div id="tab-campos-history" class="detail-tab-pane">
+      <div class="realization-entry">
+        <div class="realization-entry-header">
+          <span class="realization-entry-date">15/03/2026</span>
+          <span class="realization-stars">★★★★★</span>
+          <button class="edit-realization-btn">Editar</button>
+        </div>
+        <div class="realization-entry-meta">
+          Com: Sandy · Perfil: Padrão · Gasto: R$ 1.850 total · Variação: —
+        </div>
+        <div style="margin-top:6px;font:500 12px var(--font-sora);color:var(--color-text-secondary);font-style:italic;">"Fora de época, incrível. Temperatura perfeita, sem turistas."</div>
+      </div>
+    </div>
+
+    <div class="activity-detail-footer">
+      <button type="button" class="btn-neutral" onclick="showToast('Confirmação de exclusão abriria aqui')" style="color:var(--color-terracotta);">Excluir</button>
+      <div style="flex:1;"></div>
+      <button type="button" class="btn-neutral" onclick="closeModal('detailCamposOverlay')">Fechar</button>
+      <button type="button" class="btn-neutral" onclick="openRealizationModal('campos');closeModal('detailCamposOverlay')" style="color:var(--color-blue);">Marcar como realizada</button>
+      <button type="button" class="btn-primary" onclick="openPlanModal('campos');closeModal('detailCamposOverlay')">Mover para Planejada →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: DETALHES — TEATRO (rascunho)
+═══════════════════════════════════════════════════ -->
+<div id="detailTeatroOverlay" class="modal-overlay hidden">
+  <div class="modal activity-detail-modal" style="max-height:88vh;overflow-y:auto;">
+    <div class="activity-detail-header">
+      <div class="activity-detail-title">Teatro Municipal</div>
+      <span class="tag activity-tag-status activity-status-rascunho">rascunho</span>
+      <button type="button" class="btn-neutral-sm" onclick="openFormModal();closeModal('detailTeatroOverlay')">Detalhar →</button>
+      <button class="close-btn" onclick="closeModal('detailTeatroOverlay')" style="position:static;margin-left:auto;">&times;</button>
+    </div>
+
+    <div style="background:var(--color-terracotta-soft);border:1px solid rgba(193,98,45,.15);border-radius:var(--radius-btn);padding:12px 14px;font:500 12.5px var(--font-sora);color:var(--color-terracotta);margin-bottom:14px;">
+      ⚠️ <strong>Rascunho incompleto</strong> — Esta atividade precisa de ao menos 1 modalidade de duração e um perfil de custo em baixa temporada para entrar na lista "quero fazer".
+    </div>
+
+    <div class="activity-detail-sections">
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Categoria</span>
+        <span class="activity-detail-row-value"><span class="tag activity-tag-categoria">Social &amp; cultural</span></span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Vibes</span>
+        <span class="activity-detail-row-value activity-detail-empty">Não definido</span>
+      </div>
+      <div class="activity-detail-row">
+        <span class="activity-detail-row-label">Custo</span>
+        <span class="activity-detail-row-value activity-detail-empty">Não definido</span>
+      </div>
+    </div>
+
+    <div class="activity-detail-footer">
+      <button type="button" class="btn-neutral" onclick="showToast('Esta atividade nunca foi realizada — pode ser excluída.')" style="color:var(--color-terracotta);">Excluir</button>
+      <div style="flex:1;"></div>
+      <button type="button" class="btn-neutral" onclick="closeModal('detailTeatroOverlay')">Fechar</button>
+      <button type="button" class="btn-primary" onclick="openFormModal();closeModal('detailTeatroOverlay')">Detalhar atividade →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: DETALHES GENÉRICO (mercado, mooca, jaragua)
+═══════════════════════════════════════════════════ -->
+<div id="detailGenericOverlay" class="modal-overlay hidden">
+  <div class="modal activity-detail-modal" style="max-height:88vh;overflow-y:auto;">
+    <div class="activity-detail-header">
+      <div class="activity-detail-title" id="genericDetailTitle">Atividade</div>
+      <span class="tag activity-tag-status activity-status-quero_fazer">quero fazer</span>
+      <button type="button" class="btn-neutral-sm">Editar</button>
+      <button class="close-btn" onclick="closeModal('detailGenericOverlay')" style="position:static;margin-left:auto;">&times;</button>
+    </div>
+    <div style="font:500 13px var(--font-sora);color:var(--color-text-secondary);padding:10px 0 16px;">
+      Clique em <strong>Editar</strong> para abrir o formulário completo de 5 etapas e ver todos os campos desta atividade.
+    </div>
+    <div class="activity-detail-footer">
+      <button type="button" class="btn-neutral" onclick="closeModal('detailGenericOverlay')">Fechar</button>
+      <button type="button" class="btn-primary" onclick="openPlanModal(currentOpenDetailId);closeModal('detailGenericOverlay')">Mover para Planejada →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: MOVER PARA PLANEJADA
+═══════════════════════════════════════════════════ -->
+<div id="promoteOverlay" class="modal-overlay hidden">
+  <div class="modal activity-promote-modal">
+    <button class="close-btn" onclick="closeModal('promoteOverlay')">&times;</button>
+    <h2 style="margin:0 0 16px;font:800 17px var(--font-sora);">Mover para Planejada</h2>
+
+    <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Data de início *</label>
+    <input type="date" id="promoteDate" value="2026-08-02" min="2026-07-15" style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;" onchange="updatePromotePreview()">
+
+    <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Board de destino *</label>
+    <select id="promoteBoard" style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+      <option>Trabalho</option>
+      <option selected>Pessoal</option>
+      <option>Freelance</option>
+    </select>
+
+    <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Alocação das tarefas do checklist</label>
+    <div class="activity-promote-preview" id="promotePreview">
+      <div class="activity-promote-preview-row">
+        <span>Pesquisar pousadas</span>
+        <span class="promote-date-calc">12/07 (dom)</span>
+      </div>
+      <div class="activity-promote-preview-row">
+        <span>Definir datas</span>
+        <span class="promote-date-calc">26/07 (dom)</span>
+      </div>
+      <div class="activity-promote-preview-row">
+        <span>Reservar pousada</span>
+        <span><span class="promote-date-calc">Hoje</span> <span class="promote-date-fallback">(passou mín de 7d)</span></span>
+      </div>
+      <div class="activity-promote-preview-row">
+        <span>Separar equipamentos de praia</span>
+        <span class="promote-date-calc">01/08 (sáb)</span>
+      </div>
+      <div class="activity-promote-preview-row">
+        <span>Abastecer o carro</span>
+        <span class="promote-date-calc">01/08 (sáb)</span>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn-neutral" onclick="closeModal('promoteOverlay')">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="showToast('Atividade movida para Planejada!');closeModal('promoteOverlay')">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: CANCELAR PLANEJAMENTO (confirm)
+═══════════════════════════════════════════════════ -->
+<div id="cancelPlanOverlay" class="modal-overlay hidden">
+  <div class="modal confirm-modal" style="width:380px;">
+    <div class="confirm-icon">⚠️</div>
+    <div class="confirm-title">Cancelar planejamento</div>
+    <div class="confirm-desc">Cancelar o planejamento vai <strong>remover as datas das tarefas do checklist</strong> e tirá-las do board. As tarefas permanecem no checklist da atividade. Deseja continuar?</div>
+    <div class="modal-footer">
+      <button type="button" class="btn-neutral" onclick="closeModal('cancelPlanOverlay')">Não, manter</button>
+      <button type="button" style="background:var(--color-terracotta);color:#fff;border:none;padding:9px 18px;border-radius:var(--radius-btn);font:700 13px var(--font-sora);cursor:pointer;" onclick="showToast('Planejamento cancelado. Tarefas voltaram ao checklist.');closeModal('cancelPlanOverlay');closeModal('detailUbatubaOverlay')">Sim, cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: IMPORTAR JSON
+═══════════════════════════════════════════════════ -->
+<div id="importOverlay" class="modal-overlay hidden">
+  <div class="modal activity-import-modal">
+    <button class="close-btn" onclick="closeModal('importOverlay')">&times;</button>
+    <h2 style="margin:0 0 6px;font:800 17px var(--font-sora);">Importar atividade via JSON</h2>
+    <div style="font:500 12px var(--font-sora);color:var(--color-text-secondary);margin-bottom:10px;">Cole o JSON gerado pelo prompt de refinamento. O app valida os campos e exibe um preview antes de confirmar.</div>
+    <textarea class="activity-import-textarea" placeholder='Cole o JSON aqui...
+Exemplo:
+{
+  "nome": "Ubatuba",
+  "categoria": "Viagem de final de semana",
+  "vibes": ["Relaxamento", "Natureza & contemplação"],
+  "modalidades_duracao": ["Bate volta", "Final de semana"],
+  ...
+}'></textarea>
+    <div class="activity-import-actions">
+      <button type="button" class="btn-neutral" onclick="showToast('Validando JSON...')">Validar</button>
+      <button type="button" class="btn-primary" disabled>Confirmar</button>
+      <button type="button" class="btn-neutral" onclick="closeModal('importOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: REGISTRAR REALIZAÇÃO
+═══════════════════════════════════════════════════ -->
+<div id="realizationOverlay" class="modal-overlay hidden">
+  <div class="modal activity-realization-modal">
+    <button class="close-btn" onclick="closeModal('realizationOverlay')">&times;</button>
+    <h2 style="margin:0 0 4px;font:800 17px var(--font-sora);">Marcar como realizada</h2>
+    <div id="realizationActivityName" style="font:600 13px var(--font-sora);color:var(--color-text-secondary);margin-bottom:14px;"></div>
+
+    <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Avaliação</label>
+    <div class="proto-stars" id="protoStars">
+      <span class="proto-star" data-star="1" onclick="setStars(1)">★</span>
+      <span class="proto-star" data-star="2" onclick="setStars(2)">★</span>
+      <span class="proto-star" data-star="3" onclick="setStars(3)">★</span>
+      <span class="proto-star" data-star="4" onclick="setStars(4)">★</span>
+      <span class="proto-star" data-star="5" onclick="setStars(5)">★</span>
+    </div>
+
+    <label style="display:block;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Data realizada</label>
+    <input type="date" id="realizationDate" value="2026-07-15" max="2026-07-15"
+           style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+
+    <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Com quem foi</label>
+    <input type="text" placeholder="Nomes, grupo..." id="realizationWith"
+           style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+
+    <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Gasto total (R$)</label>
+    <input type="number" placeholder="Ex.: 850" id="realizationCost"
+           style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;">
+
+    <label style="display:block;margin-top:14px;font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Nota pessoal</label>
+    <textarea id="realizationNote" placeholder="Como foi? O que você faria diferente?"
+              style="width:100%;margin-top:5px;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;min-height:70px;resize:vertical;"></textarea>
+
+    <div class="modal-footer">
+      <button type="button" class="btn-neutral" onclick="closeModal('realizationOverlay')">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="confirmRealization()">Confirmar realização ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: PLANEJAR — escolher variação + data
+═══════════════════════════════════════════════════ -->
+<div id="planModalOverlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:440px;">
+    <button class="close-btn" onclick="closeModal('planModalOverlay')">&times;</button>
+    <h2 style="margin:0 0 4px;font:800 17px var(--font-sora);">Planejar atividade</h2>
+    <div id="planModalActivityName" style="font:600 13px var(--font-sora);color:var(--color-text-secondary);margin-bottom:20px;"></div>
+
+    <div style="margin-bottom:18px;">
+      <label style="display:block;font:700 11.5px var(--font-sora);color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Qual variação?</label>
+      <div id="planVariationsContainer"></div>
+    </div>
+
+    <div style="margin-bottom:22px;">
+      <label style="display:block;font:700 11.5px var(--font-sora);color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Data prevista de realização</label>
+      <input type="date" id="planDate"
+        style="width:100%;border:1px solid var(--color-border);border-radius:var(--radius-btn);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;box-sizing:border-box;">
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn-neutral" onclick="closeModal('planModalOverlay')">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="confirmPlan()">Confirmar plano 📅</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: MANTER EM QUERO FAZER?
+═══════════════════════════════════════════════════ -->
+<div id="keepQueroFazerOverlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:400px;text-align:center;padding:32px 28px;">
+    <div style="font-size:40px;margin-bottom:12px;">🎉</div>
+    <h2 style="margin:0 0 6px;font:800 18px var(--font-sora);">Atividade realizada!</h2>
+    <div id="keepQueroFazerActivityName" style="font:700 14px var(--font-sora);color:var(--color-green);margin-bottom:14px;"></div>
+    <p style="font:500 13px var(--font-sora);color:var(--color-text-secondary);margin:0 0 26px;line-height:1.55;">
+      Quer manter esta atividade em <strong>Quero Fazer</strong> para poder planejá-la de novo no futuro?<br>
+      <span style="font-size:11.5px;color:var(--color-text-tertiary);">(O registro fica salvo em Realizado de qualquer forma.)</span>
+    </p>
+    <div style="display:flex;gap:10px;">
+      <button type="button" class="btn-neutral" style="flex:1;" onclick="keepInQueroFazer(false)">Não, só registrar</button>
+      <button type="button" class="btn-primary"  style="flex:1;" onclick="keepInQueroFazer(true)">Sim, manter 📌</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Toast de feedback -->
+<div id="protoToast" class="proto-toast"></div>
+
+
+<script>
+// ══════════════════════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════════════════════
+const DETAIL_MODAL = {
+  ubatuba: 'detailUbatubaOverlay', campos: 'detailCamposOverlay',
+  teatro:  'detailTeatroOverlay',  mercado:'detailGenericOverlay',
+  mooca:   'detailGenericOverlay', jaragua:'detailGenericOverlay',
+};
+const ACTIVITY_NAMES = {
+  ubatuba:'Ubatuba', campos:'Campos do Jordão', teatro:'Teatro Municipal',
+  mercado:'Mercado Municipal', mooca:'Passeio pelo bairro da Mooca', jaragua:'Trilha do Pico do Jaraguá',
+};
+const ACTIVITY_VARIATIONS = {
+  ubatuba: [
+    { id:'fora', name:'Fora de temporada', epocas:'Abr–Jun · Jul–Set', vibes:['Relaxamento','Natureza & contemplação','Fotográfico'], cost:'R$ 350–550/p', notas:'Praias desertas. Ótimo para fotografia.' },
+    { id:'alta', name:'Alta temporada',    epocas:'Out–Dez · Jan–Mar', vibes:['Agito social'],                                        cost:'R$ 700–1.200/p', notas:'Trânsito brutal na sexta. Reservar com 3+ semanas.' },
+  ],
+  campos: [
+    { id:'inverno', name:'Inverno (Jun–Set)',   epocas:'Jun–Set', vibes:['Relaxamento','Gastronômico','Romântico'], cost:'R$ 450–750/p',   notas:'Faz muito frio. Levar agasalho.' },
+    { id:'ferias',  name:'Férias de julho',     epocas:'Jul',     vibes:['Gastronômico','Agito social'],           cost:'R$ 700–1.100/p', notas:'Muito movimento. Reservar com antecedência.' },
+  ],
+};
+const ACTIVITY_BASE_VIBES = {
+  ubatuba:['Relaxamento','Natureza & contemplação','Fotográfico'], campos:['Relaxamento','Gastronômico','Romântico'],
+  mercado:['Gastronômico','Fotográfico'], mooca:['Cultural','Fotográfico','Gastronômico'],
+  jaragua:['Natureza & contemplação','Aventura'], teatro:['Cultural'],
+};
+const ACTIVITY_BASE_COST = {
+  ubatuba:'R$ 350–550/p', campos:'R$ 450–750/p', mercado:'R$ 40–120/p',
+  mooca:'R$ 0–50/p', jaragua:'R$ 0–30/p', teatro:'—',
+};
+const ACTIVITY_DURATIONS = {
+  ubatuba:['Bate volta','Final de semana'], campos:['Final de semana','Feriado prolongado'],
+  mercado:['Parada rápida','Meio período'], mooca:['Meio período','Dia inteiro'],
+  jaragua:['Meio período','Dia inteiro'],  teatro:[],
+};
+const ACTIVITY_COVERS = {
+  ubatuba:'<div class="activity-card-cover" style="background:linear-gradient(135deg,#4B9A7A 0%,#2D6B50 100%);position:relative;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);font-size:30px;">🏖</div></div>',
+};
+const STATUS_LABEL = { rascunho:'rascunho', quero_fazer:'quero fazer', planejada:'planejada', realizada:'realizada' };
+const STATUS_CLASS  = { rascunho:'activity-status-rascunho', quero_fazer:'activity-status-quero_fazer', planejada:'activity-status-planejada', realizada:'activity-status-realizada' };
+
+// — Estado global
+let isDragging        = false;
+let draggedCardId     = null;
+let currentOpenDetailId = null;      // para o modal genérico
+
+let pendingPlanId     = null;        // modal Planejar
+let currentPlanVarId  = null;
+
+let pendingRealizationId    = null;  // modal Realizar
+let pendingRealizationVarId = null;
+let currentStars            = 5;
+
+const realizationCounters = {};
+
+// ══════════════════════════════════════════════════════
+//  MODAIS
+// ══════════════════════════════════════════════════════
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.remove('hidden'); el.classList.add('open'); }
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('hidden'); el.classList.remove('open'); }
+}
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) closeModal(e.target.id);
+});
+
+// ── Detalhes ──────────────────────────────────────────
+function openDetail(id) {
+  if (isDragging) return;
+  currentOpenDetailId = id;
+  const title = document.getElementById('genericDetailTitle');
+  if (title) title.textContent = ACTIVITY_NAMES[id] || id;
+  openModal(DETAIL_MODAL[id]);
+}
+function openQuickCreate()      { openModal('quickCreateOverlay'); }
+function openImportModal()      { openModal('importOverlay'); }
+function openPromoteModal()     { openModal('promoteOverlay'); }   // mantido por compatibilidade
+function openCancelPlanDialog() { openModal('cancelPlanOverlay'); }
+
+// ══════════════════════════════════════════════════════
+//  CONSTRUTOR DE CONTEÚDO DO CARD
+// ══════════════════════════════════════════════════════
+function fmt(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+}
+
+function buildCardInner(id, status, varData) {
+  varData = varData || {};
+  const { variationName, vibes, cost, date, count } = varData;
+  const displayVibes = vibes || ACTIVITY_BASE_VIBES[id] || [];
+  const displayCost  = cost  || ACTIVITY_BASE_COST[id]  || '—';
+  const cover        = ACTIVITY_COVERS[id] || '';
+
+  // — Status chip
+  const statusChip = `<span class="tag activity-tag-status ${STATUS_CLASS[status]} sc-status-chip">${STATUS_LABEL[status]}</span>`;
+
+  // — Subtítulo (variação + data nas colunas planejada/realizada)
+  let subtitle = '';
+  if ((status === 'planejada' || status === 'realizada') && (variationName || date)) {
+    const parts = [variationName, date ? fmt(date) : ''].filter(Boolean);
+    subtitle = `<div class="activity-card-subtitle">${parts.join(' · ')}</div>`;
+  }
+
+  // — Badge realizada N×
+  const realBadge = count ? `<span class="tag activity-tag-realized">Realizada ${count}×</span>` : '';
+
+  // — Chip de variação ativa
+  const varChip = (status === 'planejada' || status === 'realizada') && variationName
+    ? `<div class="activity-card-chips" style="margin-top:5px;"><span class="tag" style="background:var(--color-green-soft);color:var(--color-green);font-weight:700;">${variationName}</span></div>`
+    : '';
+
+  // — Meta
+  let metaLeft = '';
+  if (status === 'planejada' && date) metaLeft = `<span style="font:600 11px var(--font-sora);color:var(--color-text-secondary);">📅 Início: ${fmt(date)}</span>`;
+  if (status === 'realizada'  && date) metaLeft = `<span style="font:600 11px var(--font-sora);color:var(--color-text-secondary);">📅 ${fmt(date)}</span>`;
+
+  // — Vibes
+  const vibeChips = displayVibes.slice(0,2).map(v => `<span class="tag activity-tag-vibe">${v}</span>`).join('');
+  const moreChip  = displayVibes.length > 2 ? `<span class="tag activity-tag-more">+${displayVibes.length - 2}</span>` : '';
+
+  // — Duração (apenas em quero_fazer / rascunho)
+  let durChips = '';
+  if (status === 'quero_fazer' || status === 'rascunho') {
+    const durs = ACTIVITY_DURATIONS[id] || [];
+    if (durs.length) durChips = `<div class="activity-card-chips" style="margin-top:6px;">${durs.map(d => `<span class="tag activity-tag-duracao">${d}</span>`).join('')}</div>`;
+  }
+
+  return `
+    ${cover}
+    <div class="activity-card-top">
+      <div>
+        <div class="activity-card-name">${ACTIVITY_NAMES[id] || id}</div>
+        ${subtitle}
+      </div>
+    </div>
+    <div class="activity-card-chips">${statusChip}${realBadge}</div>
+    ${varChip}
+    <div class="activity-card-chips" style="margin-top:6px;">${vibeChips}${moreChip}</div>
+    ${durChips}
+    <div class="activity-card-meta">${metaLeft}<span class="activity-card-cost">${displayCost}</span></div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  MOVER CARD
+// ══════════════════════════════════════════════════════
+function moveCardToStatus(id, newStatus, varData) {
+  const card      = document.getElementById('sc-' + id);
+  const targetCol = document.getElementById('scol-' + newStatus);
+  if (!card || !targetCol) return;
+  card.innerHTML = buildCardInner(id, newStatus, varData);
+  card.style.borderStyle = newStatus === 'rascunho' ? 'dashed' : '';
+  card.style.opacity     = newStatus === 'rascunho' ? '.85'    : '';
+  targetCol.appendChild(card);
+  refreshEmptyStates();
+  refreshCounts();
+}
+
+// ══════════════════════════════════════════════════════
+//  MODAL: PLANEJAR (variação + data)
+// ══════════════════════════════════════════════════════
+function openPlanModal(id) {
+  if (!id) return;
+  pendingPlanId    = id;
+  currentPlanVarId = null;
+
+  document.getElementById('planModalActivityName').textContent = ACTIVITY_NAMES[id] || id;
+
+  const variations = ACTIVITY_VARIATIONS[id] || [];
+  const container  = document.getElementById('planVariationsContainer');
+  container.innerHTML = '';
+
+  if (variations.length === 0) {
+    container.innerHTML = `<div style="padding:10px 12px;background:#FBF9F4;border-radius:8px;font:500 12.5px var(--font-sora);color:var(--color-text-secondary);">Sem variações — será usada a atividade base.</div>`;
+    currentPlanVarId = 'base';
+  } else {
+    currentPlanVarId = variations[0].id;
+    variations.forEach((v, i) => {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = `display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1.5px solid ${i===0?'var(--color-green)':'var(--color-border)'};border-radius:var(--radius-btn);margin-bottom:8px;cursor:pointer;transition:border-color .15s;`;
+      lbl.innerHTML = `
+        <input type="radio" name="planVariation" value="${v.id}" ${i===0?'checked':''} style="accent-color:var(--color-green);width:auto;margin:3px 0 0;flex-shrink:0;">
+        <div>
+          <div style="font:700 13px var(--font-sora);color:var(--color-text);">${v.name}</div>
+          <div style="font:500 11.5px var(--font-sora);color:var(--color-text-tertiary);margin-top:2px;">${v.epocas} · ${v.cost}</div>
+          ${v.notas?`<div style="font:400 11px var(--font-sora);color:var(--color-text-secondary);margin-top:4px;font-style:italic;">"${v.notas}"</div>`:''}
+        </div>`;
+      lbl.querySelector('input').addEventListener('change', () => {
+        currentPlanVarId = v.id;
+        container.querySelectorAll('label').forEach(l => l.style.borderColor = 'var(--color-border)');
+        lbl.style.borderColor = 'var(--color-green)';
+      });
+      container.appendChild(lbl);
+    });
+  }
+
+  // Data padrão: +14 dias
+  const d = new Date(); d.setDate(d.getDate() + 14);
+  const dateEl = document.getElementById('planDate');
+  if (dateEl) dateEl.value = d.toISOString().split('T')[0];
+
+  openModal('planModalOverlay');
+}
+
+function confirmPlan() {
+  const id   = pendingPlanId;
+  const date = document.getElementById('planDate')?.value;
+  if (!id || !date) { showToast('Informe a data prevista!'); return; }
+
+  const variations = ACTIVITY_VARIATIONS[id] || [];
+  const variation  = variations.find(v => v.id === currentPlanVarId) || null;
+
+  // Persiste dados no elemento para reuso na realização
+  const card = document.getElementById('sc-' + id);
+  if (card) {
+    card.dataset.varId    = variation ? variation.id   : 'base';
+    card.dataset.varName  = variation ? variation.name : '';
+    card.dataset.planDate = date;
+  }
+
+  moveCardToStatus(id, 'planejada', {
+    variationName: variation?.name || null,
+    vibes:         variation?.vibes || null,
+    cost:          variation?.cost  || null,
+    date,
+  });
+
+  closeModal('planModalOverlay');
+  showToast(`${ACTIVITY_NAMES[id]} planejada${variation ? ' — ' + variation.name : ''}! 📅`);
+}
+
+// ══════════════════════════════════════════════════════
+//  MODAL: REGISTRAR REALIZAÇÃO
+// ══════════════════════════════════════════════════════
+function openRealizationModal(id) {
+  pendingRealizationId = id;
+
+  // Herda variação do plano, se existir
+  const card = document.getElementById('sc-' + id);
+  pendingRealizationVarId = card?.dataset?.varId || null;
+
+  const variations = ACTIVITY_VARIATIONS[id] || [];
+  const variation  = variations.find(v => v.id === pendingRealizationVarId) || null;
+
+  const nameEl = document.getElementById('realizationActivityName');
+  if (nameEl) nameEl.textContent = (ACTIVITY_NAMES[id] || id) + (variation ? ' — ' + variation.name : '');
+
+  setStars(5);
+  ['realizationNote','realizationWith','realizationCost'].forEach(f => {
+    const el = document.getElementById(f); if (el) el.value = '';
+  });
+  const dateEl = document.getElementById('realizationDate');
+  if (dateEl) { dateEl.value = '2026-07-15'; dateEl.max = '2026-07-15'; }
+
+  openModal('realizationOverlay');
+}
+
+function setStars(n) {
+  currentStars = n;
+  document.querySelectorAll('.proto-star').forEach(s => s.classList.toggle('filled', parseInt(s.dataset.star) <= n));
+}
+
+function confirmRealization() {
+  const id = pendingRealizationId;
+  if (!id) return;
+
+  realizationCounters[id] = (realizationCounters[id] || 0) + 1;
+
+  const variations = ACTIVITY_VARIATIONS[id] || [];
+  const variation  = variations.find(v => v.id === pendingRealizationVarId) || null;
+  const date       = document.getElementById('realizationDate')?.value || '2026-07-15';
+
+  moveCardToStatus(id, 'realizada', {
+    variationName: variation?.name || null,
+    vibes:         variation?.vibes || null,
+    cost:          variation?.cost  || null,
+    date,
+    count: realizationCounters[id],
+  });
+
+  closeModal('realizationOverlay');
+  Object.values(DETAIL_MODAL).forEach(mid => closeModal(mid));
+
+  // Pergunta se quer manter em Quero Fazer
+  const keepNameEl = document.getElementById('keepQueroFazerActivityName');
+  if (keepNameEl) keepNameEl.textContent = ACTIVITY_NAMES[id] || id;
+  openModal('keepQueroFazerOverlay');
+}
+
+// ── Manter em Quero Fazer ────────────────────────────
+function keepInQueroFazer(keep) {
+  closeModal('keepQueroFazerOverlay');
+  const id = pendingRealizationId;
+
+  if (keep && id) {
+    const count  = realizationCounters[id] || 1;
+    const qfCol  = document.getElementById('scol-quero_fazer');
+    if (qfCol) {
+      const newCard       = document.createElement('div');
+      newCard.className   = 'activity-card';
+      newCard.id          = 'sc-' + id + '-r' + count;
+      newCard.draggable   = true;
+      newCard.onclick     = () => openDetail(id);
+      newCard.ondragstart = e => cardDragStart(e, id + '-r' + count);
+      newCard.ondragend   = cardDragEnd;
+      newCard.innerHTML   = buildCardInner(id, 'quero_fazer', { count });
+      qfCol.appendChild(newCard);
+    }
+    showToast(`${ACTIVITY_NAMES[id]} voltou para Quero Fazer e está registrada em Realizado! 📌`);
+  } else {
+    showToast(`${ACTIVITY_NAMES[id] || id} registrada como realizada.`);
+  }
+
+  refreshEmptyStates();
+  refreshCounts();
+  setView('status');
+}
+
+// ══════════════════════════════════════════════════════
+//  DRAG & DROP
+// ══════════════════════════════════════════════════════
+function cardDragStart(e, id) {
+  isDragging    = true;
+  draggedCardId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', id);
+  setTimeout(() => document.getElementById('sc-' + id)?.classList.add('is-dragging'), 0);
+}
+
+function cardDragEnd(e) {
+  document.querySelectorAll('.activity-card.is-dragging').forEach(c => c.classList.remove('is-dragging'));
+  setTimeout(() => { isDragging = false; }, 50);
+}
+
+function colDragOver(e, status) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const col = document.getElementById('scol-' + status);
+  if (col) {
+    col.classList.remove('drag-over','drag-over-danger');
+    col.classList.add(status === 'realizada' ? 'drag-over-danger' : 'drag-over');
+  }
+}
+
+function colDragLeave(e, status) {
+  const col = document.getElementById('scol-' + status);
+  if (col && !col.contains(e.relatedTarget)) col.classList.remove('drag-over','drag-over-danger');
+}
+
+function colDrop(e, newStatus) {
+  e.preventDefault();
+  document.getElementById('scol-' + newStatus)?.classList.remove('drag-over','drag-over-danger');
+
+  const id   = e.dataTransfer.getData('text/plain') || draggedCardId;
+  if (!id) return;
+  const card = document.getElementById('sc-' + id);
+  if (!card) return;
+
+  const currentCol = card.closest('.activity-column-body');
+  if (currentCol && currentCol.id === 'scol-' + newStatus) return;
+
+  if (newStatus === 'planejada') {
+    openPlanModal(id);
+  } else if (newStatus === 'realizada') {
+    openRealizationModal(id);
+  } else {
+    moveCardToStatus(id, newStatus);
+    showToast(`"${ACTIVITY_NAMES[id]}" → ${STATUS_LABEL[newStatus]}`);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function refreshEmptyStates() {
+  document.querySelectorAll('#activitiesBoardStatus .activity-column-body').forEach(col => {
+    const isEmpty = col.querySelectorAll('.activity-card').length === 0;
+    let empty = col.querySelector('.status-column-empty');
+    if (!empty) {
+      empty = document.createElement('div');
+      empty.className   = 'status-column-empty';
+      empty.textContent = 'Nenhuma atividade aqui';
+      col.appendChild(empty);
+    }
+    empty.style.display = isEmpty ? '' : 'none';
+  });
+}
+
+function refreshCounts() {
+  document.querySelectorAll('[data-count-for]').forEach(counter => {
+    const col = document.getElementById('scol-' + counter.dataset.countFor);
+    if (col) counter.textContent = col.querySelectorAll('.activity-card').length;
+  });
+}
+
+function setView(mode) {
+  document.getElementById('activitiesBoard').classList.toggle('hidden', mode !== 'category');
+  document.getElementById('activitiesBoardStatus').classList.toggle('hidden', mode !== 'status');
+  document.getElementById('viewByCategory').classList.toggle('active', mode === 'category');
+  document.getElementById('viewByStatus').classList.toggle('active', mode === 'status');
+}
+
+function toggleFiltersPanel() { document.getElementById('activityFiltersPanel').classList.toggle('hidden'); }
+function toggleChip(el) { el.classList.toggle('selected'); }
+
+function switchTab(btn, paneId) {
+  const modal = btn.closest('.modal');
+  modal.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+  modal.querySelectorAll('.detail-tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(paneId)?.classList.add('active');
+}
+
+let toastTimeout;
+function showToast(msg) {
+  const t = document.getElementById('protoToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+document.getElementById('activitySearchInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  document.querySelectorAll('.activity-card').forEach(card => {
+    const name = card.querySelector('.activity-card-name')?.textContent.toLowerCase() || '';
+    card.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
+});
+
+// ══════════════════════════════════════════════════════
+//  FORMULÁRIO EM ETAPAS
+// ══════════════════════════════════════════════════════
+let currentStep = 1;
+const TOTAL_STEPS = 5;
+
+function openFormModal() { currentStep = 1; renderStep(); openModal('formOverlay'); }
+function goStep(n)       { currentStep = n; renderStep(); }
+
+function formStepNext() {
+  if (currentStep < TOTAL_STEPS) { currentStep++; renderStep(); showToast('Rascunho salvo automaticamente'); }
+  else { showToast('Atividade salva!'); closeModal('formOverlay'); }
+}
+function formStepBack() { if (currentStep > 1) { currentStep--; renderStep(); } }
+
+function renderStep() {
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    const el = document.getElementById('formStep' + i);
+    if (el) el.classList.toggle('hidden', i !== currentStep);
+  }
+  document.querySelectorAll('.activity-form-step-dot').forEach((dot, idx) => {
+    const n = idx + 1;
+    dot.classList.remove('active','done');
+    if (n < currentStep) dot.classList.add('done');
+    if (n === currentStep) dot.classList.add('active');
+  });
+  const backBtn = document.getElementById('formBackBtn');
+  if (backBtn) backBtn.style.display = currentStep > 1 ? '' : 'none';
+  const nextBtn = document.getElementById('formNextBtn');
+  if (nextBtn) nextBtn.textContent = currentStep === TOTAL_STEPS ? 'Salvar atividade ✓' : 'Próximo →';
+  document.querySelector('#formOverlay .modal')?.scrollTop = 0;
+}
+
+// ── Init ─────────────────────────────────────────────
+renderStep();
+refreshEmptyStates();
+refreshCounts();
+</script>
+</body>
+</html>

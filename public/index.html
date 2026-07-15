@@ -77,12 +77,16 @@
           <button id="calendarTodayBtn">Hoje</button>
         </div>
         <div class="nav-activities hidden" id="navActivitiesControls">
+          <div class="view-toggle">
+            <button type="button" id="viewByCategoryBtn" class="view-toggle-btn active">Por categoria</button>
+            <button type="button" id="viewByStatusBtn"   class="view-toggle-btn">Por status</button>
+          </div>
           <input type="text" id="activitySearchInput" class="activity-search-input" placeholder="🔍 Buscar atividades...">
           <div class="activity-filters-wrap">
             <button type="button" id="activityFiltersBtn" class="icon-btn" title="Filtros">Filtros ▾</button>
             <div id="activityFiltersPanel" class="activity-filters-panel hidden"></div>
           </div>
-          <button type="button" id="activityImportBtn" class="icon-btn" title="Importar atividade via JSON">Importar</button>
+          <button type="button" id="activityImportBtn" class="icon-btn hidden" title="Importar atividade via JSON">Importar</button>
           <button type="button" id="activityNewBtn" class="btn-brand-sm" title="Nova atividade">+ Nova atividade</button>
         </div>
       </div>
@@ -459,9 +463,21 @@
       <input type="text" id="activityQuickCategoriaCustom" list="activityQuickCategoriaCustomList" placeholder="Digite a categoria">
       <datalist id="activityQuickCategoriaCustomList"></datalist>
     </label>
+    <label>Descrição <span style="font-weight:500;font-size:11px;color:var(--color-text-tertiary);">(opcional)</span>
+      <textarea id="activityQuickDesc" class="activity-quick-desc" placeholder="Contexto, com quem vai, ocasião, preferências..."></textarea>
+    </label>
+    <button type="button" id="activityAiToggleBtn" class="activity-ai-toggle-btn">✨ Preencher com IA</button>
+    <div id="activityAiPanel" class="activity-ai-panel">
+      <div class="activity-ai-panel-inner">
+        <p class="activity-ai-panel-hint">Copie o prompt, cole na sua IA favorita (ChatGPT, Claude...) e cole o JSON de volta aqui.</p>
+        <button type="button" id="activityCopyPromptBtn" class="btn-neutral" style="width:100%;">📋 Copiar prompt</button>
+        <textarea id="activityAiJsonArea" class="activity-import-textarea" placeholder="Cole aqui o JSON gerado pela IA..."></textarea>
+        <button type="button" id="activityAiConfirmBtn" class="btn-primary" style="width:100%;" disabled>Confirmar e importar</button>
+      </div>
+    </div>
     <div class="modal-footer">
       <button type="button" id="activityQuickCancelBtn" class="btn-neutral">Cancelar</button>
-      <button type="button" id="activityQuickCreateBtn" class="btn-primary">Criar</button>
+      <button type="button" id="activityQuickCreateBtn" class="btn-primary">Criar rascunho</button>
     </div>
   </div>
 </div>
@@ -469,6 +485,7 @@
 <div id="activityFormOverlay" class="modal-overlay hidden">
   <div class="modal activity-form-modal">
     <button id="closeActivityForm" class="close-btn">&times;</button>
+    <div id="activityFormImportBanner" class="activity-form-import-banner hidden">✅ Atividade importada via IA — revise e ajuste o que precisar antes de salvar.</div>
     <div class="activity-form-stepper">
       <div class="activity-form-step-dot active" data-step="1">1<span class="activity-form-step-label">Identidade</span></div>
       <div class="activity-form-step-dot" data-step="2">2<span class="activity-form-step-label">Logística</span></div>
@@ -498,6 +515,8 @@
   <div class="modal activity-detail-modal">
     <div class="activity-detail-header">
       <div id="activityDetailTitle" class="activity-detail-title"></div>
+      <span id="activityDetailStatus" class="tag activity-tag-status"></span>
+      <span id="activityDetailRealizedBadge" class="tag activity-tag-realized hidden"></span>
       <button type="button" id="activityDetailEditBtn" class="btn-neutral-sm">Editar</button>
       <button id="closeActivityDetail" class="close-btn">&times;</button>
     </div>
@@ -554,6 +573,39 @@
     <div class="modal-footer">
       <button type="button" id="activityPromoteCancelBtn" class="btn-neutral">Cancelar</button>
       <button type="button" id="activityPromoteConfirmBtn" class="btn-primary" disabled>Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div id="activityVariationPickerOverlay" class="modal-overlay hidden">
+  <div class="modal activity-variation-picker-modal">
+    <button id="closeActivityVariationPicker" class="close-btn">&times;</button>
+    <h2>Planejar atividade</h2>
+    <p id="activityVariationPickerActivityName" style="font:600 13px var(--font-sora);color:var(--color-text-secondary);margin:0 0 16px;"></p>
+    <div id="activityVariationPickerOptions" class="activity-variation-picker-options"></div>
+    <label style="display:block;margin-top:16px;font:700 11.5px var(--font-sora);color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.05em;">
+      Data prevista de realização
+      <input type="date" id="activityVariationPickerDate" style="display:block;width:100%;margin-top:6px;padding:9px 10px;border:1px solid var(--color-border);border-radius:var(--radius-btn);font:500 13px var(--font-sora);box-sizing:border-box;">
+    </label>
+    <div class="modal-footer">
+      <button type="button" id="activityVariationPickerCancelBtn" class="btn-neutral">Cancelar</button>
+      <button type="button" id="activityVariationPickerConfirmBtn" class="btn-primary" disabled>Confirmar plano 📅</button>
+    </div>
+  </div>
+</div>
+
+<div id="activityKeepQueroFazerOverlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:400px;text-align:center;padding:32px 28px;">
+    <div style="font-size:40px;margin-bottom:12px;">🎉</div>
+    <h2 style="margin:0 0 6px;">Atividade realizada!</h2>
+    <p id="activityKeepQueroFazerName" style="font:700 14px var(--font-sora);color:var(--color-green);margin:0 0 14px;"></p>
+    <p style="font:500 13px var(--font-sora);color:var(--color-text-secondary);margin:0 0 26px;line-height:1.55;">
+      Quer manter esta atividade em <strong>Quero Fazer</strong> para poder planejá-la de novo no futuro?<br>
+      <span style="font-size:11.5px;color:var(--color-text-tertiary);">(O registro fica salvo no histórico de qualquer forma.)</span>
+    </p>
+    <div style="display:flex;gap:10px;">
+      <button type="button" id="activityKeepNoBtn"  class="btn-neutral" style="flex:1;">Não, só registrar</button>
+      <button type="button" id="activityKeepYesBtn" class="btn-primary"  style="flex:1;">Sim, manter 📌</button>
     </div>
   </div>
 </div>

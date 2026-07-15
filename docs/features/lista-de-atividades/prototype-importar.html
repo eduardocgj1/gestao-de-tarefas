@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protótipo — Nova atividade com Preencher com IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../public/styles.css">
+<style>
+body { overflow: hidden; }
+
+#board, #calendarView, #navBoardControls, #navCalendarControls,
+#exportReportBtn, #dayDrawerDocked { display: none !important; }
+#activitiesView { display: flex; flex-direction: column; }
+#navActivitiesControls { display: flex !important; }
+.sidebar { width: 236px; }
+.sidebar-activities-item { background: var(--color-green-soft); color: var(--color-green); }
+.sidebar-app-name, .sidebar-board-name, .sidebar-calendar-label,
+.sidebar-activities-label, .sidebar-section-label, .sidebar-collapse-btn { display: block !important; }
+.sidebar-expand-wrap { display: none !important; }
+#appTitle::after { content: "Atividades"; }
+#appTitle { font-size: 0; }
+#appTitle::after { font: 700 17px var(--font-sora); }
+.modal-overlay.open { display: flex !important; }
+.modal { animation: slideUp .18s ease; }
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── Toast ── */
+.proto-toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  background: var(--color-dark); color: #fff;
+  font: 600 13px var(--font-sora); padding: 10px 20px;
+  border-radius: var(--radius-pill); z-index: 9999;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+  white-space: nowrap;
+}
+.proto-toast.show { opacity: 1; }
+
+/* ── Modal de edição (form em etapas) ── */
+.activity-form-modal { width: 520px; }
+
+.import-success-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--color-green-soft); border: 1px solid rgba(58,102,4,.2);
+  border-radius: var(--radius-btn-sm); padding: 10px 14px;
+  font: 600 12px var(--font-sora); color: var(--color-green);
+  margin-bottom: 18px; animation: slideUp .22s ease;
+}
+.import-success-banner .banner-icon { font-size: 15px; flex-shrink: 0; }
+
+.activity-form-stepper {
+  display: flex; align-items: flex-start; gap: 0;
+  margin-bottom: 22px; position: relative;
+}
+.activity-form-stepper::before {
+  content: ''; position: absolute; top: 13px; left: 13px; right: 13px;
+  height: 1.5px; background: var(--color-border); z-index: 0;
+}
+.activity-form-step-dot {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  flex: 1; cursor: pointer; position: relative; z-index: 1;
+}
+.step-dot-circle {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid var(--color-border); background: var(--color-surface);
+  display: flex; align-items: center; justify-content: center;
+  font: 700 11px var(--font-sora); color: var(--color-text-tertiary);
+  transition: all .15s;
+}
+.activity-form-step-dot.active .step-dot-circle { border-color: var(--color-green); color: var(--color-green); }
+.activity-form-step-dot.done   .step-dot-circle { background: var(--color-green); border-color: var(--color-green); color: #fff; }
+.activity-form-step-label { font: 600 10.5px var(--font-sora); color: var(--color-text-tertiary); white-space: nowrap; }
+.activity-form-step-dot.active .activity-form-step-label { color: var(--color-green); font-weight: 700; }
+.activity-form-step-dot.done   .activity-form-step-label { color: var(--color-text-secondary); }
+
+.activity-form-step.hidden { display: none; }
+.activity-form-step { animation: slideUp .18s ease; }
+
+.f-label {
+  display: block; font: 700 11px var(--font-sora); color: var(--color-text-tertiary);
+  text-transform: uppercase; letter-spacing: .04em; margin: 14px 0 5px;
+}
+.f-label:first-child { margin-top: 0; }
+.f-input, .f-textarea, .f-select {
+  width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-btn-sm);
+  padding: 9px 10px; font: 500 13px var(--font-sora); background: #FBF9F4;
+  color: var(--color-text); outline: none; transition: border-color .15s;
+}
+.f-input:focus, .f-textarea:focus, .f-select:focus { border-color: var(--color-green); }
+.f-input.f-title { font: 600 15px var(--font-sora); }
+.f-textarea { resize: vertical; min-height: 76px; }
+
+.chip-select-group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip-select-option {
+  padding: 5px 11px; border: 1.5px solid var(--color-border); border-radius: var(--radius-pill);
+  font: 600 11.5px var(--font-sora); color: var(--color-text-secondary); cursor: pointer;
+  background: var(--color-surface); transition: all .1s; user-select: none;
+}
+.chip-select-option.selected { border-color: var(--color-green); background: var(--color-green-soft); color: var(--color-green); }
+.chip-select-option:hover:not(.selected) { border-color: var(--color-text-secondary); background: var(--color-neutral-btn); }
+
+.cost-profile-section { border: 1px solid var(--color-border); border-radius: var(--radius-btn); padding: 12px; margin-top: 8px; }
+.cost-range-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; font: 500 12px var(--font-sora); }
+.cost-range-label { width: 110px; flex-shrink: 0; color: var(--color-text-secondary); }
+.cost-range-row input { width: 76px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-btn-sm); font: 500 12.5px var(--font-sora); outline: none; }
+.cost-range-row input:focus { border-color: var(--color-green); }
+.cost-range-row span { color: var(--color-text-tertiary); flex-shrink: 0; }
+
+.activity-variation-card { border: 1px solid var(--color-border); border-radius: var(--radius-btn); padding: 12px; margin-bottom: 8px; background: #FBFAF7; }
+.activity-variation-card.active { border-color: var(--color-green); background: #F4FAE8; }
+.activity-variation-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.activity-variation-card-epocas { font: 500 11.5px var(--font-sora); color: var(--color-text-secondary); margin-top: 2px; }
+.activity-variation-list-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.variation-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.variation-chip-vibe { background: var(--color-blue-soft); color: var(--color-blue); padding: 3px 10px; border-radius: var(--radius-pill); font: 600 10.5px var(--font-sora); }
+.variation-chip-warn { background: var(--color-terracotta-soft); color: var(--color-terracotta); padding: 3px 10px; border-radius: var(--radius-pill); font: 600 10.5px var(--font-sora); }
+.variation-chip-ok   { background: var(--color-green-soft); color: var(--color-green); padding: 3px 10px; border-radius: var(--radius-pill); font: 600 10.5px var(--font-sora); }
+.variation-notas { font: 500 11.5px var(--font-sora); color: var(--color-text-secondary); font-style: italic; margin-top: 6px; }
+
+.activity-checklist-progress {
+  display: flex; align-items: center; gap: 10px;
+  font: 600 11px var(--font-sora); color: var(--color-text-secondary);
+  background: #FBF9F4; padding: 6px 10px; border-radius: 8px; margin-bottom: 8px;
+}
+.detail-checklist-bar { flex: 1; height: 4px; background: var(--color-border); border-radius: 2px; overflow: hidden; }
+.detail-checklist-bar-fill { height: 100%; background: var(--color-green); border-radius: 2px; }
+.activity-detail-checklist { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.checklist-task-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: #FBFAF7; border: 1px solid var(--color-border); }
+.checklist-task-row.completed { opacity: .65; }
+.checklist-task-name { flex: 1; border: none; background: none; text-align: left; padding: 0; font: 600 12.5px var(--font-sora); color: var(--color-text); cursor: pointer; }
+.checklist-task-row.completed .checklist-task-name { text-decoration: line-through; color: var(--color-text-tertiary); }
+.checklist-task-antecedencias { font: 500 10.5px var(--font-sora); color: var(--color-text-tertiary); flex-shrink: 0; }
+.checklist-task-remove { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 14px; flex-shrink: 0; }
+.checklist-task-remove:hover { color: var(--color-terracotta); }
+.checklist-add-form { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+.checklist-add-form input { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius-btn-sm); padding: 7px 9px; font: 500 12px var(--font-sora); background: #FBF9F4; outline: none; }
+.checklist-add-form input:focus { border-color: var(--color-green); }
+.checklist-add-form button { border: none; background: var(--color-green); color: #fff; border-radius: var(--radius-btn-sm); padding: 7px 12px; font: 700 13px var(--font-sora); cursor: pointer; }
+
+.holiday-chip { display: inline-flex; align-items: center; gap: 5px; background: #FBF6E9; border: 1px solid #F0E4C0; color: #8B6914; font: 600 11px var(--font-sora); padding: 4px 10px; border-radius: var(--radius-pill); }
+.activity-link-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #FBF9F4; border-radius: 8px; font: 600 12px var(--font-sora); color: var(--color-blue); margin-bottom: 4px; }
+.af-link-remove { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 14px; margin-left: auto; }
+
+.activity-form-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--color-border-strong); gap: 10px; }
+.activity-form-autosave-hint { font: 500 11px var(--font-sora); color: var(--color-text-tertiary); flex: 1; }
+.activity-form-footer-actions { display: flex; gap: 8px; }
+.nominatim-note { background: var(--color-green-soft); border: 1px solid rgba(58,102,4,.15); border-radius: var(--radius-btn-sm); padding: 8px 12px; font: 500 11.5px var(--font-sora); color: var(--color-green); margin-bottom: 12px; }
+
+/* ── Board / cards ── */
+.activities-view { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.activities-board { flex: 1; display: flex; gap: 14px; padding: 20px 26px; overflow-x: auto; align-items: flex-start; }
+.activity-draft-banner { background: #FBF6E9; border-bottom: 1px solid #F0E4C0; padding: 9px 26px; font: 600 12px var(--font-sora); color: #8B6914; flex-shrink: 0; }
+.activity-column { width: 240px; min-width: 240px; background: var(--color-surface); border-radius: var(--radius-panel); display: flex; flex-direction: column; box-shadow: var(--shadow-card); overflow: hidden; }
+.activity-column-header { padding: 12px 14px; border-bottom: 1px solid var(--color-border-strong); display: flex; align-items: center; justify-content: space-between; }
+.activity-column-title { font: 700 12px var(--font-sora); padding: 3px 10px; border-radius: var(--radius-pill); }
+.activity-column-count { font: 700 11px var(--font-sora); color: var(--color-text-tertiary); }
+.activity-column-body { flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.activity-card { border: 1px solid var(--color-border); border-radius: 12px; padding: 10px 12px; cursor: pointer; background: var(--color-surface); transition: box-shadow .12s; }
+.activity-card:hover { box-shadow: 0 2px 8px rgba(38,36,32,.1); }
+.activity-card-name { font: 700 13px var(--font-sora); color: var(--color-text); }
+.activity-card-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.activity-card-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font: 600 10.5px var(--font-sora); color: var(--color-text-secondary); }
+.activity-card-cost { color: var(--color-green); font-weight: 700; }
+.activity-card-cover { height: 56px; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.35); font-size: 28px; }
+.tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--radius-pill); font: 600 10.5px var(--font-sora); }
+.activity-status-quero_fazer { background: var(--color-terracotta-soft); color: var(--color-terracotta); }
+.activity-status-planejada  { background: var(--color-green-soft); color: var(--color-green); }
+.activity-status-rascunho   { background: var(--color-neutral-btn); color: var(--color-text-secondary); }
+.activity-tag-vibe   { background: var(--color-blue-soft); color: var(--color-blue); }
+.activity-tag-duracao { background: #FBF9F4; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
+.activity-column-empty { font: 500 12px var(--font-sora); color: var(--color-text-tertiary); padding: 8px; text-align: center; border: 1.5px dashed var(--color-border); border-radius: var(--radius-btn); cursor: pointer; }
+.variation-active-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--color-green-soft); color: var(--color-green); font: 700 10.5px var(--font-sora); padding: 3px 10px; border-radius: var(--radius-pill); }
+
+/* ── Modal da nova atividade ── */
+.modal.new-activity-modal {
+  width: 420px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+/* ── Campos base ── */
+.field-label {
+  display: block;
+  font: 700 11px var(--font-sora);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 5px;
+}
+.field-input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn-sm);
+  padding: 10px 12px;
+  font: 600 14px var(--font-sora);
+  background: #FBF9F4;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color .15s;
+}
+.field-input:focus { border-color: var(--color-green); }
+.field-input::placeholder { color: var(--color-text-tertiary); font-weight: 500; }
+.field-textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn-sm);
+  padding: 10px 12px;
+  font: 500 13px var(--font-sora);
+  background: #FBF9F4;
+  color: var(--color-text);
+  outline: none;
+  resize: none;
+  min-height: 72px;
+  line-height: 1.5;
+  transition: border-color .15s;
+}
+.field-textarea:focus { border-color: var(--color-green); }
+.field-textarea::placeholder { color: var(--color-text-tertiary); }
+
+/* ── Botão "Preencher com IA" ── */
+.ai-fill-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-btn-sm);
+  background: transparent;
+  padding: 9px 13px;
+  cursor: pointer;
+  font: 600 12.5px var(--font-sora);
+  color: var(--color-text-secondary);
+  margin-top: 6px;
+  transition: border-color .14s, background .14s, color .14s;
+  text-align: left;
+}
+.ai-fill-btn:hover {
+  border-color: var(--color-green);
+  background: var(--color-green-soft);
+  color: var(--color-green);
+}
+.ai-fill-btn.active {
+  border-color: var(--color-green);
+  background: var(--color-green-soft);
+  color: var(--color-green);
+}
+.ai-fill-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.ai-fill-label { flex: 1; }
+.ai-fill-chevron {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  transition: transform .18s;
+  flex-shrink: 0;
+}
+.ai-fill-btn.active .ai-fill-chevron { transform: rotate(90deg); }
+
+/* ── Painel expandido da IA ── */
+.ai-panel {
+  display: none;
+  margin-top: 0;
+  border: 1.5px solid var(--color-green);
+  border-top: none;
+  border-radius: 0 0 var(--radius-btn-sm) var(--radius-btn-sm);
+  background: #FAFDF6;
+  overflow: hidden;
+  animation: panelOpen .18s ease;
+}
+.ai-panel.open { display: block; }
+@keyframes panelOpen {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* quando o painel está aberto, o botão perde o border-radius inferior */
+.ai-fill-btn.active {
+  border-radius: var(--radius-btn-sm) var(--radius-btn-sm) 0 0;
+  border-bottom-color: var(--color-green);
+}
+
+.ai-panel-inner { padding: 14px; }
+
+.ai-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ai-step-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-green);
+  color: #fff;
+  font: 700 10.5px var(--font-sora);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ai-step-text {
+  font: 500 12px var(--font-sora);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.ai-step-text strong { color: var(--color-text); font-weight: 700; }
+
+/* ── Botão Copiar prompt ── */
+.copy-prompt-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: none;
+  background: var(--color-green);
+  color: #fff;
+  font: 700 13px var(--font-sora);
+  padding: 11px 16px;
+  border-radius: var(--radius-btn-sm);
+  cursor: pointer;
+  transition: background .12s;
+  margin-bottom: 14px;
+}
+.copy-prompt-btn:hover { background: var(--color-green-hover); }
+.copy-prompt-btn.copied { background: #4B8A1A; }
+
+/* ── Separator ── */
+.ai-separator {
+  height: 1px;
+  background: rgba(58,102,4,.15);
+  margin: 0 0 14px;
+}
+
+/* ── Textarea de retorno do JSON ── */
+.json-return-label {
+  font: 700 10.5px var(--font-sora);
+  color: var(--color-green);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  display: block;
+  margin-bottom: 5px;
+}
+.json-return-textarea {
+  width: 100%;
+  min-height: 88px;
+  border: 1.5px solid rgba(58,102,4,.25);
+  border-radius: var(--radius-btn-sm);
+  padding: 9px 11px;
+  font: 500 11.5px 'Courier New', monospace;
+  background: #fff;
+  color: var(--color-text);
+  resize: vertical;
+  outline: none;
+  transition: border-color .15s;
+  line-height: 1.5;
+}
+.json-return-textarea:focus { border-color: var(--color-green); }
+.json-return-textarea::placeholder { font-family: var(--font-sora); color: var(--color-text-tertiary); font-size: 11.5px; }
+
+.ai-confirm-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* ── Separador antes da categoria ── */
+.section-separator {
+  height: 1px;
+  background: var(--color-border-strong);
+  margin: 18px 0 16px;
+}
+
+/* ── Footer ── */
+.modal-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.modal-footer-hint {
+  font: 500 11px var(--font-sora);
+  color: var(--color-text-tertiary);
+  flex: 1;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="sidebar open">
+    <div class="sidebar-top">
+      <div class="app-logo">T</div>
+      <span class="sidebar-app-name">Tarefas</span>
+      <button type="button" class="sidebar-collapse-btn">‹</button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Boards</div>
+      <button type="button" class="sidebar-board-item">
+        <span class="sidebar-board-dot" style="background:#3A6604"></span>
+        <span class="sidebar-board-name">Trabalho</span>
+      </button>
+      <button type="button" class="sidebar-board-item">
+        <span class="sidebar-board-dot" style="background:#3E6FBD"></span>
+        <span class="sidebar-board-name">Pessoal</span>
+      </button>
+      <button type="button" class="sidebar-board-item">
+        <span class="sidebar-board-dot" style="background:#C1622D"></span>
+        <span class="sidebar-board-name">Freelance</span>
+      </button>
+      <div class="sidebar-separator"></div>
+      <button type="button" class="sidebar-calendar-item">
+        <span class="icon-calendar-wrap"><span class="icon-calendar"></span></span>
+        <span class="sidebar-calendar-label">Calendário</span>
+      </button>
+      <button type="button" class="sidebar-activities-item">
+        <span class="icon-activities-wrap"><span class="icon-activities"></span></span>
+        <span class="sidebar-activities-label">Atividades</span>
+      </button>
+    </nav>
+    <div class="sidebar-pomodoro-wrap">
+      <div class="pomodoro">
+        <div class="pomo-header">
+          <span class="dot" style="background:#3A6604;width:8px;height:8px;border-radius:50%"></span>
+          <span class="pomo-header-label">Foco</span>
+          <span class="pomo-header-time">25:00</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-content">
+    <header class="topbar">
+      <h1 id="appTitle"></h1>
+      <div class="spacer"></div>
+      <div class="nav">
+        <div class="nav-activities" id="navActivitiesControls">
+          <input type="text" class="activity-search-input" placeholder="🔍 Buscar atividades...">
+          <div class="activity-filters-wrap">
+            <button type="button" class="icon-btn" style="height:32px;padding:0 12px;font:700 12px var(--font-sora);">Filtros ▾</button>
+          </div>
+          <div style="display:flex;align-items:center;border:1px solid var(--color-border);border-radius:var(--radius-btn);overflow:hidden;">
+            <button type="button" style="border:none;background:var(--color-green-soft);color:var(--color-green);font:600 11.5px var(--font-sora);padding:0 11px;height:32px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="0" y="0" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="7.5" y="0" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="0" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor"/><rect x="7.5" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor"/></svg>
+              Categoria
+            </button>
+            <button type="button" style="border:none;border-left:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text-secondary);font:600 11.5px var(--font-sora);padding:0 11px;height:32px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="0" y="0" width="3" height="13" rx="1.5" fill="currentColor"/><rect x="5" y="0" width="3" height="10" rx="1.5" fill="currentColor"/><rect x="10" y="0" width="3" height="7" rx="1.5" fill="currentColor"/></svg>
+              Status
+            </button>
+          </div>
+          <button type="button" class="btn-brand-sm" style="height:32px;padding:0 14px;" onclick="openModal('newActivityOverlay')">+ Nova atividade</button>
+        </div>
+      </div>
+      <button class="icon-btn settings-btn" title="Configurações">⚙</button>
+    </header>
+
+    <!-- ACTIVITIES VIEW -->
+    <main id="activitiesView" class="activities-view">
+      <div class="activity-draft-banner">
+        ⚠️ 1 atividade aguardando detalhamento —
+        <a href="#" style="color:inherit;text-decoration:underline;font-weight:800;">ver rascunhos</a>
+      </div>
+      <div class="activities-board">
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:#E8EFF9;color:#3E6FBD;">Explorar a cidade</span>
+            <span class="activity-column-count">2</span>
+          </div>
+          <div class="activity-column-body">
+            <div class="activity-card">
+              <div class="activity-card-name">Mercado Municipal</div>
+              <div class="activity-card-chips">
+                <span class="tag activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-vibe">Gastronômico</span>
+              </div>
+              <div class="activity-card-meta"><span>🚇 Metro</span><span class="activity-card-cost">R$ 40–120/p</span></div>
+            </div>
+            <div class="activity-card">
+              <div class="activity-card-name">Passeio pelo bairro da Mooca</div>
+              <div class="activity-card-chips">
+                <span class="tag activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-vibe">Cultural</span>
+              </div>
+              <div class="activity-card-meta"><span>🚶 A pé</span><span class="activity-card-cost">R$ 0–50/p</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:#EAF0DE;color:#3A6604;">Viagem de final de semana</span>
+            <span class="activity-column-count">2</span>
+          </div>
+          <div class="activity-column-body">
+            <div class="activity-card">
+              <div class="activity-card-cover" style="background:linear-gradient(135deg,#4B9A7A,#2D6B50);">🏖</div>
+              <div class="activity-card-name">Ubatuba</div>
+              <div class="activity-card-chips">
+                <span class="tag activity-status-planejada">planejada</span>
+                <span class="variation-active-chip">Fora de temporada</span>
+              </div>
+              <div class="activity-card-meta"><span>📅 02/08</span><span class="activity-card-cost">R$ 350–550/p</span></div>
+            </div>
+            <div class="activity-card">
+              <div class="activity-card-name">Campos do Jordão</div>
+              <div class="activity-card-chips">
+                <span class="tag activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-vibe">Relaxamento</span>
+              </div>
+              <div class="activity-card-meta"><span>🚗 Carro</span><span class="activity-card-cost">R$ 450–750/p</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:#EAF0DE;color:#3A6604;">Natureza &amp; aventura</span>
+            <span class="activity-column-count">1</span>
+          </div>
+          <div class="activity-column-body">
+            <div class="activity-card">
+              <div class="activity-card-name">Trilha do Pico do Jaraguá</div>
+              <div class="activity-card-chips">
+                <span class="tag activity-status-quero_fazer">quero fazer</span>
+                <span class="tag activity-tag-vibe">Aventura</span>
+              </div>
+              <div class="activity-card-meta"><span>🚗 Carro/Uber</span><span class="activity-card-cost">R$ 0–30/p</span></div>
+            </div>
+            <div class="activity-column-empty">+ Adicionar atividade</div>
+          </div>
+        </div>
+        <div class="activity-column">
+          <div class="activity-column-header">
+            <span class="activity-column-title" style="background:var(--color-neutral-btn);color:var(--color-text-secondary);">Social &amp; cultural</span>
+            <span class="activity-column-count">1</span>
+          </div>
+          <div class="activity-column-body">
+            <div class="activity-card" style="opacity:.8;border-style:dashed;">
+              <div class="activity-card-name">Teatro Municipal</div>
+              <div class="activity-card-chips"><span class="tag activity-status-rascunho">rascunho</span></div>
+              <div class="activity-card-meta" style="margin-top:8px;"><span style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);">Aguardando detalhamento</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: NOVA ATIVIDADE
+═══════════════════════════════════════════════════════════ -->
+<div id="newActivityOverlay" class="modal-overlay hidden">
+  <div class="modal new-activity-modal">
+    <button class="close-btn" onclick="closeModal('newActivityOverlay')">&times;</button>
+
+    <h2 style="margin:0 0 4px;font:800 17px var(--font-sora);">Nova atividade</h2>
+    <div style="font:500 12px var(--font-sora);color:var(--color-text-secondary);margin-bottom:18px;">
+      Capture rápido e detalhe depois, ou use o modo detalhado para preencher tudo de uma vez.
+    </div>
+
+    <!-- Nome -->
+    <label class="field-label" for="quickName">Nome da atividade</label>
+    <input
+      type="text"
+      id="quickName"
+      class="field-input"
+      placeholder="O que você quer fazer? Ex.: ir para Ubatuba, cafezinho no Mercadão..."
+      oninput="onFieldInput()"
+    >
+
+    <!-- Descrição -->
+    <label class="field-label" for="quickDesc" style="margin-top:14px;">Descrição</label>
+    <textarea
+      id="quickDesc"
+      class="field-textarea"
+      placeholder="Fale mais sobre ela. O que te atrai? Com quem, quando, o que espera viver..."
+      oninput="onFieldInput()"
+    ></textarea>
+
+    <!-- Botão Preencher com IA -->
+    <button type="button" class="ai-fill-btn" id="aiFillBtn" onclick="toggleAiPanel()">
+      <span class="ai-fill-icon">✨</span>
+      <span class="ai-fill-label">Preencher com IA</span>
+      <span class="ai-fill-chevron">›</span>
+    </button>
+
+    <!-- Painel expansível da IA -->
+    <div class="ai-panel" id="aiPanel">
+      <div class="ai-panel-inner">
+
+        <!-- Passos de instrução -->
+        <div class="ai-step">
+          <span class="ai-step-num">1</span>
+          <span class="ai-step-text">
+            <strong>Copie o prompt</strong> — ele já inclui o nome e a descrição que você preencheu.
+          </span>
+        </div>
+        <div class="ai-step">
+          <span class="ai-step-num">2</span>
+          <span class="ai-step-text">
+            <strong>Cole no ChatGPT ou Claude</strong> e envie. Receba o JSON pronto.
+          </span>
+        </div>
+        <div class="ai-step" style="margin-bottom:14px;">
+          <span class="ai-step-num">3</span>
+          <span class="ai-step-text">
+            <strong>Cole o JSON abaixo</strong> e confirme para importar a atividade completa.
+          </span>
+        </div>
+
+        <!-- Botão de copiar prompt -->
+        <button type="button" class="copy-prompt-btn" id="copyPromptBtn" onclick="copyPrompt()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copiar prompt
+        </button>
+
+        <div class="ai-separator"></div>
+
+        <!-- Campo de retorno -->
+        <label class="json-return-label">2. Cole o JSON retornado pela IA</label>
+        <textarea
+          id="jsonReturnArea"
+          class="json-return-textarea"
+          placeholder='Cole aqui o JSON que a IA gerou...'
+          oninput="onJsonInput()"
+        ></textarea>
+
+        <div class="ai-confirm-row">
+          <button type="button" class="btn-neutral" style="flex:1;" onclick="toggleAiPanel()">Cancelar</button>
+          <button type="button" class="btn-primary" id="aiConfirmBtn" style="flex:2;" disabled onclick="handleConfirm()">Confirmar e importar</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Separador -->
+    <div class="section-separator"></div>
+
+    <!-- Categoria -->
+    <label class="field-label" for="quickCategory">Categoria</label>
+    <select id="quickCategory" style="width:100%;border:1px solid var(--color-border);border-radius:var(--radius-btn-sm);padding:9px 10px;font:500 13px var(--font-sora);background:#FBF9F4;color:var(--color-text);outline:none;">
+      <option value="">Selecione uma categoria...</option>
+      <option>Explorar a cidade</option>
+      <option>Viagem de final de semana</option>
+      <option>Viagem longa</option>
+      <option>Natureza &amp; aventura</option>
+      <option>Hobbies &amp; aprendizado</option>
+      <option>Social &amp; cultural</option>
+      <option>Descanso intencional</option>
+      <option>Personalizada</option>
+    </select>
+
+    <!-- Footer -->
+    <div class="modal-footer-row">
+      <span class="modal-footer-hint">Modo rascunho — detalhe depois</span>
+      <button type="button" class="btn-neutral" onclick="closeModal('newActivityOverlay')">Cancelar</button>
+      <button type="button" class="btn-neutral">Detalhado →</button>
+      <button type="button" class="btn-primary" onclick="handleCreate()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: EDIÇÃO DA ATIVIDADE (formulário em etapas)
+═══════════════════════════════════════════════════════════ -->
+<div id="editFormOverlay" class="modal-overlay hidden">
+  <div class="modal activity-form-modal" style="max-height:90vh;overflow-y:auto;">
+    <button class="close-btn" onclick="closeModal('editFormOverlay')">&times;</button>
+
+    <!-- Banner de importação bem-sucedida -->
+    <div class="import-success-banner" id="importBanner">
+      <span class="banner-icon">✅</span>
+      <span>Atividade importada via IA — revise e ajuste o que precisar antes de salvar.</span>
+    </div>
+
+    <!-- Stepper -->
+    <div class="activity-form-stepper" id="editStepper">
+      <div class="activity-form-step-dot active" data-step="1" onclick="goStep(1)">
+        <div class="step-dot-circle">1</div>
+        <span class="activity-form-step-label">Identidade</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="2" onclick="goStep(2)">
+        <div class="step-dot-circle">2</div>
+        <span class="activity-form-step-label">Logística</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="3" onclick="goStep(3)">
+        <div class="step-dot-circle">3</div>
+        <span class="activity-form-step-label">Condições</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="4" onclick="goStep(4)">
+        <div class="step-dot-circle">4</div>
+        <span class="activity-form-step-label">Variações</span>
+      </div>
+      <div class="activity-form-step-dot" data-step="5" onclick="goStep(5)">
+        <div class="step-dot-circle">5</div>
+        <span class="activity-form-step-label">Planejamento</span>
+      </div>
+    </div>
+
+    <!-- ── Etapa 1: Identidade ── -->
+    <div id="editStep1" class="activity-form-step">
+      <label class="f-label">Nome da atividade *</label>
+      <input type="text" id="fNome" class="f-input f-title" placeholder="Nome da atividade">
+
+      <label class="f-label">Categoria *</label>
+      <select id="fCategoria" class="f-select">
+        <option>Explorar a cidade</option>
+        <option>Viagem de final de semana</option>
+        <option>Viagem longa</option>
+        <option>Natureza &amp; aventura</option>
+        <option>Hobbies &amp; aprendizado</option>
+        <option>Social &amp; cultural</option>
+        <option>Descanso intencional</option>
+        <option>Personalizada</option>
+      </select>
+
+      <label class="f-label">Vibe (multisseleção)</label>
+      <div class="chip-select-group" id="fVibesGroup">
+        <span class="chip-select-option" onclick="toggleChip(this)">Romântico</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Relaxamento</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Aventura</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Cultural</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Agito social</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Mochilão</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Natureza &amp; contemplação</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Fotográfico</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Gastronômico</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Desconexão digital</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Família</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Solo</span>
+      </div>
+
+      <label class="f-label">Descrição</label>
+      <textarea id="fDescricao" class="f-textarea" placeholder="Descreva a atividade..."></textarea>
+
+      <label class="f-label">Localidade <span style="font-weight:500;text-transform:none;letter-spacing:0;">(para geocodificação)</span></label>
+      <input type="text" id="fLocalidade" class="f-input" placeholder="Ex.: Ubatuba, Mercadão, Cantareira">
+      <div style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);margin-top:4px;">Usado para calcular distância automaticamente via OpenStreetMap.</div>
+
+      <label class="f-label">Foto de capa</label>
+      <div style="margin-top:2px;border:2px dashed var(--color-border);border-radius:var(--radius-btn);padding:16px;text-align:center;color:var(--color-text-tertiary);font:500 12px var(--font-sora);cursor:pointer;">
+        📷 Clique para selecionar uma imagem
+      </div>
+    </div>
+
+    <!-- ── Etapa 2: Logística ── -->
+    <div id="editStep2" class="activity-form-step hidden">
+      <div class="nominatim-note" id="fDistanciaNote">📍 Distância calculada via Nominatim — aguardando localidade</div>
+
+      <label class="f-label">Modalidades de duração * (multisseleção)</label>
+      <div class="chip-select-group" id="fDuracaoGroup">
+        <span class="chip-select-option" onclick="toggleChip(this)">Parada rápida</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Meio período</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Dia inteiro</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Bate volta</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Final de semana</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Feriado prolongado</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Semana+</span>
+      </div>
+
+      <label class="f-label">Meios de transporte compatíveis</label>
+      <div class="chip-select-group" id="fTransporteGroup">
+        <span class="chip-select-option" onclick="toggleChip(this)">A pé</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Bicicleta</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Metro / CPTM</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Ônibus municipal</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Ônibus interestadual</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Carro próprio</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Aplicativo (Uber/99)</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Aluguel de carro</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Avião</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Barco / ferry</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Van / transfer compartilhado</span>
+      </div>
+
+      <label class="f-label">Perfis de custo (R$/pessoa)</label>
+      <div style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);margin-bottom:4px;">Preencha ao menos um range completo (mín + máx) em baixa temporada para sair do Rascunho.</div>
+
+      <div class="cost-profile-section">
+        <div style="font:700 12px var(--font-sora);margin-bottom:6px;">🎒 Econômico</div>
+        <div class="cost-range-row"><span class="cost-range-label">Baixa temporada</span><span>R$</span><input type="number" id="fEcoMin" placeholder="mín"><span>–</span><input type="number" id="fEcoMax" placeholder="máx"></div>
+        <div class="cost-range-row"><span class="cost-range-label">Alta temporada</span><span>R$</span><input type="number" id="fEcoAltMin" placeholder="mín"><span>–</span><input type="number" id="fEcoAltMax" placeholder="máx"></div>
+      </div>
+      <div class="cost-profile-section">
+        <div style="font:700 12px var(--font-sora);margin-bottom:6px;">🏨 Padrão</div>
+        <div class="cost-range-row"><span class="cost-range-label">Baixa temporada</span><span>R$</span><input type="number" id="fPadMin" placeholder="mín"><span>–</span><input type="number" id="fPadMax" placeholder="máx"></div>
+        <div class="cost-range-row"><span class="cost-range-label">Alta temporada</span><span>R$</span><input type="number" id="fPadAltMin" placeholder="mín"><span>–</span><input type="number" id="fPadAltMax" placeholder="máx"></div>
+      </div>
+      <div class="cost-profile-section">
+        <div style="font:700 12px var(--font-sora);margin-bottom:6px;">✨ Conforto</div>
+        <div class="cost-range-row"><span class="cost-range-label">Baixa temporada</span><span>R$</span><input type="number" id="fConMin" placeholder="mín"><span>–</span><input type="number" id="fConMax" placeholder="máx"></div>
+        <div class="cost-range-row"><span class="cost-range-label">Alta temporada</span><span>R$</span><input type="number" id="fConAltMin" placeholder="mín"><span>–</span><input type="number" id="fConAltMax" placeholder="máx"></div>
+      </div>
+
+      <label class="f-label">Nível de planejamento</label>
+      <select id="fNivelPlanejamento" class="f-select">
+        <option>Espontâneo</option>
+        <option>Planejado</option>
+        <option>Requer reserva antecipada</option>
+      </select>
+
+      <div style="display:flex;gap:12px;margin-top:14px;">
+        <div style="flex:1;">
+          <label class="f-label" style="margin-top:0;">Antecedência mínima (dias)</label>
+          <input type="number" id="fAntecedencia" class="f-input" placeholder="Ex.: 7">
+        </div>
+        <div style="flex:1;display:flex;align-items:flex-end;padding-bottom:2px;">
+          <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);color:var(--color-text);cursor:pointer;">
+            <input type="checkbox" id="fUltimaHora" style="width:auto;margin:0;"> Decisão de última hora possível
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Etapa 3: Condições ── -->
+    <div id="editStep3" class="activity-form-step hidden">
+      <label class="f-label">Condição climática ideal</label>
+      <div class="chip-select-group" id="fClimaGroup">
+        <span class="chip-select-option" onclick="toggleChip(this)">Ensolarado</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Nublado (ok)</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Chuva (ok)</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Frio</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Qualquer</span>
+      </div>
+
+      <label class="f-label">Temperatura mínima ideal (°C)</label>
+      <input type="number" id="fTemperatura" class="f-input" style="width:120px;" placeholder="Ex.: 18">
+
+      <label class="f-label">Época ideal do ano</label>
+      <div class="chip-select-group" id="fEpocaGroup">
+        <span class="chip-select-option" onclick="toggleChip(this)">Jan–Mar</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Abr–Jun</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Jul–Set</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Out–Dez</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Qualquer</span>
+      </div>
+
+      <label class="f-label">Perfil de grupo</label>
+      <div class="chip-select-group" id="fGrupoGroup">
+        <span class="chip-select-option" onclick="toggleChip(this)">Solo</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Dupla (casal)</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Amigos</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Família</span>
+        <span class="chip-select-option" onclick="toggleChip(this)">Qualquer</span>
+      </div>
+
+      <label class="f-label">Tamanho do grupo</label>
+      <select id="fTamanhoGrupo" class="f-select">
+        <option>Solo</option><option>Dupla</option><option>Pequeno (3–5)</option><option>Grande</option><option>Qualquer</option>
+      </select>
+
+      <label class="f-label">Condicionamento físico exigido</label>
+      <select id="fCondFisico" class="f-select">
+        <option>Não</option><option>Leve</option><option>Moderado</option><option>Intenso</option>
+      </select>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+        <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);cursor:pointer;"><input type="checkbox" id="fEvitarAlta" style="width:auto;margin:0;"> Evitar alta temporada</label>
+        <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);cursor:pointer;"><input type="checkbox" id="fRepetivel" checked style="width:auto;margin:0;"> Repetível</label>
+        <label style="display:flex;align-items:center;gap:8px;font:600 12.5px var(--font-sora);cursor:pointer;"><input type="checkbox" id="fPetFriendly" style="width:auto;margin:0;"> Pet-friendly</label>
+      </div>
+    </div>
+
+    <!-- ── Etapa 4: Variações ── -->
+    <div id="editStep4" class="activity-form-step hidden">
+      <div style="font:500 12px var(--font-sora);color:var(--color-text-secondary);margin-bottom:12px;">
+        Variações sazonais permitem que a mesma atividade tenha vibes, custos e condições diferentes dependendo da época do ano.
+      </div>
+      <div id="fVariacoesList"></div>
+      <button type="button" class="btn-neutral" style="width:100%;margin-top:4px;" onclick="showToast('Editor de variação abriria aqui')">+ Nova variação sazonal</button>
+    </div>
+
+    <!-- ── Etapa 5: Planejamento ── -->
+    <div id="editStep5" class="activity-form-step hidden">
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Próximos feriados compatíveis</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+        <span class="holiday-chip">📅 Tiradentes · 21/04 · 3 dias</span>
+        <span class="holiday-chip">📅 Corpus Christi · 19/06 · 4 dias</span>
+        <span class="holiday-chip">📅 Nossa Sra. Aparecida · 12/10 · 3 dias</span>
+      </div>
+
+      <div style="font:700 11px var(--font-sora);color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Checklist de planejamento</div>
+      <div id="fChecklistProgress" class="activity-checklist-progress" style="display:none;">
+        <span id="fChecklistProgressText">0 de 0 concluídos</span>
+        <div class="detail-checklist-bar"><div class="detail-checklist-bar-fill" id="fChecklistBar" style="width:0%"></div></div>
+      </div>
+      <div id="fChecklistList" class="activity-detail-checklist"></div>
+      <div class="checklist-add-form">
+        <input type="text" id="fNewTask" placeholder="Nova tarefa do checklist">
+        <input type="number" id="fNewTaskMin" placeholder="Mín (d)" style="width:80px;">
+        <input type="number" id="fNewTaskRec" placeholder="Rec (d)" style="width:80px;">
+        <button type="button" onclick="addChecklistTask()">+</button>
+      </div>
+
+      <label class="f-label" style="margin-top:18px;">Notas pessoais</label>
+      <textarea id="fNotas" class="f-textarea" placeholder="Observações, dicas, lembretes..."></textarea>
+
+      <label class="f-label">Links úteis</label>
+      <div id="fLinksList"></div>
+      <div class="checklist-add-form">
+        <input type="text" id="fNewLinkUrl" placeholder="https://" style="flex:1.2;">
+        <input type="text" id="fNewLinkTitle" placeholder="Título (opcional)" style="flex:1;">
+        <button type="button" onclick="addLink()">+</button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="activity-form-footer">
+      <span class="activity-form-autosave-hint">Rascunho salvo automaticamente</span>
+      <div class="activity-form-footer-actions">
+        <button type="button" class="btn-neutral" id="editBackBtn" onclick="formStepBack()" style="display:none;">← Voltar</button>
+        <button type="button" class="btn-neutral" onclick="showToast('Rascunho salvo!')">Salvar rascunho</button>
+        <button type="button" class="btn-primary" id="editNextBtn" onclick="formStepNext()">Próximo →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="proto-toast" id="protoToast"></div>
+
+<script>
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+  document.getElementById(id).classList.remove('open');
+  // reset apenas do modal de criação rápida
+  if (id === 'newActivityOverlay') {
+    document.getElementById('quickName').value = '';
+    document.getElementById('quickDesc').value = '';
+    document.getElementById('jsonReturnArea').value = '';
+    document.getElementById('aiConfirmBtn').disabled = true;
+    resetCopyBtn();
+    closeAiPanel();
+  }
+}
+
+function showToast(msg, duration) {
+  const t = document.getElementById('protoToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.remove('show'), duration || 2600);
+}
+
+// ─── Painel de IA ───────────────────────────────────────────────────────────
+let aiOpen = false;
+
+function toggleAiPanel() {
+  aiOpen = !aiOpen;
+  const panel = document.getElementById('aiPanel');
+  const btn   = document.getElementById('aiFillBtn');
+  if (aiOpen) {
+    panel.classList.add('open');
+    btn.classList.add('active');
+  } else {
+    closeAiPanel();
+  }
+}
+
+function closeAiPanel() {
+  aiOpen = false;
+  document.getElementById('aiPanel').classList.remove('open');
+  document.getElementById('aiFillBtn').classList.remove('active');
+}
+
+// ─── Geração dinâmica do prompt ─────────────────────────────────────────────
+function buildPrompt() {
+  const nome = document.getElementById('quickName').value.trim();
+  const desc = document.getElementById('quickDesc').value.trim();
+
+  const lines = [];
+  if (nome) lines.push(`Nome: ${nome}`);
+  if (desc) lines.push(`Descrição: ${desc}`);
+  const userInput = lines.length ? lines.join('\n') : '[sem informação — pergunte ao usuário]';
+
+  return `Você é um assistente de planejamento pessoal. O usuário vai descrever uma atividade que quer fazer — pode ser só o título, pode ser uma descrição mais detalhada, pode incluir contexto pessoal (com quem vai, ocasião, preferências).
+
+ANTES DE GERAR O JSON:
+- Avalie se você tem informação suficiente para preencher os campos com qualidade.
+- Se o input for ambíguo em algo que impacte campos obrigatórios ou estimativas centrais (categoria, custo, duração), faça perguntas objetivas — no máximo 3, todas numa única mensagem.
+- Se o input for suficiente, vá direto ao JSON sem comentários.
+- Campos opcionais sem informação suficiente devem ser preenchidos com null.
+
+REGRAS DE PREENCHIMENTO:
+- Preencha com base no seu conhecimento sobre a atividade e no contexto fornecido.
+- Inclua variações sazonais apenas quando a experiência mudar significativamente por época.
+- Nas variações, preencha APENAS os campos que diferem da base.
+- Estime custos em R$ por pessoa, considerando São Paulo como cidade de origem.
+- O checklist deve ser prático e específico. Para cada item, estime antecedência mínima, máxima e recomendada em dias antes da data da atividade.
+
+RETORNE SOMENTE O JSON, sem texto antes ou depois.
+
+SCHEMA:
+{
+  "nome": "",
+  "categoria": "", // "Explorar a cidade" | "Viagem de final de semana" | "Viagem longa" | "Natureza & aventura" | "Hobbies & aprendizado" | "Social & cultural" | "Descanso intencional" | texto livre para categoria personalizada
+  "descricao": "",
+  "vibes": [], // Romântico | Relaxamento | Aventura | Cultural | Agito social | Mochilão | Natureza & contemplação | Fotográfico | Gastronômico | Desconexão digital | Família | Solo
+  "modalidades_duracao": [], // Parada rápida | Meio período | Dia inteiro | Bate volta | Final de semana | Feriado prolongado | Semana+
+  "meios_transporte": [], // A pé | Bicicleta | Metro / CPTM | Ônibus municipal | Ônibus interestadual | Carro próprio | Aplicativo (Uber/99) | Aluguel de carro | Avião | Barco / ferry | Van / transfer compartilhado
+  "nivel_planejamento": "", // "Espontâneo" | "Planejado" | "Requer reserva antecipada"
+  "antecedencia_minima_dias": null,
+  "decisao_ultima_hora": false,
+  "localidade": "", // nome curto da cidade ou local para geocodificação (ex: "Ubatuba", "Mercadão")
+  "distancia_sp": "", // "Na cidade" | "Até 150 km" | "150–400 km" | "400 km+"
+  "condicao_climatica_ideal": [], // "Ensolarado" | "Nublado (ok)" | "Chuva (ok)" | "Frio" | "Qualquer"
+  "temperatura_minima_ideal_celsius": null,
+  "epoca_ideal": [], // "Jan–Mar" | "Abr–Jun" | "Jul–Set" | "Out–Dez" | "Qualquer"
+  "perfil_grupo": [], // "Solo" | "Dupla (casal)" | "Amigos" | "Família" | "Qualquer"
+  "tamanho_grupo": "", // "Solo" | "Dupla" | "Pequeno (3–5)" | "Grande" | "Qualquer"
+  "condicionamento_fisico": "", // "Não" | "Leve" | "Moderado" | "Intenso"
+  "evitar_alta_temporada": false,
+  "repetivel": true,
+  "pet_friendly": null,
+  "perfis_custo": {
+    "economico": { "baixa_temporada": [min, max], "alta_temporada": [min, max] },
+    "padrao":    { "baixa_temporada": [min, max], "alta_temporada": [min, max] },
+    "conforto":  { "baixa_temporada": [min, max], "alta_temporada": [min, max] }
+  },
+  "variacoes": [
+    {
+      "nome": "",
+      "epocas_cobertas": [], // um ou mais de: "Jan–Mar" | "Abr–Jun" | "Jul–Set" | "Out–Dez"
+      "inclui_feriados_prolongados": false,
+      // Preencha APENAS os campos que diferem da base (lista substituível):
+      "vibes": [],
+      "condicao_climatica_ideal": [],
+      "temperatura_minima_celsius": null,
+      "antecedencia_minima_dias": null,
+      "decisao_ultima_hora": null,
+      "perfis_custo": {},
+      "modalidades_duracao": [],
+      "meios_transporte": [],
+      "perfil_grupo": [],
+      "evitar_alta_temporada": null,
+      "notas": ""
+    }
+  ],
+  "checklist_sugerido": [
+    {
+      "name": "",
+      "antecedencia_minima_dias": null,
+      "antecedencia_max_dias": null,
+      "antecedencia_rec_dias": null
+    }
+  ]
+}
+
+--- ATIVIDADE ---
+${userInput}`;
+}
+
+// ─── Input listeners ─────────────────────────────────────────────────────────
+function onFieldInput() {
+  // atualiza label do botão se o painel estiver aberto
+  // (nada extra necessário — o prompt é gerado no momento do clique)
+}
+
+function onJsonInput() {
+  const val = document.getElementById('jsonReturnArea').value.trim();
+  const btn = document.getElementById('aiConfirmBtn');
+  if (!val) { btn.disabled = true; return; }
+  try {
+    const obj = JSON.parse(val);
+    btn.disabled = !obj.nome;
+  } catch(e) {
+    btn.disabled = true;
+  }
+}
+
+// ─── Copiar prompt ───────────────────────────────────────────────────────────
+async function copyPrompt() {
+  const prompt = buildPrompt();
+  try {
+    await navigator.clipboard.writeText(prompt);
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = prompt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+
+  const btn = document.getElementById('copyPromptBtn');
+  btn.classList.add('copied');
+  btn.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>
+    Prompt copiado!
+  `;
+  showToast('✓ Prompt copiado! Cole no ChatGPT ou Claude.');
+  setTimeout(resetCopyBtn, 3500);
+}
+
+function resetCopyBtn() {
+  const btn = document.getElementById('copyPromptBtn');
+  if (!btn) return;
+  btn.classList.remove('copied');
+  btn.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+    Copiar prompt
+  `;
+}
+
+// ─── Stepper do formulário de edição ────────────────────────────────────────
+let currentStep = 1;
+const TOTAL_STEPS = 5;
+
+function goStep(n) {
+  // Esconde step atual
+  document.getElementById(`editStep${currentStep}`).classList.add('hidden');
+  // Atualiza dots
+  document.querySelectorAll('.activity-form-step-dot').forEach((dot, i) => {
+    const s = i + 1;
+    dot.classList.remove('active', 'done');
+    if (s < n) dot.classList.add('done');
+    else if (s === n) dot.classList.add('active');
+  });
+  // Mostra novo step
+  currentStep = n;
+  document.getElementById(`editStep${currentStep}`).classList.remove('hidden');
+  // Botões de navegação
+  const backBtn = document.getElementById('editBackBtn');
+  const nextBtn = document.getElementById('editNextBtn');
+  backBtn.style.display = currentStep === 1 ? 'none' : '';
+  nextBtn.textContent = currentStep === TOTAL_STEPS ? '✓ Salvar atividade' : 'Próximo →';
+}
+
+function formStepNext() {
+  if (currentStep < TOTAL_STEPS) {
+    goStep(currentStep + 1);
+  } else {
+    showToast('✓ Atividade salva!', 3000);
+    closeModal('editFormOverlay');
+  }
+}
+
+function formStepBack() {
+  if (currentStep > 1) goStep(currentStep - 1);
+}
+
+function toggleChip(el) {
+  el.classList.toggle('selected');
+}
+
+// ─── População do formulário via JSON importado ──────────────────────────────
+function populateForm(data) {
+  // Etapa 1
+  setVal('fNome', data.nome || '');
+  setVal('fDescricao', data.descricao || '');
+  setVal('fLocalidade', data.localidade || '');
+  if (data.categoria) {
+    const sel = document.getElementById('fCategoria');
+    for (let opt of sel.options) {
+      if (opt.text.toLowerCase().includes(data.categoria.toLowerCase())) {
+        sel.value = opt.value; break;
+      }
+    }
+  }
+  if (Array.isArray(data.vibes)) {
+    document.querySelectorAll('#fVibesGroup .chip-select-option').forEach(chip => {
+      const txt = chip.textContent.trim().toLowerCase();
+      if (data.vibes.some(v => v.toLowerCase().includes(txt) || txt.includes(v.toLowerCase()))) {
+        chip.classList.add('selected');
+      }
+    });
+  }
+
+  // Etapa 2
+  if (Array.isArray(data.modalidades_duracao)) {
+    document.querySelectorAll('#fDuracaoGroup .chip-select-option').forEach(chip => {
+      const txt = chip.textContent.trim().toLowerCase();
+      if (data.modalidades_duracao.some(m => m.toLowerCase().includes(txt) || txt.includes(m.toLowerCase()))) {
+        chip.classList.add('selected');
+      }
+    });
+  }
+  if (Array.isArray(data.meios_transporte)) {
+    document.querySelectorAll('#fTransporteGroup .chip-select-option').forEach(chip => {
+      const txt = chip.textContent.trim().toLowerCase();
+      if (data.meios_transporte.some(t => t.toLowerCase().includes(txt) || txt.includes(t.toLowerCase()))) {
+        chip.classList.add('selected');
+      }
+    });
+  }
+  // Custos
+  const pc = data.perfis_custo || {};
+  if (pc.economico) {
+    setVal('fEcoMin', (pc.economico.baixa_temporada || {}).min || '');
+    setVal('fEcoMax', (pc.economico.baixa_temporada || {}).max || '');
+    setVal('fEcoAltMin', (pc.economico.alta_temporada || {}).min || '');
+    setVal('fEcoAltMax', (pc.economico.alta_temporada || {}).max || '');
+  }
+  if (pc.padrao) {
+    setVal('fPadMin', (pc.padrao.baixa_temporada || {}).min || '');
+    setVal('fPadMax', (pc.padrao.baixa_temporada || {}).max || '');
+    setVal('fPadAltMin', (pc.padrao.alta_temporada || {}).min || '');
+    setVal('fPadAltMax', (pc.padrao.alta_temporada || {}).max || '');
+  }
+  if (pc.conforto) {
+    setVal('fConMin', (pc.conforto.baixa_temporada || {}).min || '');
+    setVal('fConMax', (pc.conforto.baixa_temporada || {}).max || '');
+    setVal('fConAltMin', (pc.conforto.alta_temporada || {}).min || '');
+    setVal('fConAltMax', (pc.conforto.alta_temporada || {}).max || '');
+  }
+  if (data.nivel_planejamento) setSelectByText('fNivelPlanejamento', data.nivel_planejamento);
+  setVal('fAntecedencia', data.antecedencia_minima_dias || '');
+  setCheck('fUltimaHora', !!data.decisao_ultima_hora);
+
+  // Etapa 3
+  if (Array.isArray(data.condicao_climatica_ideal)) {
+    document.querySelectorAll('#fClimaGroup .chip-select-option').forEach(chip => {
+      const txt = chip.textContent.trim().toLowerCase();
+      if (data.condicao_climatica_ideal.some(c => c.toLowerCase().includes(txt) || txt.includes(c.toLowerCase()))) {
+        chip.classList.add('selected');
+      }
+    });
+  }
+  setVal('fTemperatura', data.temperatura_minima_ideal_celsius || '');
+  if (Array.isArray(data.epoca_ideal)) {
+    document.querySelectorAll('#fEpocaGroup .chip-select-option').forEach(chip => {
+      const txt = chip.textContent.trim().toLowerCase();
+      if (data.epoca_ideal.some(e => e.toLowerCase().includes(txt) || txt.includes(e.toLowerCase()))) {
+        chip.classList.add('selected');
+      }
+    });
+  }
+  if (data.perfil_grupo) {
+    document.querySelectorAll('#fGrupoGroup .chip-select-option').forEach(chip => {
+      const txt = chip.textContent.trim().toLowerCase();
+      if (data.perfil_grupo.toLowerCase().includes(txt) || txt.includes(data.perfil_grupo.toLowerCase())) {
+        chip.classList.add('selected');
+      }
+    });
+  }
+  if (data.tamanho_grupo) setSelectByText('fTamanhoGrupo', data.tamanho_grupo);
+  if (data.condicionamento_fisico) setSelectByText('fCondFisico', data.condicionamento_fisico);
+  setCheck('fEvitarAlta', !!data.evitar_alta_temporada);
+  setCheck('fRepetivel', data.repetivel !== false);
+  setCheck('fPetFriendly', !!data.pet_friendly);
+
+  // Etapa 4: variações
+  const varList = document.getElementById('fVariacoesList');
+  varList.innerHTML = '';
+  if (Array.isArray(data.variacoes) && data.variacoes.length) {
+    data.variacoes.forEach((v, i) => {
+      const card = document.createElement('div');
+      card.className = 'activity-variation-card';
+      card.innerHTML = `
+        <div class="variation-card-header">
+          <strong>${v.nome || `Variação ${i+1}`}</strong>
+          <span style="font:500 11px var(--font-sora);color:var(--color-text-tertiary);">${(v.epocas_cobertas || []).join(', ')}</span>
+        </div>
+        ${v.descricao ? `<div style="font:500 12px var(--font-sora);color:var(--color-text-secondary);margin-top:4px;">${v.descricao}</div>` : ''}
+      `;
+      varList.appendChild(card);
+    });
+  } else {
+    varList.innerHTML = '<div style="font:500 12px var(--font-sora);color:var(--color-text-tertiary);padding:8px 0;">Nenhuma variação sazonal. Adicione se necessário.</div>';
+  }
+
+  // Etapa 5: checklist
+  const chkList = document.getElementById('fChecklistList');
+  chkList.innerHTML = '';
+  if (Array.isArray(data.checklist_sugerido) && data.checklist_sugerido.length) {
+    document.getElementById('fChecklistProgress').style.display = 'flex';
+    document.getElementById('fChecklistProgressText').textContent = `0 de ${data.checklist_sugerido.length} concluídos`;
+    data.checklist_sugerido.forEach(task => {
+      const row = document.createElement('div');
+      row.className = 'detail-checklist-item';
+      row.innerHTML = `
+        <div class="detail-checklist-check"></div>
+        <div class="detail-checklist-content">
+          <span class="detail-checklist-title">${task.tarefa || task.titulo || ''}</span>
+          ${task.antecedencia_recomendada_dias ? `<span class="detail-checklist-meta">${task.antecedencia_recomendada_dias}d antes</span>` : ''}
+        </div>
+      `;
+      chkList.appendChild(row);
+    });
+  }
+  setVal('fNotas', data.notas || '');
+}
+
+function setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+function setCheck(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.checked = val;
+}
+function setSelectByText(id, text) {
+  const sel = document.getElementById(id);
+  if (!sel || !text) return;
+  for (let opt of sel.options) {
+    if (opt.text.toLowerCase().includes(text.toLowerCase()) || text.toLowerCase().includes(opt.text.toLowerCase())) {
+      sel.value = opt.value; return;
+    }
+  }
+}
+
+function addChecklistTask() {
+  const task = document.getElementById('fNewTask').value.trim();
+  if (!task) return;
+  const rec = document.getElementById('fNewTaskRec').value;
+  const row = document.createElement('div');
+  row.className = 'detail-checklist-item';
+  row.innerHTML = `
+    <div class="detail-checklist-check"></div>
+    <div class="detail-checklist-content">
+      <span class="detail-checklist-title">${task}</span>
+      ${rec ? `<span class="detail-checklist-meta">${rec}d antes</span>` : ''}
+    </div>
+  `;
+  document.getElementById('fChecklistList').appendChild(row);
+  document.getElementById('fNewTask').value = '';
+  document.getElementById('fNewTaskMin').value = '';
+  document.getElementById('fNewTaskRec').value = '';
+}
+
+function addLink() {
+  const url = document.getElementById('fNewLinkUrl').value.trim();
+  if (!url) return;
+  const title = document.getElementById('fNewLinkTitle').value.trim() || url;
+  const row = document.createElement('div');
+  row.className = 'activity-link-row';
+  row.innerHTML = `<a href="${url}" target="_blank">🔗 ${title}</a>`;
+  document.getElementById('fLinksList').appendChild(row);
+  document.getElementById('fNewLinkUrl').value = '';
+  document.getElementById('fNewLinkTitle').value = '';
+}
+
+// ─── Confirmar importação ────────────────────────────────────────────────────
+function handleConfirm() {
+  const val = document.getElementById('jsonReturnArea').value.trim();
+  try {
+    const obj = JSON.parse(val);
+    populateForm(obj);
+    closeModal('newActivityOverlay');
+    // Reseta o stepper para o passo 1
+    for (let i = 1; i <= TOTAL_STEPS; i++) {
+      const el = document.getElementById(`editStep${i}`);
+      if (el) el.classList.add('hidden');
+    }
+    currentStep = 1;
+    document.getElementById('editStep1').classList.remove('hidden');
+    document.querySelectorAll('.activity-form-step-dot').forEach((dot, i) => {
+      dot.classList.remove('active', 'done');
+      if (i === 0) dot.classList.add('active');
+    });
+    document.getElementById('editBackBtn').style.display = 'none';
+    document.getElementById('editNextBtn').textContent = 'Próximo →';
+    openModal('editFormOverlay');
+  } catch(e) {
+    showToast('JSON inválido. Verifique e tente novamente.');
+  }
+}
+
+function handleCreate() {
+  const nome = document.getElementById('quickName').value.trim();
+  if (!nome) { showToast('Preencha o nome da atividade.'); return; }
+  showToast(`Rascunho "${nome}" criado!`);
+  closeModal('newActivityOverlay');
+}
+
+// Abre o modal automaticamente para visualização do protótipo
+window.addEventListener('DOMContentLoaded', () => {
+  openModal('newActivityOverlay');
+  // Pré-preenche campos para demonstrar o prompt dinâmico
+  document.getElementById('quickName').value = 'Ubatuba';
+  document.getElementById('quickDesc').value = 'Praias paradisíacas fora de temporada, Mata Atlântica preservada e pousadas charmosas. Ótimo para um final de semana tranquilo a dois.';
+});
+</script>
+</body>
+</html>

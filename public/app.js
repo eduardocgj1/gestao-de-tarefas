@@ -3137,12 +3137,11 @@ function getFilteredActivities() {
   return applyActivityFilters(searchActivitiesFuzzy(activities, activitySearchQuery));
 }
 
-function groupActivitiesByCategory(list) {
-  const groups = new Map();
+function groupActivitiesByStatus(list) {
+  const groups = new Map(Object.keys(ACTIVITY_STATUS_LABELS).map(s => [s, []]));
   list.forEach(a => {
-    const key = a.categoria || 'Sem categoria';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(a);
+    if (!groups.has(a.status)) groups.set(a.status, []);
+    groups.get(a.status).push(a);
   });
   groups.forEach(g => g.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
   return groups;
@@ -3158,7 +3157,8 @@ function activityDraftBannerHtml() {
   return `<div class="activity-draft-banner">⚠️ ${count} atividade${count > 1 ? 's' : ''} aguardando detalhamento</div>`;
 }
 
-const ACTIVITY_STATUS_LABELS = { rascunho: 'Rascunho', quero_fazer: 'Quero fazer', planejada: 'Planejada' };
+const ACTIVITY_STATUS_LABELS = { rascunho: 'Rascunho', quero_fazer: 'Quero fazer', planejada: 'Planejada', realizada: 'Realizada' };
+let activityDisplayView = 'category'; // 'category' | 'status'
 
 // Mapeamento mês (0-indexado) → época trimestral.
 function epocaForMonth(month) {
@@ -3234,25 +3234,68 @@ function activityCostSummaryHtml(a) {
 }
 
 function activityCardHtml(a) {
-  const vibes = a.vibes || [];
+  const isStatusView = activityDisplayView === 'status';
+  const isPlanned    = a.status === 'planejada';
+  const isRealized   = a.status === 'realizada';
+
+  // Variação escolhida (para Planejada/Realizada na visão por status)
+  const chosenVar = (isPlanned || isRealized)
+    ? (a.variacoes || []).find(v => v.id === a.variacaoEscolhidaId) || null
+    : null;
+
+  // Vibes: usa os da variação escolhida se existir, senão base da atividade
+  const vibes    = (chosenVar && chosenVar.vibes && chosenVar.vibes.length ? chosenVar.vibes : a.vibes) || [];
   const vibeChips = vibes.slice(0, 3).map(v => `<span class="tag activity-tag-vibe">${escapeHtml(v)}</span>`).join('');
-  const vibeMore = vibes.length > 3 ? `<span class="tag activity-tag-more">+${vibes.length - 3}</span>` : '';
+  const vibeMore  = vibes.length > 3 ? `<span class="tag activity-tag-more">+${vibes.length - 3}</span>` : '';
+
+  // Custo: usa perfil da variação se existir
+  const costSrc  = (chosenVar && chosenVar.perfisCusto && Object.keys(chosenVar.perfisCusto).length)
+    ? { ...a, perfisCusto: chosenVar.perfisCusto }
+    : a;
+  const cost     = activityCostSummaryHtml(costSrc);
+
+  const realCount  = (a.realizacoes || []).length;
+  const durChips   = (a.modalidadesDuracao || []).map(m => `<span class="tag activity-tag-duracao">${escapeHtml(m)}</span>`).join('');
   const activeVariation = getActiveVariation(a);
-  const cost = activityCostSummaryHtml(a);
-  const realCount = (a.realizacoes || []).length;
-  const durChips = (a.modalidadesDuracao || []).map(m => `<span class="tag activity-tag-duracao">${escapeHtml(m)}</span>`).join('');
+
+  // Subtítulo: variação escolhida + data de início (só em Planejada/Realizada)
+  const subtitleParts = [
+    chosenVar ? escapeHtml(chosenVar.nome) : null,
+    (isPlanned || isRealized) && a.dataInicio ? fmtDateBR(a.dataInicio) : null,
+  ].filter(Boolean);
+  const subtitle = subtitleParts.length
+    ? `<div class="activity-card-subtitle">${subtitleParts.join(' · ')}</div>`
+    : '';
+
+  // Chip de variação escolhida (visão por status — planejada/realizada)
+  const chosenVarChip = chosenVar && isStatusView
+    ? `<span class="tag activity-tag-variation">${escapeHtml(chosenVar.nome)}</span>`
+    : '';
+
+  // Chip de status (visão por categoria, para o usuário saber onde cada atividade está)
+  const statusChip = !isStatusView
+    ? `<span class="tag activity-tag-status activity-status-${a.status}">${ACTIVITY_STATUS_LABELS[a.status] || a.status}</span>`
+    : '';
+
+  // Chip de variação sazonal ativa (só na visão por categoria, quando não tem variação escolhida)
+  const activeVarChip = !isStatusView && activeVariation && !chosenVar
+    ? `<span class="tag activity-tag-variation">🕓 ${escapeHtml(activeVariation.nome)}</span>`
+    : '';
 
   return `
-  <div class="activity-card" data-id="${a.id}">
+  <div class="activity-card" draggable="true" data-id="${a.id}">
     ${a.fotoCapa ? `<div class="activity-card-cover" style="background-image:url('${a.fotoCapa}')"></div>` : ''}
     <div class="activity-card-top">
-      <div class="activity-card-name">${escapeHtml(a.name)}</div>
-      <span class="tag activity-tag-status activity-status-${a.status}">${ACTIVITY_STATUS_LABELS[a.status] || a.status}</span>
+      <div>
+        <div class="activity-card-name">${escapeHtml(a.name)}</div>
+        ${subtitle}
+      </div>
     </div>
     <div class="activity-card-chips">
-      <span class="tag activity-tag-categoria">${escapeHtml(a.categoria)}</span>
+      ${statusChip}
+      ${chosenVarChip}
       ${vibeChips}${vibeMore}
-      ${activeVariation ? `<span class="tag activity-tag-variation">🕓 ${escapeHtml(activeVariation.nome)}</span>` : ''}
+      ${activeVarChip}
       ${realCount > 0 ? `<span class="tag activity-tag-realized">Realizada ${realCount}×</span>` : ''}
     </div>
     <div class="activity-card-meta">
@@ -3262,11 +3305,38 @@ function activityCardHtml(a) {
   </div>`;
 }
 
-function activityGroupHtml(categoria, list) {
+function activityColumnHtml(status, list) {
   return `
-  <section class="activity-group">
-    <h2 class="activity-group-title">${escapeHtml(categoria)}</h2>
-    <div class="activity-group-grid">
+  <section class="activity-column">
+    <div class="activity-column-header">
+      <span class="activity-column-title activity-status-${status}">${ACTIVITY_STATUS_LABELS[status] || status}</span>
+      <span class="activity-column-count">${list.length}</span>
+    </div>
+    <div class="activity-column-body" data-status="${status}">
+      ${list.map(a => activityCardHtml(a)).join('') || '<div class="activity-column-empty">Nenhuma atividade</div>'}
+    </div>
+  </section>`;
+}
+
+// ─── Vista por categoria ────────────────────────────────────
+function groupActivitiesByCategoria(list) {
+  const groups = new Map();
+  list.forEach(a => {
+    if (!groups.has(a.categoria)) groups.set(a.categoria, []);
+    groups.get(a.categoria).push(a);
+  });
+  // Ordena categorias alfabeticamente
+  return new Map([...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+}
+
+function activityCategoryGroupHtml(categoria, list) {
+  return `
+  <section class="activity-column">
+    <div class="activity-column-header">
+      <span class="activity-column-title activity-tag-categoria">${escapeHtml(categoria)}</span>
+      <span class="activity-column-count">${list.length}</span>
+    </div>
+    <div class="activity-column-body" data-categoria="${escapeHtml(categoria)}">
       ${list.map(a => activityCardHtml(a)).join('')}
     </div>
   </section>`;
@@ -3286,10 +3356,16 @@ function renderActivities() {
   }
 
   const filtered = getFilteredActivities();
-  const groups = groupActivitiesByCategory(filtered);
-  const groupsHtml = [...groups.entries()].map(([categoria, list]) => activityGroupHtml(categoria, list)).join('');
 
-  container.innerHTML = banner + (groupsHtml || activitiesEmptyStateHtml());
+  if (activityDisplayView === 'category') {
+    const groups = groupActivitiesByCategoria(filtered);
+    const columnsHtml = [...groups.entries()].map(([cat, list]) => activityCategoryGroupHtml(cat, list)).join('');
+    container.innerHTML = banner + `<div class="activities-board">${columnsHtml}</div>`;
+  } else {
+    const groups = groupActivitiesByStatus(filtered);
+    const columnsHtml = [...groups.entries()].map(([status, list]) => activityColumnHtml(status, list)).join('');
+    container.innerHTML = banner + `<div class="activities-board">${columnsHtml}</div>`;
+  }
 }
 
 // ---------- criação rápida (Fluxo 1) ----------
@@ -3302,7 +3378,7 @@ function createBlankActivity(name, categoria) {
     antecedenciaMiniDias: null, decisaoUltimaHora: false, localidade: null, distanciaSP: null,
     condicaoClimaticaIdeal: [], temperaturaMiniCelsius: null, epocaIdeal: [], perfilGrupo: [],
     tamanhoGrupo: null, condicionamentoFisico: null, evitarAltaTemporada: false, repetivel: true, petFriendly: null,
-    perfisCusto: {}, variacoes: [], notas: null, links: [],
+    perfisCusto: {}, variacoes: [], variacaoEscolhidaId: null, notas: null, links: [],
     dataInicio: null, boardDestinoId: null, realizacoes: [],
     checklistTasks: [], createdAt: now, updatedAt: now,
   };
@@ -3317,8 +3393,21 @@ function customCategoriesInUse() {
   return [...set];
 }
 
+let activityAiPanelOpen = false;
+
+function resetActivityAiPanel() {
+  activityAiPanelOpen = false;
+  document.getElementById('activityAiPanel').classList.remove('open');
+  document.getElementById('activityAiToggleBtn').classList.remove('active');
+  document.getElementById('activityAiJsonArea').value = '';
+  document.getElementById('activityAiConfirmBtn').disabled = true;
+  const copyBtn = document.getElementById('activityCopyPromptBtn');
+  if (copyBtn) copyBtn.textContent = '📋 Copiar prompt';
+}
+
 function openActivityQuickCreate() {
   document.getElementById('activityQuickName').value = '';
+  document.getElementById('activityQuickDesc').value = '';
   const sel = document.getElementById('activityQuickCategoria');
   sel.innerHTML = ACTIVITY_CATEGORIES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   sel.value = ACTIVITY_CATEGORIES[0];
@@ -3326,11 +3415,13 @@ function openActivityQuickCreate() {
   document.getElementById('activityQuickCategoriaCustom').value = '';
   document.getElementById('activityQuickCategoriaCustomList').innerHTML =
     customCategoriesInUse().map(c => `<option value="${escapeHtml(c)}">`).join('');
+  resetActivityAiPanel();
   document.getElementById('activityQuickCreateOverlay').classList.remove('hidden');
   document.getElementById('activityQuickName').focus();
 }
 function closeActivityQuickCreate() {
   document.getElementById('activityQuickCreateOverlay').classList.add('hidden');
+  resetActivityAiPanel();
 }
 function confirmActivityQuickCreate() {
   const name = document.getElementById('activityQuickName').value.trim();
@@ -3348,6 +3439,152 @@ function confirmActivityQuickCreate() {
   renderActivities();
 }
 
+// ── Painel IA no quick-create ────────────────────────────────────────────────
+function toggleActivityAiPanel() {
+  activityAiPanelOpen = !activityAiPanelOpen;
+  document.getElementById('activityAiPanel').classList.toggle('open', activityAiPanelOpen);
+  document.getElementById('activityAiToggleBtn').classList.toggle('active', activityAiPanelOpen);
+}
+
+function buildActivityPrompt() {
+  const nome = document.getElementById('activityQuickName').value.trim();
+  const desc = document.getElementById('activityQuickDesc').value.trim();
+  const lines = [];
+  if (nome) lines.push(`Nome: ${nome}`);
+  if (desc) lines.push(`Descrição: ${desc}`);
+  const userInput = lines.length ? lines.join('\n') : '[sem informação — pergunte ao usuário]';
+  return `Você é um assistente de planejamento pessoal. O usuário vai descrever uma atividade que quer fazer — pode ser só o título, pode ser uma descrição mais detalhada, pode incluir contexto pessoal (com quem vai, ocasião, preferências).
+
+ANTES DE GERAR O JSON:
+- Avalie se você tem informação suficiente para preencher os campos com qualidade.
+- Se o input for ambíguo em algo que impacte campos obrigatórios ou estimativas centrais (categoria, custo, duração), faça perguntas objetivas — no máximo 3, todas numa única mensagem.
+- Se o input for suficiente, vá direto ao JSON sem comentários.
+- Campos opcionais sem informação suficiente devem ser preenchidos com null.
+
+REGRAS DE PREENCHIMENTO:
+- Preencha com base no seu conhecimento sobre a atividade e no contexto fornecido.
+- Inclua variações sazonais apenas quando a experiência mudar significativamente por época.
+- Nas variações, preencha APENAS os campos que diferem da base.
+- Estime custos em R$ por pessoa, considerando São Paulo como cidade de origem.
+- O checklist deve ser prático e específico. Para cada item, estime antecedência mínima, máxima e recomendada em dias antes da data da atividade.
+
+RETORNE SOMENTE O JSON, sem texto antes ou depois.
+
+SCHEMA:
+{
+  "nome": "",
+  "categoria": "",
+  "descricao": "",
+  "vibes": [],
+  "modalidades_duracao": [],
+  "meios_transporte": [],
+  "nivel_planejamento": "",
+  "antecedencia_minima_dias": null,
+  "decisao_ultima_hora": false,
+  "distancia_sp": "",
+  "condicao_climatica_ideal": [],
+  "temperatura_minima_ideal_celsius": null,
+  "epoca_ideal": [],
+  "perfil_grupo": [],
+  "tamanho_grupo": "",
+  "condicionamento_fisico": "",
+  "evitar_alta_temporada": false,
+  "repetivel": true,
+  "pet_friendly": null,
+  "perfis_custo": {
+    "economico": { "baixa_temporada": [min, max], "alta_temporada": [min, max] },
+    "padrao":    { "baixa_temporada": [min, max], "alta_temporada": [min, max] },
+    "conforto":  { "baixa_temporada": [min, max], "alta_temporada": [min, max] }
+  },
+  "variacoes": [
+    {
+      "nome": "",
+      "epocas_cobertas": [],
+      "inclui_feriados_prolongados": false,
+      "vibes": [],
+      "condicao_climatica_ideal": [],
+      "temperatura_minima_celsius": null,
+      "antecedencia_minima_dias": null,
+      "decisao_ultima_hora": null,
+      "perfis_custo": {},
+      "modalidades_duracao": [],
+      "meios_transporte": [],
+      "perfil_grupo": [],
+      "evitar_alta_temporada": null,
+      "notas": ""
+    }
+  ],
+  "checklist_sugerido": [
+    {
+      "name": "",
+      "antecedencia_minima_dias": null,
+      "antecedencia_max_dias": null,
+      "antecedencia_rec_dias": null
+    }
+  ]
+}
+
+--- ATIVIDADE ---
+${userInput}`;
+}
+
+async function copyActivityPrompt() {
+  const prompt = buildActivityPrompt();
+  try {
+    await navigator.clipboard.writeText(prompt);
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = prompt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  const btn = document.getElementById('activityCopyPromptBtn');
+  const original = btn.textContent;
+  btn.textContent = '✓ Prompt copiado!';
+  setTimeout(() => { btn.textContent = original; }, 3000);
+}
+
+function onActivityAiJsonInput() {
+  const val = document.getElementById('activityAiJsonArea').value.trim();
+  let valid = false;
+  try { valid = validateActivityImportJson(JSON.parse(val)).valid; } catch(e) {}
+  document.getElementById('activityAiConfirmBtn').disabled = !valid;
+}
+
+function confirmActivityImportFromQuickCreate() {
+  const raw = document.getElementById('activityAiJsonArea').value.trim();
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch(e) {
+    alert('JSON inválido. Verifique e tente novamente.');
+    return;
+  }
+  const { valid, errors } = validateActivityImportJson(json);
+  if (!valid) {
+    alert('JSON inválido:\n' + errors.map(e => `- ${e.field}: ${e.message}`).join('\n'));
+    return;
+  }
+  const activity = importJsonToActivity(json);
+  activities.push(activity);
+  save();
+  closeActivityQuickCreate();
+  openActivityFormAfterImport(activity.id);
+}
+
+function openActivityFormAfterImport(id) {
+  const a = findActivity(id);
+  if (!a) return;
+  editingActivityId = id;
+  activityFormMode = 'edit';
+  showActivityFormStep(1);
+  renderActivityFormStep(1);
+  document.getElementById('activityFormImportBanner').classList.remove('hidden');
+  document.getElementById('activityFormOverlay').classList.remove('hidden');
+}
+
 document.getElementById('activitySearchInput').addEventListener('input', e => {
   activitySearchQuery = e.target.value;
   renderActivities();
@@ -3361,6 +3598,10 @@ document.getElementById('activityQuickCategoria').addEventListener('change', e =
   document.getElementById('activityQuickCategoriaCustomField').classList.toggle('hidden', e.target.value !== 'Personalizada');
 });
 document.getElementById('activityQuickCreateBtn').addEventListener('click', confirmActivityQuickCreate);
+document.getElementById('activityAiToggleBtn').addEventListener('click', toggleActivityAiPanel);
+document.getElementById('activityCopyPromptBtn').addEventListener('click', copyActivityPrompt);
+document.getElementById('activityAiJsonArea').addEventListener('input', onActivityAiJsonInput);
+document.getElementById('activityAiConfirmBtn').addEventListener('click', confirmActivityImportFromQuickCreate);
 
 // ---------- modal de detalhes ----------
 function detailRow(label, value) {
@@ -3418,7 +3659,7 @@ function activityDetailConditionsHtml(a) {
   `;
 }
 
-function activityVariationCardHtml(v, isActive) {
+function activityVariationCardHtml(v, isActive, isChosen) {
   const rows = ACTIVITY_VARIATION_MERGE_FIELDS
     .filter(f => v[f] != null && !(Array.isArray(v[f]) && !v[f].length))
     .map(f => detailRow(f, Array.isArray(v[f]) ? v[f] : String(v[f])))
@@ -3426,7 +3667,9 @@ function activityVariationCardHtml(v, isActive) {
   return `
   <div class="activity-variation-card${isActive ? ' active' : ''}" data-id="${v.id}">
     <div class="activity-variation-card-header">
-      <strong>${escapeHtml(v.nome)}</strong>${isActive ? ' <span class="tag activity-tag-variation">Ativa agora</span>' : ''}
+      <strong>${escapeHtml(v.nome)}</strong>
+      ${isChosen ? ' <span class="tag activity-tag-variation">Escolhida ✓</span>' : ''}
+      ${isActive ? ' <span class="tag activity-tag-variation">Ativa agora</span>' : ''}
       <span class="activity-variation-card-epocas">${(v.epocasCobertas || []).map(escapeHtml).join(', ')}${v.incluiFeriadosProlongados ? ' + feriados prolongados' : ''}</span>
     </div>
     ${rows}
@@ -3438,7 +3681,7 @@ function activityDetailVariationsHtml(a) {
   const active = getActiveVariation(a);
   return `
     <h3>Variações sazonais</h3>
-    ${variations.length ? variations.map(v => activityVariationCardHtml(v, active && active.id === v.id)).join('') : '<div class="activity-detail-empty">Nenhuma variação sazonal cadastrada.</div>'}
+    ${variations.length ? variations.map(v => activityVariationCardHtml(v, active && active.id === v.id, a.variacaoEscolhidaId === v.id)).join('') : '<div class="activity-detail-empty">Nenhuma variação sazonal cadastrada.</div>'}
   `;
 }
 
@@ -3494,8 +3737,11 @@ function activityDetailFooterHtml(a) {
   if (a.status === 'planejada') {
     buttons.push(`<button type="button" class="btn-neutral activity-cancel-plan-btn" data-id="${a.id}">Cancelar planejamento</button>`);
   }
-  if (a.status !== 'rascunho') {
+  if (a.status !== 'rascunho' && a.status !== 'realizada') {
     buttons.push(`<button type="button" class="btn-neutral activity-realize-btn" data-id="${a.id}">Marcar como realizada</button>`);
+  }
+  if (a.status === 'realizada') {
+    buttons.push(`<button type="button" class="btn-neutral activity-realize-btn" data-id="${a.id}" title="Registrar outra realização">Registrar nova visita</button>`);
   }
   buttons.push(`<button type="button" class="btn-neutral activity-delete-btn" data-id="${a.id}">Excluir atividade</button>`);
   return buttons.join('');
@@ -3506,6 +3752,13 @@ function openActivityDetail(id) {
   if (!a) return;
   activityDetailId = id;
   document.getElementById('activityDetailTitle').textContent = a.name;
+  const statusEl = document.getElementById('activityDetailStatus');
+  statusEl.textContent = ACTIVITY_STATUS_LABELS[a.status] || a.status;
+  statusEl.className = `tag activity-tag-status activity-status-${a.status}`;
+  const realCount = (a.realizacoes || []).length;
+  const realizedBadgeEl = document.getElementById('activityDetailRealizedBadge');
+  realizedBadgeEl.textContent = `Realizada ${realCount}×`;
+  realizedBadgeEl.classList.toggle('hidden', realCount === 0);
   document.getElementById('activityDetailOverview').innerHTML = activityDetailOverviewHtml(a);
   document.getElementById('activityDetailLogistics').innerHTML = activityDetailLogisticsHtml(a);
   document.getElementById('activityDetailConditions').innerHTML = activityDetailConditionsHtml(a);
@@ -3560,6 +3813,116 @@ document.getElementById('activitiesView').addEventListener('click', e => {
   const card = e.target.closest('.activity-card');
   if (card) { openActivityDetail(card.dataset.id); return; }
 });
+
+// ---------- kanban de status (drag-and-drop entre colunas) ----------
+// Move a atividade para o status da coluna de destino diretamente — sem exigir checklist,
+// board ou qualquer outro campo preenchido (o kanban é a via rápida de mudança de status;
+// o fluxo de "Mover para Planejada" no detalhe, com data/board, continua existindo à parte).
+function setActivityStatus(a, newStatus) {
+  a.status = newStatus;
+  a.updatedAt = Date.now();
+  save();
+  renderActivities();
+  if (activityDetailId === a.id) openActivityDetail(a.id);
+}
+
+let pendingVariationPickActivityId = null;
+
+function openActivityVariationPicker(activityId) {
+  const a = findActivity(activityId);
+  if (!a) return;
+  pendingVariationPickActivityId = activityId;
+
+  // Nome da atividade no cabeçalho do modal
+  const nameEl = document.getElementById('activityVariationPickerActivityName');
+  if (nameEl) nameEl.textContent = a.name;
+
+  // Opções de variação
+  document.getElementById('activityVariationPickerOptions').innerHTML = (a.variacoes || []).map(v => `
+    <label class="activity-variation-picker-option">
+      <input type="radio" name="activityVariationPick" value="${v.id}">
+      <div>
+        <div style="font:700 13px var(--font-sora);">${escapeHtml(v.nome)}</div>
+        ${v.epocasCobertas && v.epocasCobertas.length ? `<div style="font:500 11.5px var(--font-sora);color:var(--color-text-tertiary);margin-top:2px;">${v.epocasCobertas.map(escapeHtml).join(' · ')}</div>` : ''}
+      </div>
+    </label>`).join('');
+
+  // Data padrão: +14 dias
+  const d = new Date(); d.setDate(d.getDate() + 14);
+  const dateEl = document.getElementById('activityVariationPickerDate');
+  if (dateEl) dateEl.value = d.toISOString().split('T')[0];
+
+  document.getElementById('activityVariationPickerConfirmBtn').disabled = (a.variacoes || []).length > 0;
+  document.getElementById('activityVariationPickerOverlay').classList.remove('hidden');
+}
+function closeActivityVariationPicker() {
+  document.getElementById('activityVariationPickerOverlay').classList.add('hidden');
+  pendingVariationPickActivityId = null;
+}
+document.getElementById('closeActivityVariationPicker').addEventListener('click', closeActivityVariationPicker);
+document.getElementById('activityVariationPickerCancelBtn').addEventListener('click', closeActivityVariationPicker);
+document.getElementById('activityVariationPickerOverlay').addEventListener('click', e => {
+  if (e.target.id === 'activityVariationPickerOverlay') closeActivityVariationPicker();
+});
+document.getElementById('activityVariationPickerOverlay').addEventListener('change', e => {
+  if (e.target.name === 'activityVariationPick') {
+    document.getElementById('activityVariationPickerConfirmBtn').disabled = !e.target.value;
+  }
+});
+document.getElementById('activityVariationPickerConfirmBtn').addEventListener('click', () => {
+  const a = findActivity(pendingVariationPickActivityId);
+  const checked = document.querySelector('input[name="activityVariationPick"]:checked');
+  if (!a) return;
+  if (checked) a.variacaoEscolhidaId = checked.value;
+  const dateEl = document.getElementById('activityVariationPickerDate');
+  if (dateEl && dateEl.value) a.dataInicio = dateEl.value;
+  setActivityStatus(a, 'planejada');
+  closeActivityVariationPicker();
+});
+
+const activitiesView = document.getElementById('activitiesView');
+activitiesView.addEventListener('dragstart', e => {
+  const card = e.target.closest('.activity-card');
+  if (!card) return;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', card.dataset.id);
+  setTimeout(() => card.classList.add('dragging'), 0);
+});
+activitiesView.addEventListener('dragend', e => {
+  const card = e.target.closest('.activity-card');
+  if (card) card.classList.remove('dragging');
+  activitiesView.querySelectorAll('.activity-column-body.drag-over').forEach(el => el.classList.remove('drag-over'));
+});
+activitiesView.addEventListener('dragover', e => {
+  const col = e.target.closest('.activity-column-body');
+  if (!col) return;
+  e.preventDefault();
+  if (!col.classList.contains('drag-over')) {
+    activitiesView.querySelectorAll('.activity-column-body.drag-over').forEach(el => el.classList.remove('drag-over'));
+    col.classList.add('drag-over');
+  }
+});
+activitiesView.addEventListener('drop', e => {
+  const col = e.target.closest('.activity-column-body');
+  if (!col) return;
+  e.preventDefault();
+  col.classList.remove('drag-over');
+  const id = e.dataTransfer.getData('text/plain');
+  const a = findActivity(id);
+  const newStatus = col.dataset.status;
+  if (!a || newStatus === undefined || a.status === newStatus) return;
+  if (newStatus === 'planejada') {
+    // Sempre abre o picker — com variações para escolher, sem variações só pede data
+    openActivityVariationPicker(a.id);
+    return;
+  }
+  if (newStatus === 'realizada') {
+    openActivityRealization(a.id, null);
+    return;
+  }
+  setActivityStatus(a, newStatus);
+});
+
 document.getElementById('closeActivityDetail').addEventListener('click', closeActivityDetail);
 document.getElementById('activityDetailOverlay').addEventListener('click', e => { if (e.target.id === 'activityDetailOverlay') closeActivityDetail(); });
 document.getElementById('activityDetailEditBtn').addEventListener('click', () => {
@@ -3581,6 +3944,7 @@ function openActivityForm(id) {
 }
 function closeActivityForm() {
   document.getElementById('activityFormOverlay').classList.add('hidden');
+  document.getElementById('activityFormImportBanner').classList.add('hidden');
   editingActivityId = null;
   renderActivities();
 }
@@ -4547,8 +4911,10 @@ document.getElementById('activityRealizationFields').addEventListener('click', e
   starsEl.innerHTML = starsInputHtml(n);
 });
 
-// Registra (ou edita) uma realização: adiciona/atualiza `activity.realizacoes` e volta o status
-// para quero_fazer, independentemente do status anterior — permite realizar novamente depois.
+// Registra (ou edita) uma realização: adiciona/atualiza `activity.realizacoes`.
+// Se for uma nova realização (não edição), muda o status para 'realizada' e pergunta
+// se o usuário quer manter a atividade em Quero Fazer para refazê-la no futuro.
+let pendingKeepActivityId = null;
 function confirmActivityRealization() {
   const a = findActivity(activityDetailId);
   if (!a) return;
@@ -4556,6 +4922,7 @@ function confirmActivityRealization() {
   const today = toKey(new Date());
   if (!data || data > today) { alert('A data realizada deve ser hoje ou uma data passada.'); return; }
   const gastoRaw = document.getElementById('real-gasto').value;
+  const isNew = !editingRealizationId;
   const registro = {
     id: editingRealizationId || uid(),
     data,
@@ -4569,18 +4936,70 @@ function confirmActivityRealization() {
   a.realizacoes = a.realizacoes || [];
   const idx = a.realizacoes.findIndex(x => x.id === registro.id);
   if (idx >= 0) a.realizacoes[idx] = registro; else a.realizacoes.push(registro);
-  a.status = 'quero_fazer';
-  a.updatedAt = Date.now();
-  save();
-  closeActivityRealization();
-  openActivityDetail(a.id);
-  renderActivities();
+
+  if (isNew) {
+    // Nova realização: marca como realizada e pergunta se quer manter em Quero Fazer
+    a.status = 'realizada';
+    a.updatedAt = Date.now();
+    save();
+    closeActivityRealization();
+    renderActivities();
+    pendingKeepActivityId = a.id;
+    const nameEl = document.getElementById('activityKeepQueroFazerName');
+    if (nameEl) nameEl.textContent = a.name;
+    document.getElementById('activityKeepQueroFazerOverlay').classList.remove('hidden');
+  } else {
+    // Edição de realização existente: só salva e volta para o detalhe
+    a.updatedAt = Date.now();
+    save();
+    closeActivityRealization();
+    openActivityDetail(a.id);
+    renderActivities();
+  }
 }
 
 document.getElementById('closeActivityRealization').addEventListener('click', closeActivityRealization);
 document.getElementById('activityRealizationCancelBtn').addEventListener('click', closeActivityRealization);
 document.getElementById('activityRealizationOverlay').addEventListener('click', e => { if (e.target.id === 'activityRealizationOverlay') closeActivityRealization(); });
 document.getElementById('activityRealizationConfirmBtn').addEventListener('click', confirmActivityRealization);
+
+// ---------- diálogo "Manter em Quero Fazer?" ----------
+document.getElementById('activityKeepYesBtn').addEventListener('click', () => {
+  document.getElementById('activityKeepQueroFazerOverlay').classList.add('hidden');
+  const a = findActivity(pendingKeepActivityId);
+  if (a) {
+    // Mantém em Quero Fazer: duplica (atividade volta ao ciclo) — status volta para quero_fazer,
+    // a realização já foi registrada em a.realizacoes e continua visível no histórico.
+    a.status = 'quero_fazer';
+    a.variacaoEscolhidaId = null;
+    a.dataInicio = null;
+    a.updatedAt = Date.now();
+    save();
+    renderActivities();
+    openActivityDetail(a.id);
+  }
+  pendingKeepActivityId = null;
+});
+document.getElementById('activityKeepNoBtn').addEventListener('click', () => {
+  document.getElementById('activityKeepQueroFazerOverlay').classList.add('hidden');
+  const a = findActivity(pendingKeepActivityId);
+  if (a) openActivityDetail(a.id);
+  pendingKeepActivityId = null;
+});
+
+// ---------- toggle de visualização (Categoria / Status) ----------
+document.getElementById('viewByCategoryBtn').addEventListener('click', () => {
+  activityDisplayView = 'category';
+  document.getElementById('viewByCategoryBtn').classList.add('active');
+  document.getElementById('viewByStatusBtn').classList.remove('active');
+  renderActivities();
+});
+document.getElementById('viewByStatusBtn').addEventListener('click', () => {
+  activityDisplayView = 'status';
+  document.getElementById('viewByStatusBtn').classList.add('active');
+  document.getElementById('viewByCategoryBtn').classList.remove('active');
+  renderActivities();
+});
 
 // ---------- exclusão de atividade ----------
 // Bloqueada quando já houve ao menos 1 realização (ver Fluxo 7 da spec). O delete de `tasks`

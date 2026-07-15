@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS activities (
   perfis_custo                JSONB NOT NULL DEFAULT '{}',
   -- Variações sazonais
   variacoes                   JSONB NOT NULL DEFAULT '[]',
+  variacao_escolhida_id       TEXT,             -- id da variação escolhida ao mover para planejada
   -- Planejamento
   notas                       TEXT,
   links                       JSONB NOT NULL DEFAULT '[]',  -- [{ url, titulo }]
@@ -137,6 +138,10 @@ ALTER TABLE tasks
   ADD COLUMN IF NOT EXISTS antecedencia_minima_dias INTEGER DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS antecedencia_max_dias    INTEGER DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS antecedencia_rec_dias    INTEGER DEFAULT NULL;
+
+-- Variação escolhida ao mover a atividade para "planejada" (kanban de status)
+ALTER TABLE activities
+  ADD COLUMN IF NOT EXISTS variacao_escolhida_id     TEXT;
 
 -- Índices
 CREATE INDEX IF NOT EXISTS tasks_activity_id_idx     ON tasks(activity_id);
