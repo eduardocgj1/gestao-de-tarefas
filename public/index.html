@@ -675,6 +675,11 @@
       <div id="finCatPills" class="fin-cat-pills-row"></div>
     </div>
 
+    <div id="finEnvelopeField">
+      <label>Envelope <span style="font-weight:500;font-size:11px;color:var(--color-text-tertiary)">(opcional)</span></label>
+      <div id="finEnvelopePills" class="fin-cat-pills-row"></div>
+    </div>
+
     <div id="finWalletField">
       <label>Carteira</label>
       <div id="finWalletPills" class="fin-cat-pills-row"></div>
@@ -694,6 +699,77 @@
     </div>
   </div>
 </div>
+
+<!-- Finance: Novo Envelope Modal -->
+<div id="finEnvelopeModal" class="modal-overlay hidden">
+  <div class="modal fin-modal fin-envelope-modal">
+    <button id="finEnvelopeClose" class="close-btn">&times;</button>
+    <h2>Novo envelope</h2>
+
+    <div class="fin-env-kind-toggle">
+      <button type="button" class="fin-env-kind-btn active" data-env-kind="event"><span>✉️</span><strong>Evento único</strong><small>começo e fim</small></button>
+      <button type="button" class="fin-env-kind-btn" data-env-kind="recurring"><span>🔁</span><strong>Recorrente</strong><small>ciclo automático</small></button>
+      <button type="button" class="fin-env-kind-btn" data-env-kind="project"><span>🧩</span><strong>Projeto</strong><small>sub-envelopes</small></button>
+    </div>
+
+    <label>Nome
+      <input type="text" id="finEnvName" class="f-name" placeholder="Ex.: Viagem a Buenos Aires">
+    </label>
+
+    <div id="finEnvEventFields">
+      <label style="margin-top:4px">Tipo de evento</label>
+      <div id="finEnvTypePills" class="fin-cat-pills-row"></div>
+    </div>
+
+    <div id="finEnvColorField">
+      <label style="margin-top:4px">Cor</label>
+      <div id="finEnvColorPicker" class="fin-color-picker">
+        <button type="button" class="fin-color-opt" data-color="blue" style="background:#3E6FBD" title="Azul"></button>
+        <button type="button" class="fin-color-opt" data-color="green" style="background:#3A6604" title="Verde"></button>
+        <button type="button" class="fin-color-opt" data-color="amber" style="background:#C07C30" title="Âmbar"></button>
+        <button type="button" class="fin-color-opt" data-color="teal" style="background:#1F7A6E" title="Teal"></button>
+        <button type="button" class="fin-color-opt" data-color="red" style="background:#C1622D" title="Vermelho"></button>
+        <button type="button" class="fin-color-opt" data-color="purple" style="background:#7B4FA0" title="Roxo"></button>
+        <button type="button" class="fin-color-opt" data-color="gray" style="background:#9A9488" title="Cinza"></button>
+      </div>
+    </div>
+
+    <label id="finEnvBudgetLabel">Orçamento (R$)
+      <input type="number" id="finEnvBudget" min="0" step="0.01" placeholder="0,00">
+    </label>
+
+    <div id="finEnvPeriodFields" class="fin-env-field-row">
+      <label>Início
+        <input type="date" id="finEnvStart">
+      </label>
+      <label>Fim
+        <input type="date" id="finEnvEnd">
+      </label>
+    </div>
+
+    <div id="finEnvRecurrenceField" class="hidden">
+      <label>Cadência</label>
+      <div class="fin-nature-row">
+        <button type="button" class="fin-nature-btn active" data-env-recurrence="weekly">Semanal</button>
+        <button type="button" class="fin-nature-btn" data-env-recurrence="monthly">Mensal</button>
+      </div>
+    </div>
+
+    <div id="finEnvSubField" class="hidden">
+      <label>Sub-envelopes</label>
+      <div id="finEnvSubRows" class="fin-env-sub-editor"></div>
+      <button type="button" id="finEnvAddSub" class="fin-bud-add-fixed-btn" style="margin-top:8px"><span>+</span> Adicionar sub-envelope</button>
+    </div>
+
+    <div class="modal-footer" style="margin-top:20px">
+      <button type="button" id="finEnvelopeCancel" class="btn-neutral">Cancelar</button>
+      <button type="button" id="finEnvelopeSave" class="btn-primary">Criar envelope</button>
+    </div>
+  </div>
+</div>
+
+<div id="finEnvelopeDrawerOverlay" class="fin-env-drawer-overlay hidden"></div>
+<aside id="finEnvelopeDrawer" class="fin-env-drawer hidden"></aside>
 
 <!-- Finance: Planned Purchase Modal -->
 <div id="finPurchaseModal" class="modal-overlay hidden">

@@ -17,21 +17,40 @@ const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'application/jav
 const memoryDb = {
   boards: [], tasks: [], calendar_events: [], people: [], app_state: [], activities: [],
   finance_categories: [], finance_wallets: [], finance_transactions: [],
-  finance_planned_purchases: [], finance_budget_items: [],
+  finance_planned_purchases: [], finance_budget_items: [], finance_envelopes: [],
 };
 
 function makeMemorySupabaseClient() {
+  const matchesFilters = (row, filters) => filters.every(filter => {
+    switch (filter.type) {
+      case 'eq':
+        return row[filter.column] === filter.value;
+      case 'like': {
+        const pattern = String(filter.pattern || '');
+        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*');
+        const regex = new RegExp(`^${escaped}$`, 'i');
+        return regex.test(String(row[filter.column] ?? ''));
+      }
+      case 'is':
+        return row[filter.column] === filter.value;
+      default:
+        return true;
+    }
+  });
+
   return {
     from(table) {
       if (!memoryDb[table]) memoryDb[table] = [];
+      const filters = [];
       return {
         select(_cols) {
-          const data = memoryDb[table].map(row => ({ ...row }));
-          // Retorna um "thenable" encadeável — eq/like/is são no-ops em dev mode
+          const data = memoryDb[table]
+            .map(row => ({ ...row }))
+            .filter(row => matchesFilters(row, filters));
           const builder = {
-            eq() { return this; },
-            like() { return this; },
-            is() { return this; },
+            eq(column, value) { filters.push({ type: 'eq', column, value }); return this; },
+            like(column, pattern) { filters.push({ type: 'like', column, pattern }); return this; },
+            is(column, value) { filters.push({ type: 'is', column, value }); return this; },
             not() { return this; },
             then(resolve, reject) {
               return Promise.resolve({ data, error: null }).then(resolve, reject);
@@ -54,25 +73,28 @@ function makeMemorySupabaseClient() {
           return Promise.resolve({ error: null });
         },
         update(updates) {
-          // Em dev mode, aplica update em todas as linhas (single user)
-          memoryDb[table] = memoryDb[table].map(row => ({ ...row, ...updates }));
+          const filtered = memoryDb[table].filter(row => matchesFilters(row, filters));
+          memoryDb[table] = memoryDb[table].map(row => {
+            if (!filtered.includes(row)) return row;
+            return { ...row, ...updates };
+          });
           return {
-            is() { return Promise.resolve({ error: null }); },
-            eq() { return Promise.resolve({ error: null }); },
+            is(column, value) { filters.push({ type: 'is', column, value }); return Promise.resolve({ error: null }); },
+            eq(column, value) { filters.push({ type: 'eq', column, value }); return Promise.resolve({ error: null }); },
             filter() { return Promise.resolve({ error: null }); },
           };
         },
         delete() {
           const builder = {
-            eq() { return this; },  // no-op em dev mode (single user)
+            eq(column, value) { filters.push({ type: 'eq', column, value }); return this; },
             not(column, op, pattern) {
               if (op === 'is') {
-                memoryDb[table] = [];
+                memoryDb[table] = memoryDb[table].filter(row => !matchesFilters(row, filters));
                 return Promise.resolve({ error: null });
               }
               const inner = String(pattern).replace(/^\(|\)$/g, '');
               const allowed = new Set(inner.split(',').filter(Boolean));
-              memoryDb[table] = memoryDb[table].filter(r => allowed.has(String(r[column])));
+              memoryDb[table] = memoryDb[table].filter(r => !allowed.has(String(r[column])) && matchesFilters(r, filters));
               return Promise.resolve({ error: null });
             },
           };
@@ -520,6 +542,7 @@ function appTransactionToDb(t) {
     date:        t.date,
     category_id: t.categoryId   ?? null,
     wallet_id:   t.walletId     ?? null,
+    envelope_id: t.envelopeId   ?? null,
   };
 }
 function dbTransactionToApp(t) {
@@ -532,6 +555,48 @@ function dbTransactionToApp(t) {
     date:        t.date,
     categoryId:  t.category_id  ?? null,
     walletId:    t.wallet_id    ?? null,
+    envelopeId:  t.envelope_id  ?? null,
+  };
+}
+
+function appEnvelopeToDb(e) {
+  return {
+    id:                 e.id,
+    name:               e.name,
+    kind:               e.kind        || 'event',
+    event_type:         e.eventType   ?? null,
+    icon:               e.icon        || '✉️',
+    color:              e.color       || 'gray',
+    budget:             e.budget      ?? null,
+    period_start:       e.periodStart ?? null,
+    period_end:         e.periodEnd   ?? null,
+    status:             e.status      || 'open',
+    closed_at:          e.closedAt    ?? null,
+    parent_id:          e.parentId    ?? null,
+    recurrence:         e.recurrence  ?? null,
+    linked_activity_id: e.linkedActivityId ?? null,
+    sort_order:         e.sortOrder   ?? 0,
+    created_at:         e.createdAt   ?? null,
+  };
+}
+function dbEnvelopeToApp(e) {
+  return {
+    id:               e.id,
+    name:             e.name,
+    kind:             e.kind        || 'event',
+    eventType:        e.event_type  ?? null,
+    icon:             e.icon        || '✉️',
+    color:            e.color       || 'gray',
+    budget:           e.budget === null || e.budget === undefined ? null : Number(e.budget),
+    periodStart:      e.period_start ?? null,
+    periodEnd:        e.period_end   ?? null,
+    status:           e.status      || 'open',
+    closedAt:         e.closed_at   ?? null,
+    parentId:         e.parent_id   ?? null,
+    recurrence:       e.recurrence  ?? null,
+    linkedActivityId: e.linked_activity_id ?? null,
+    sortOrder:        e.sort_order  ?? 0,
+    createdAt:        e.created_at  ?? null,
   };
 }
 
@@ -589,16 +654,20 @@ async function loadFinance(userId) {
     { data: purchases,   error: e3 },
     { data: wallets,     error: e4 },
     { data: budgetItems, error: e5 },
+    { data: envelopes,   error: e6 },
+    { data: envTypes,    error: e7 },
   ] = await Promise.all([
     supabase.from('finance_categories').select('*').eq('user_id', userId),
     supabase.from('finance_transactions').select('*').eq('user_id', userId),
     supabase.from('finance_planned_purchases').select('*').eq('user_id', userId),
     supabase.from('finance_wallets').select('*').eq('user_id', userId),
     supabase.from('finance_budget_items').select('*').eq('user_id', userId),
+    supabase.from('finance_envelopes').select('*').eq('user_id', userId),
+    supabase.from('app_state').select('*').eq('key', `${userId}:envelopeEventTypes`),
   ]);
 
-  if (e1 || e2 || e3 || e4 || e5) {
-    throw new Error([e1, e2, e3, e4, e5].filter(Boolean).map(e => e.message).join('; '));
+  if (e1 || e2 || e3 || e4 || e5 || e6 || e7) {
+    throw new Error([e1, e2, e3, e4, e5, e6, e7].filter(Boolean).map(e => e.message).join('; '));
   }
 
   return {
@@ -607,11 +676,13 @@ async function loadFinance(userId) {
     plannedPurchases: (purchases   || []).map(dbPurchaseToApp),
     wallets:          (wallets     || []).map(dbWalletToApp),
     budgetItems:      (budgetItems || []).map(dbBudgetItemToApp),
+    envelopes:        (envelopes   || []).map(dbEnvelopeToApp),
+    envelopeEventTypes: envTypes?.[0]?.value || [],
   };
 }
 
 async function saveFinance(state, userId) {
-  const { categories = [], transactions = [], plannedPurchases = [], wallets = [], budgetItems = [] } = state;
+  const { categories = [], transactions = [], plannedPurchases = [], wallets = [], budgetItems = [], envelopes = [], envelopeEventTypes = [] } = state;
 
   // Upsert + delete categories
   if (categories.length > 0) {
@@ -692,6 +763,28 @@ async function saveFinance(state, userId) {
       : await q.not('id', 'is', null);
     if (error) throw error;
   }
+
+  // Upsert + delete envelopes
+  if (envelopes.length > 0) {
+    const { error } = await supabase.from('finance_envelopes').upsert(
+      envelopes.map(e => ({ ...appEnvelopeToDb(e), user_id: userId })), { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+  const envelopeIds = envelopes.map(e => e.id);
+  if (Array.isArray(state.envelopes)) {
+    const q = supabase.from('finance_envelopes').delete().eq('user_id', userId);
+    const { error } = envelopeIds.length > 0
+      ? await q.not('id', 'in', `(${envelopeIds.join(',')})`)
+      : await q.not('id', 'is', null);
+    if (error) throw error;
+  }
+
+  const { error: envTypeErr } = await supabase.from('app_state').upsert(
+    [{ key: `${userId}:envelopeEventTypes`, value: envelopeEventTypes }],
+    { onConflict: 'key' }
+  );
+  if (envTypeErr) throw envTypeErr;
 }
 
 // ── Servidor HTTP ────────────────────────────────────────────

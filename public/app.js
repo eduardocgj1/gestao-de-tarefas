@@ -5466,7 +5466,7 @@ function renderActivityDetailHolidays(a) {
 // ================================================================
 
 // --- Estado global de finanças ---
-let financeState = { categories: [], transactions: [], plannedPurchases: [], wallets: [], budgetItems: [] };
+let financeState = { categories: [], transactions: [], plannedPurchases: [], wallets: [], budgetItems: [], envelopes: [], envelopeEventTypes: [] };
 let financeMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let financeTab = 'geral';
 let financeCatFilter = null;
@@ -5475,8 +5475,15 @@ let finTransactionType = 'expense';
 let finTransactionNature = 'variable';
 let finTransactionCatId = null;
 let finTransactionWalletId = null;
+let finTransactionEnvelopeId = null;
 let finEditingTxnId = null;
 let finPurchasePriority = 'medium';
+let finEnvExpandedTypes = new Set(['Viagem', 'Social', 'Recorrentes', 'Projetos', 'Avulsos']);
+let finEnvDraftKind = 'event';
+let finEnvDraftEventType = 'Social';
+let finEnvDraftColor = 'amber';
+let finEnvDrawerId = null;
+let finEnvEditingId = null;
 // Planejamento state
 let finPlanExpandedCats = new Set();
 let finNewCatIcon = '📦';
@@ -5497,7 +5504,10 @@ async function loadFinance() {
     financeState.plannedPurchases = data.plannedPurchases || [];
     financeState.wallets          = data.wallets          || [];
     financeState.budgetItems      = data.budgetItems      || [];
+    financeState.envelopes        = data.envelopes        || [];
+    financeState.envelopeEventTypes = data.envelopeEventTypes || [];
     if (financeState.categories.length === 0) initDefaultFinanceCategories();
+    ensureRecurringEnvelopeInstances();
     renderWalletSettings();
     if (currentView === 'finance') renderFinanceView();
   } catch (err) {
@@ -5614,6 +5624,156 @@ function finCatBarColor(color) {
   return map[color] || '#9A9488';
 }
 
+const FIN_ENV_DEFAULT_TYPES = [
+  { name: 'Social',       icon: '🎉', color: 'amber'  },
+  { name: 'Casal',        icon: '💛', color: 'red'    },
+  { name: 'Viagem',       icon: '✈️', color: 'blue'   },
+  { name: 'Rotina',       icon: '🍱', color: 'green'  },
+  { name: 'Saúde',        icon: '💊', color: 'teal'   },
+  { name: 'Casa',         icon: '🏠', color: 'purple' },
+  { name: 'Profissional', icon: '💼', color: 'gray'   },
+];
+
+function finEnvTypes() {
+  const custom = Array.isArray(financeState.envelopeEventTypes) ? financeState.envelopeEventTypes : [];
+  const byName = new Map();
+  [...FIN_ENV_DEFAULT_TYPES, ...custom].forEach(t => byName.set(t.name, t));
+  return [...byName.values()];
+}
+
+function finEnvTypeMeta(typeName) {
+  return finEnvTypes().find(t => t.name === typeName) || { name: typeName || 'Sem tipo', icon: '✉️', color: 'gray' };
+}
+
+function finMonthBounds(month) {
+  const y = month.getFullYear(), m = month.getMonth();
+  return {
+    start: toKey(new Date(y, m, 1)),
+    end: toKey(new Date(y, m + 1, 0)),
+  };
+}
+
+function finDateInRange(date, start, end) {
+  return (!start || date >= start) && (!end || date <= end);
+}
+
+function finEnvVisibleInMonth(env, month) {
+  const { start, end } = finMonthBounds(month);
+  if (env.kind === 'recurring' || env.kind === 'project') return env.status !== 'closed';
+  if (!env.periodStart && !env.periodEnd) return env.status !== 'closed';
+  return (!env.periodStart || env.periodStart <= end) && (!env.periodEnd || env.periodEnd >= start);
+}
+
+function finEnvTransactions(env, month = null) {
+  const ids = new Set([env.id]);
+  if (env.kind === 'project') financeState.envelopes.filter(e => e.parentId === env.id).forEach(e => ids.add(e.id));
+  const txns = financeState.transactions.filter(t => t.type === 'expense' && ids.has(t.envelopeId));
+  if (!month) return txns;
+  const { start, end } = finMonthBounds(month);
+  return txns.filter(t => t.date >= start && t.date <= end);
+}
+
+function finEnvBudget(env) {
+  if (env.kind === 'project') {
+    const subTotal = financeState.envelopes
+      .filter(e => e.parentId === env.id && e.kind === 'sub')
+      .reduce((s, e) => s + Number(e.budget || 0), 0);
+    return Number(env.budget || subTotal || 0);
+  }
+  return Number(env.budget || 0);
+}
+
+function finEnvSpent(env, month = financeMonth) {
+  return finEnvTransactions(env, month).reduce((s, t) => s + Number(t.amount || 0), 0);
+}
+
+function finEnvProgress(env, month = financeMonth) {
+  const budget = finEnvBudget(env);
+  const spent = finEnvSpent(env, month);
+  const pctRaw = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+  const pct = Math.min(100, pctRaw);
+  const color = pctRaw >= 100 ? 'var(--color-terracotta)' : pctRaw >= 75 ? '#C07C30' : finCatBarColor(env.color);
+  const cls = pctRaw >= 100 ? 'fin-over' : pctRaw >= 75 ? 'fin-warn' : '';
+  return { budget, spent, pct, pctRaw, color, cls };
+}
+
+function finEnvPeriodLabel(env) {
+  if (env.kind === 'recurring') return env.recurrence === 'weekly' ? 'template semanal' : 'template mensal';
+  if (env.kind === 'project') return 'projeto';
+  if (env.kind === 'sub') return 'sub-envelope';
+  if (env.periodStart && env.periodEnd) return `${finFmtDate(env.periodStart)} – ${finFmtDate(env.periodEnd)}`;
+  if (env.periodStart) return `desde ${finFmtDate(env.periodStart)}`;
+  if (env.periodEnd) return `até ${finFmtDate(env.periodEnd)}`;
+  return 'sem período definido';
+}
+
+function finEnvPaceText(env, progress) {
+  if (progress.budget <= 0) return 'sem orçamento definido';
+  if (progress.pctRaw >= 100) return 'orçamento estourado';
+  if (env.kind === 'recurring') return `${progress.pctRaw}% do ciclo atual`;
+  if (env.kind === 'project') return `${progress.pctRaw}% do projeto`;
+  if (!env.periodEnd || env.periodEnd < toKey(new Date())) return `${progress.pctRaw}% do orçamento`;
+  const remaining = Math.max(0, Math.ceil((new Date(env.periodEnd + 'T12:00:00') - new Date()) / 86400000));
+  return remaining ? `${progress.pctRaw}% usado · ${remaining} dias restantes` : `${progress.pctRaw}% usado · termina hoje`;
+}
+
+function ensureRecurringEnvelopeInstances() {
+  const today = toKey(new Date());
+  let changed = false;
+  financeState.envelopes.filter(e => e.kind === 'recurring' && e.status !== 'closed').forEach(template => {
+    const now = new Date(today + 'T12:00:00');
+    let startDate;
+    let endDate;
+    if (template.recurrence === 'monthly') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else {
+      const day = now.getDay();
+      const mondayOffset = day === 0 ? -6 : 1 - day;
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() + mondayOffset);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+    }
+    const periodStart = toKey(startDate);
+    const periodEnd = toKey(endDate);
+    const exists = financeState.envelopes.some(e => e.parentId === template.id && e.periodStart === periodStart);
+    if (!exists) {
+      financeState.envelopes.forEach(e => {
+        if (e.parentId === template.id && e.kind === 'event' && e.status === 'open') {
+          e.status = 'closed';
+          e.closedAt = new Date().toISOString();
+        }
+      });
+      financeState.envelopes.push({
+        id: uid(),
+        name: template.name,
+        kind: 'event',
+        eventType: template.eventType,
+        icon: template.icon || '🔁',
+        color: template.color || 'green',
+        budget: template.budget || 0,
+        periodStart,
+        periodEnd,
+        status: 'open',
+        parentId: template.id,
+        sortOrder: financeState.envelopes.length,
+        createdAt: new Date().toISOString(),
+      });
+      changed = true;
+    }
+  });
+  if (changed) saveFinance();
+}
+
+function finOpenEnvelopesForDate(date) {
+  return financeState.envelopes
+    .filter(e => e.status !== 'closed' && e.kind !== 'recurring')
+    .filter(e => e.kind === 'sub' || e.kind === 'project' || finDateInRange(date, e.periodStart, e.periodEnd))
+    .filter(e => e.kind !== 'project')
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
 // --- Renderização principal ---
 function renderFinanceView() {
   const el = document.getElementById('financeView');
@@ -5629,6 +5789,7 @@ function renderFinanceView() {
   const tabDefs = [
     { id: 'geral',         label: 'Visão geral'    },
     { id: 'lancamentos',   label: 'Lançamentos'    },
+    { id: 'envelopes',     label: 'Envelopes'      },
     { id: 'planejamento',  label: 'Planejamento'   },
     { id: 'planejados',    label: 'Planejados'     },
   ];
@@ -5642,6 +5803,7 @@ function renderFinanceView() {
     <div class="fin-tab-body">
       ${financeTab === 'geral'        ? renderFinanceGeral(summary, cats)          : ''}
       ${financeTab === 'lancamentos'  ? renderFinanceLancamentos(summary, cats)    : ''}
+      ${financeTab === 'envelopes'    ? renderFinanceEnvelopes(summary, cats)      : ''}
       ${financeTab === 'planejamento' ? renderFinancePlanejamento(summary, cats)   : ''}
       ${financeTab === 'planejados'   ? renderFinancePlanejados(summary)           : ''}
     </div>
@@ -5787,6 +5949,33 @@ function renderFinanceView() {
   // Open "new category" modal
   const addCatBtn = el.querySelector('#finAddCatBtn');
   if (addCatBtn) addCatBtn.addEventListener('click', openFinNewCatModal);
+
+  // ── Envelopes tab handlers ────────────────────────────────
+  el.querySelectorAll('[data-env-toggle]').forEach(header => {
+    header.addEventListener('click', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      const type = header.dataset.envToggle;
+      if (finEnvExpandedTypes.has(type)) finEnvExpandedTypes.delete(type);
+      else finEnvExpandedTypes.add(type);
+      renderFinanceView();
+    });
+  });
+  el.querySelectorAll('[data-env-open]').forEach(row => {
+    row.addEventListener('click', () => openFinEnvelopeDrawer(row.dataset.envOpen));
+  });
+  el.querySelectorAll('[data-env-new]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openFinEnvelopeModal(btn.dataset.envNew || null);
+    });
+  });
+  el.querySelectorAll('[data-env-assign-txn]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const txn = financeState.transactions.find(t => t.id === btn.dataset.envAssignTxn);
+      if (txn) openFinTransactionModal(txn);
+    });
+  });
 }
 
 // --- Visão Geral ---
@@ -6017,6 +6206,207 @@ function renderFinanceLancamentos(summary, cats) {
     </div>
     <div class="fin-txn-list">${txnGroupHtml}</div>
   `;
+}
+
+// --- Envelopes ---
+function renderFinanceEnvelopes(summary, cats) {
+  const monthTxns = summary.txns.filter(t => t.type === 'expense');
+  const visibleEnvs = financeState.envelopes
+    .filter(e => finEnvVisibleInMonth(e, financeMonth))
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const openBudget = visibleEnvs.filter(e => e.status !== 'closed' && e.kind !== 'sub').reduce((s, e) => s + finEnvBudget(e), 0);
+  const envTxnIds = new Set(financeState.envelopes.map(e => e.id));
+  const contextual = monthTxns.filter(t => t.envelopeId && envTxnIds.has(t.envelopeId));
+  const avulsos = monthTxns.filter(t => !t.envelopeId || !envTxnIds.has(t.envelopeId));
+  const contextPct = monthTxns.length ? Math.round((contextual.reduce((s, t) => s + Number(t.amount), 0) / summary.expense) * 100) : 0;
+  const envSpent = contextual.reduce((s, t) => s + Number(t.amount), 0);
+  const avulsoTotal = avulsos.reduce((s, t) => s + Number(t.amount), 0);
+  const budgetPct = openBudget > 0 ? Math.min(100, Math.round((envSpent / openBudget) * 100)) : 0;
+
+  const groups = [];
+  finEnvTypes().forEach(type => {
+    const items = visibleEnvs.filter(e => e.kind === 'event' && e.eventType === type.name && !e.parentId);
+    if (items.length) groups.push({ id: type.name, label: type.name, icon: type.icon, color: type.color, envs: items });
+  });
+  const recurringTemplates = visibleEnvs.filter(e => e.kind === 'recurring');
+  if (recurringTemplates.length) {
+    const instances = visibleEnvs.filter(e => e.parentId && recurringTemplates.some(t => t.id === e.parentId));
+    groups.push({ id: 'Recorrentes', label: 'Recorrentes', icon: '🔁', color: 'green', envs: instances.length ? instances : recurringTemplates });
+  }
+  const projects = visibleEnvs.filter(e => e.kind === 'project');
+  if (projects.length) groups.push({ id: 'Projetos', label: 'Projetos', icon: '🧩', color: 'purple', envs: projects });
+  groups.push({ id: 'Avulsos', label: 'Avulsos', icon: '•', color: 'gray', envs: [], avulsos });
+
+  const groupHtml = groups.map(group => renderFinanceEnvelopeGroup(group, avulsos)).join('');
+  const byTypeRows = groups.filter(g => g.id !== 'Avulsos').map(group => {
+    const spent = group.envs.reduce((s, env) => s + finEnvSpent(env, financeMonth), 0);
+    return `
+      <div class="fin-env-total-row">
+        <span class="fin-env-total-name"><span class="fin-cat-badge fin-c-${escapeHtml(group.color)}">${escapeHtml(group.icon)} ${escapeHtml(group.label)}</span></span>
+        <span class="fin-env-total-val">R$&nbsp;${finFmt(spent)}</span>
+      </div>
+    `;
+  }).join('');
+
+  const tips = [];
+  if (contextPct < 60 && summary.expense > 0) tips.push({ tone: 'warn', icon: '📍', text: `Só <strong>${contextPct}%</strong> dos gastos do mês têm contexto. Comece pelos avulsos maiores.` });
+  const over = visibleEnvs.find(e => finEnvProgress(e, financeMonth).pctRaw >= 100 && e.kind !== 'sub');
+  if (over) tips.push({ tone: 'alert', icon: '!', text: `<strong>${escapeHtml(over.name)}</strong> passou do orçamento.` });
+  const closeable = visibleEnvs.find(e => e.status === 'open' && e.periodEnd && e.periodEnd < toKey(new Date()));
+  if (closeable) tips.push({ tone: 'info', icon: '✓', text: `<strong>${escapeHtml(closeable.name)}</strong> já terminou e pode ser encerrado.` });
+  if (!tips.length) tips.push({ tone: 'ok', icon: '✓', text: 'Envelopes ajudam a responder quanto custaram seus eventos, hábitos e projetos.' });
+
+  return `
+    <div class="fin-bud-kpi-grid">
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Orçado · envelopes abertos</div>
+        <div class="fin-kpi-value">R$&nbsp;${finFmt(openBudget)}</div>
+        <div class="fin-kpi-sub">${visibleEnvs.filter(e => e.status !== 'closed' && e.kind !== 'sub').length} envelopes ativos em ${MONTH_NAMES[financeMonth.getMonth()].toLowerCase()}</div>
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Realizado no mês</div>
+        <div class="fin-kpi-value">R$&nbsp;${finFmt(envSpent)}</div>
+        <div class="fin-kpi-sub">${budgetPct}% do orçado · ${summary.dayOfMonth} dias</div>
+        <div class="fin-kpi-bar"><div class="fin-kpi-bar-fill" style="width:${budgetPct}%;background:${budgetPct >= 100 ? 'var(--color-terracotta)' : budgetPct >= 75 ? '#C07C30' : 'var(--color-green)'}"></div></div>
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Avulsos do mês</div>
+        <div class="fin-kpi-value" style="color:var(--color-text-secondary)">R$&nbsp;${finFmt(avulsoTotal)}</div>
+        <div class="fin-kpi-sub">gastos sem envelope</div>
+      </div>
+      <div class="fin-kpi-card">
+        <div class="fin-kpi-label">Gastos com contexto</div>
+        <div class="fin-kpi-value" style="color:var(--color-green)">${contextPct}%</div>
+        <div class="fin-kpi-sub">dos gastos de ${MONTH_NAMES[financeMonth.getMonth()].toLowerCase()} têm envelope</div>
+        <div class="fin-kpi-bar"><div class="fin-kpi-bar-fill" style="width:${contextPct}%;background:var(--color-green)"></div></div>
+      </div>
+    </div>
+    ${visibleEnvs.length === 0 && avulsos.length === 0 ? `
+      <div class="fin-env-empty">
+        <div class="fin-env-empty-art">✉️</div>
+        <div class="fin-env-empty-title">Envelopes dão contexto aos seus gastos</div>
+        <div class="fin-env-empty-sub">Crie um envelope para uma viagem, hábito semanal ou projeto e associe gastos no lançamento.</div>
+        <button class="fin-btn-brand" data-env-new="">+ Novo envelope</button>
+        <div class="fin-env-suggestions">
+          <button data-env-new="Rotina">🍱 Marmita da semana</button>
+          <button data-env-new="Viagem">✈️ Próxima viagem</button>
+          <button data-env-new="Social">🎂 Aniversário</button>
+        </div>
+      </div>
+    ` : `
+      <div class="fin-bud-body">
+        <div class="fin-bud-left">
+          ${groupHtml}
+          <button class="fin-bud-add-cat-btn" data-env-new="">
+            <span style="font-size:16px">+</span> Novo envelope
+          </button>
+        </div>
+        <div class="fin-bud-right">
+          <div class="fin-section">
+            <div class="fin-section-head">
+              <span class="fin-section-title">Resumo por tipo</span>
+              <span class="fin-section-sub">${MONTH_NAMES[financeMonth.getMonth()]} ${financeMonth.getFullYear()}</span>
+            </div>
+            <div class="fin-section-body" style="padding-top:8px;padding-bottom:8px">
+              ${byTypeRows || '<div class="fin-empty">Nenhum envelope com gasto no mês.</div>'}
+              <div class="fin-env-total-row" style="font-weight:700">
+                <span class="fin-env-total-name">Avulsos</span>
+                <span class="fin-env-total-val">R$&nbsp;${finFmt(avulsoTotal)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="fin-section">
+            <div class="fin-section-head"><span class="fin-section-title">Dicas</span></div>
+            <div class="fin-section-body" style="padding-top:8px;padding-bottom:8px">
+              ${tips.map(t => `<div class="fin-env-tip ${t.tone}"><span>${escapeHtml(t.icon)}</span><div>${t.text}</div></div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `}
+  `;
+}
+
+function renderFinanceEnvelopeGroup(group) {
+  const isAvulso = group.id === 'Avulsos';
+  const spent = isAvulso
+    ? group.avulsos.reduce((s, t) => s + Number(t.amount || 0), 0)
+    : group.envs.reduce((s, env) => s + finEnvSpent(env, financeMonth), 0);
+  const budget = isAvulso ? 0 : group.envs.reduce((s, env) => s + finEnvBudget(env), 0);
+  const pctRaw = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+  const pct = Math.min(100, pctRaw);
+  const barColor = pctRaw >= 100 ? 'var(--color-terracotta)' : pctRaw >= 75 ? '#C07C30' : finCatBarColor(group.color);
+  const cls = pctRaw >= 100 ? 'fin-over' : pctRaw >= 75 ? 'fin-warn' : '';
+  const expanded = finEnvExpandedTypes.has(group.id);
+  const rows = isAvulso ? renderFinanceAvulsoRows(group.avulsos) : group.envs.map(env => renderFinanceEnvelopeRow(env)).join('');
+  const closedCount = financeState.envelopes.filter(e => e.status === 'closed' && (e.eventType === group.id || group.id === 'Projetos' && e.kind === 'project')).length;
+  return `
+    <div class="fin-bud-cat-card fin-env-card">
+      <div class="fin-bud-cat-header ${expanded ? 'expanded' : ''}" data-env-toggle="${escapeHtml(group.id)}">
+        <span class="fin-cat-badge fin-c-${escapeHtml(group.color)}">${escapeHtml(group.icon)} ${escapeHtml(group.label)}</span>
+        <div class="fin-bud-cat-info">
+          <div class="fin-bud-progress-row">
+            <div class="fin-cat-bar-wrap" style="flex:1"><div class="fin-cat-bar" style="width:${pct || (spent > 0 ? 2 : 0)}%;background:${barColor}"></div></div>
+            <span class="fin-bud-pct ${cls}">${budget ? pctRaw + '%' : '–'}</span>
+          </div>
+        </div>
+        <span class="fin-env-count">${isAvulso ? `${group.avulsos.length} gastos` : `${group.envs.length} envelope${group.envs.length === 1 ? '' : 's'}`}</span>
+        <div class="fin-bud-amounts">
+          <span class="fin-bud-spent ${cls}">R$&nbsp;${finFmt(spent)}</span>
+          ${budget ? `<span class="fin-bud-of">/ R$&nbsp;${finFmt(budget)}</span>` : ''}
+        </div>
+        <span class="fin-bud-expand-icon ${expanded ? 'open' : ''}">›</span>
+      </div>
+      ${expanded ? `
+        <div class="fin-bud-fixed-list">
+          <div class="fin-bud-fixed-head">${isAvulso ? 'Gastos avulsos' : 'Envelopes'}</div>
+          ${rows || `<div class="fin-empty" style="padding:6px 0;text-align:left">Nada por aqui neste mês.</div>`}
+          ${!isAvulso ? `<button class="fin-bud-add-fixed-btn" data-env-new="${escapeHtml(group.id)}"><span>+</span> Novo envelope em ${escapeHtml(group.label)}</button>` : ''}
+          ${closedCount ? `<button class="fin-env-archive-link" type="button">ver arquivo (${closedCount} encerrados)</button>` : ''}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderFinanceEnvelopeRow(env, sub = false) {
+  const p = finEnvProgress(env, financeMonth);
+  const children = env.kind === 'project'
+    ? financeState.envelopes.filter(e => e.parentId === env.id && e.kind === 'sub').map(e => renderFinanceEnvelopeRow(e, true)).join('')
+    : '';
+  return `
+    <div class="fin-env-row ${sub ? 'sub' : ''} ${env.status === 'closed' ? 'closed' : ''}" data-env-open="${escapeHtml(env.id)}">
+      <span class="fin-env-icon">${escapeHtml(env.icon || '✉️')}</span>
+      <div class="fin-env-row-info">
+        <div class="fin-env-row-name">${escapeHtml(env.name)}</div>
+        <div class="fin-env-row-meta">${escapeHtml(finEnvPeriodLabel(env))} · ${escapeHtml(finEnvPaceText(env, p))}</div>
+      </div>
+      <div class="fin-env-row-bar"><div style="width:${p.pct || (p.spent > 0 ? 2 : 0)}%;background:${p.color}"></div></div>
+      <div class="fin-bud-amounts">
+        <span class="fin-bud-spent ${p.cls}" style="font-size:12px">R$&nbsp;${finFmt(p.spent)}</span>
+        ${p.budget ? `<span class="fin-bud-of">/ ${finFmt(p.budget)}</span>` : ''}
+      </div>
+      <span class="fin-env-row-chevron">›</span>
+    </div>
+    ${children}
+  `;
+}
+
+function renderFinanceAvulsoRows(avulsos) {
+  return avulsos.sort((a, b) => b.date.localeCompare(a.date)).map(t => {
+    const cat = financeState.categories.find(c => c.id === t.categoryId);
+    return `
+      <div class="fin-env-row">
+        <span class="fin-env-icon">${cat ? escapeHtml(cat.icon) : '•'}</span>
+        <div class="fin-env-row-info">
+          <div class="fin-env-row-name">${escapeHtml(t.description)}</div>
+          <div class="fin-env-row-meta">${finFmtDate(t.date)}${cat ? ` · ${escapeHtml(cat.name)}` : ''}</div>
+        </div>
+        <span class="fin-txn-amt out">− R$&nbsp;${finFmt(t.amount)}</span>
+        <button class="fin-env-assign" data-env-assign-txn="${escapeHtml(t.id)}">+ envelope</button>
+      </div>
+    `;
+  }).join('');
 }
 
 // --- Planejamento do Mês ---
@@ -6299,6 +6689,7 @@ function openFinTransactionModal(txn) {
   finTransactionNature  = txn ? txn.nature : 'variable';
   finTransactionCatId   = txn ? txn.categoryId : null;
   finTransactionWalletId = txn ? txn.walletId : null;
+  finTransactionEnvelopeId = txn ? txn.envelopeId || null : null;
   renderFinTransactionModal();
   document.getElementById('finTransactionModal').classList.remove('hidden');
   document.getElementById('finTxnDate').value   = txn ? txn.date : toKey(new Date());
@@ -6319,6 +6710,8 @@ function renderFinTransactionModal() {
   const isCatVisible = finTransactionType === 'expense';
   document.getElementById('finCatField').style.display   = isCatVisible ? '' : 'none';
   document.getElementById('finNatureField').style.display = isCatVisible ? '' : 'none';
+  const envField = document.getElementById('finEnvelopeField');
+  if (envField) envField.style.display = isCatVisible ? '' : 'none';
 
   const catPills = document.getElementById('finCatPills');
   if (catPills) {
@@ -6330,6 +6723,25 @@ function renderFinTransactionModal() {
     catPills.querySelectorAll('.fin-cat-pill').forEach(btn => {
       btn.addEventListener('click', () => {
         finTransactionCatId = finTransactionCatId === btn.dataset.cat ? null : btn.dataset.cat;
+        renderFinTransactionModal();
+      });
+    });
+  }
+
+  const envelopePills = document.getElementById('finEnvelopePills');
+  if (envelopePills) {
+    const date = document.getElementById('finTxnDate')?.value || toKey(new Date());
+    const envs = finOpenEnvelopesForDate(date);
+    envelopePills.innerHTML = envs.length
+      ? envs.map(env => {
+          const parent = env.parentId ? financeState.envelopes.find(e => e.id === env.parentId) : null;
+          const label = parent && parent.kind === 'project' ? `${parent.name} › ${env.name}` : env.name;
+          return `<button type="button" class="fin-cat-pill ${finTransactionEnvelopeId === env.id ? 'selected' : ''}" data-envelope="${env.id}">${escapeHtml(env.icon || '✉️')} ${escapeHtml(label)}</button>`;
+        }).join('')
+      : '<span class="fin-env-modal-empty">Nenhum envelope aberto cobre esta data.</span>';
+    envelopePills.querySelectorAll('.fin-cat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        finTransactionEnvelopeId = finTransactionEnvelopeId === btn.dataset.envelope ? null : btn.dataset.envelope;
         renderFinTransactionModal();
       });
     });
@@ -6376,6 +6788,7 @@ function saveFinTransaction() {
     date:        date,
     categoryId:  finTransactionType === 'expense' ? finTransactionCatId : null,
     walletId:    finTransactionWalletId,
+    envelopeId:  finTransactionType === 'expense' ? finTransactionEnvelopeId : null,
   };
 
   if (finEditingTxnId) {
@@ -6433,6 +6846,278 @@ function saveFinPurchase() {
   renderFinanceView();
 }
 
+// --- Modal e drawer de envelopes ---
+function openFinEnvelopeModal(typeName = null, env = null) {
+  const meta = finEnvTypeMeta(env?.eventType || typeName || finEnvDraftEventType);
+  finEnvEditingId = env ? env.id : null;
+  finEnvDraftKind = env ? env.kind : 'event';
+  finEnvDraftEventType = meta.name;
+  finEnvDraftColor = env?.color || meta.color || 'gray';
+  document.querySelector('#finEnvelopeModal h2').textContent = env ? 'Editar envelope' : 'Novo envelope';
+  document.getElementById('finEnvelopeSave').textContent = env ? 'Salvar alterações' : 'Criar envelope';
+  document.getElementById('finEnvName').value = env?.name || '';
+  document.getElementById('finEnvBudget').value = env?.budget || '';
+  document.getElementById('finEnvStart').value = env?.periodStart || toKey(new Date(financeMonth.getFullYear(), financeMonth.getMonth(), 1));
+  document.getElementById('finEnvEnd').value = env?.periodEnd || '';
+  document.getElementById('finEnvSubRows').innerHTML = '';
+  if (env?.kind === 'project') {
+    const subs = financeState.envelopes.filter(e => e.parentId === env.id && e.kind === 'sub');
+    document.getElementById('finEnvSubRows').innerHTML = subs.map(s => `
+      <div class="fin-env-sub-row" data-sub-id="${escapeHtml(s.id)}"><input type="text" value="${escapeHtml(s.name)}" placeholder="Nome"><input type="number" min="0" step="0.01" value="${Number(s.budget || 0)}" placeholder="0,00"></div>
+    `).join('');
+  }
+  renderFinEnvelopeModal();
+  document.getElementById('finEnvelopeModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('finEnvName').focus(), 80);
+}
+
+function closeFinEnvelopeModal() {
+  finEnvEditingId = null;
+  document.getElementById('finEnvelopeModal').classList.add('hidden');
+}
+
+function renderFinEnvelopeModal() {
+  document.querySelectorAll('[data-env-kind]').forEach(btn => btn.classList.toggle('active', btn.dataset.envKind === finEnvDraftKind));
+  document.getElementById('finEnvEventFields').style.display = finEnvDraftKind === 'project' ? 'none' : '';
+  document.getElementById('finEnvPeriodFields').style.display = finEnvDraftKind === 'event' ? 'flex' : 'none';
+  document.getElementById('finEnvRecurrenceField').classList.toggle('hidden', finEnvDraftKind !== 'recurring');
+  document.getElementById('finEnvSubField').classList.toggle('hidden', finEnvDraftKind !== 'project');
+  document.getElementById('finEnvBudgetLabel').childNodes[0].nodeValue = finEnvDraftKind === 'recurring' ? 'Orçamento por ciclo (R$) ' : finEnvDraftKind === 'project' ? 'Orçamento total (R$) ' : 'Orçamento (R$) ';
+
+  const typePills = document.getElementById('finEnvTypePills');
+  typePills.innerHTML = finEnvTypes().map(t => `
+    <button type="button" class="fin-cat-pill ${finEnvDraftEventType === t.name ? 'selected' : ''}" data-env-type="${escapeHtml(t.name)}">${escapeHtml(t.icon)} ${escapeHtml(t.name)}</button>
+  `).join('') + '<button type="button" class="fin-cat-pill" data-env-new-type>+ novo tipo</button>';
+  typePills.querySelectorAll('[data-env-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const meta = finEnvTypeMeta(btn.dataset.envType);
+      finEnvDraftEventType = meta.name;
+      finEnvDraftColor = meta.color;
+      renderFinEnvelopeModal();
+    });
+  });
+  const newTypeBtn = typePills.querySelector('[data-env-new-type]');
+  if (newTypeBtn) newTypeBtn.addEventListener('click', () => {
+    const name = prompt('Nome do novo tipo de evento:');
+    if (!name || !name.trim()) return;
+    const icon = prompt('Ícone do tipo:', '✉️') || '✉️';
+    const type = { name: name.trim(), icon: icon.trim() || '✉️', color: finEnvDraftColor || 'gray' };
+    financeState.envelopeEventTypes = [...(financeState.envelopeEventTypes || []), type];
+    finEnvDraftEventType = type.name;
+    finEnvDraftColor = type.color;
+    saveFinance();
+    renderFinEnvelopeModal();
+  });
+
+  document.querySelectorAll('#finEnvColorPicker .fin-color-opt').forEach(btn => btn.classList.toggle('selected', btn.dataset.color === finEnvDraftColor));
+  if (finEnvDraftKind === 'project') renderFinEnvSubRows();
+}
+
+function renderFinEnvSubRows() {
+  const wrap = document.getElementById('finEnvSubRows');
+  if (!wrap.children.length) {
+    wrap.innerHTML = `
+      <div class="fin-env-sub-row"><input type="text" placeholder="Identidade visual"><input type="number" min="0" step="0.01" placeholder="0,00"></div>
+      <div class="fin-env-sub-row"><input type="text" placeholder="Equipamento"><input type="number" min="0" step="0.01" placeholder="0,00"></div>
+    `;
+  }
+}
+
+function saveFinEnvelope() {
+  const name = document.getElementById('finEnvName').value.trim();
+  const budget = parseFloat(document.getElementById('finEnvBudget').value) || 0;
+  if (!name) { document.getElementById('finEnvName').focus(); return; }
+  if (budget <= 0) { alert('Informe um orçamento.'); return; }
+
+  const existing = finEnvEditingId ? financeState.envelopes.find(e => e.id === finEnvEditingId) : null;
+  const base = {
+    ...(existing || {}),
+    id: uid(),
+    name,
+    kind: finEnvDraftKind,
+    eventType: finEnvDraftKind === 'project' ? null : finEnvDraftEventType,
+    icon: finEnvDraftKind === 'project' ? '🧩' : finEnvTypeMeta(finEnvDraftEventType).icon,
+    color: finEnvDraftColor,
+    budget,
+    periodStart: finEnvDraftKind === 'event' ? document.getElementById('finEnvStart').value || null : null,
+    periodEnd: finEnvDraftKind === 'event' ? document.getElementById('finEnvEnd').value || null : null,
+    status: 'open',
+    parentId: null,
+    recurrence: finEnvDraftKind === 'recurring'
+      ? (document.querySelector('[data-env-recurrence].active')?.dataset.envRecurrence || 'weekly')
+      : null,
+    sortOrder: existing?.sortOrder ?? financeState.envelopes.length,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+  };
+  if (existing) {
+    base.id = existing.id;
+    Object.assign(existing, base);
+  } else {
+    financeState.envelopes.push(base);
+  }
+
+  if (finEnvDraftKind === 'project') {
+    const seenSubIds = new Set();
+    const rows = [...document.querySelectorAll('#finEnvSubRows .fin-env-sub-row')];
+    rows.forEach((row, idx) => {
+      const inputs = row.querySelectorAll('input');
+      const subName = inputs[0].value.trim();
+      const subBudget = parseFloat(inputs[1].value) || 0;
+      if (!subName || subBudget <= 0) return;
+      const subId = row.dataset.subId;
+      const existingSub = subId ? financeState.envelopes.find(e => e.id === subId) : null;
+      const subData = {
+        ...(existingSub || {}),
+        id: uid(),
+        name: subName,
+        kind: 'sub',
+        eventType: null,
+        icon: '↳',
+        color: finEnvDraftColor,
+        budget: subBudget,
+        periodStart: null,
+        periodEnd: null,
+        status: 'open',
+        parentId: base.id,
+        sortOrder: idx,
+        createdAt: existingSub?.createdAt || new Date().toISOString(),
+      };
+      if (existingSub) {
+        subData.id = existingSub.id;
+        Object.assign(existingSub, subData);
+        seenSubIds.add(existingSub.id);
+      } else {
+        financeState.envelopes.push(subData);
+        seenSubIds.add(subData.id);
+      }
+    });
+    if (existing) {
+      financeState.envelopes = financeState.envelopes.filter(e => e.parentId !== existing.id || seenSubIds.has(e.id));
+    }
+  }
+
+  closeFinEnvelopeModal();
+  ensureRecurringEnvelopeInstances();
+  saveFinance();
+  financeTab = 'envelopes';
+  renderFinanceView();
+}
+
+function openFinEnvelopeDrawer(id) {
+  finEnvDrawerId = id;
+  renderFinEnvelopeDrawer();
+  document.getElementById('finEnvelopeDrawerOverlay').classList.remove('hidden');
+  document.getElementById('finEnvelopeDrawer').classList.remove('hidden');
+}
+
+function closeFinEnvelopeDrawer() {
+  finEnvDrawerId = null;
+  document.getElementById('finEnvelopeDrawerOverlay').classList.add('hidden');
+  document.getElementById('finEnvelopeDrawer').classList.add('hidden');
+}
+
+function renderFinEnvelopeDrawer() {
+  const drawer = document.getElementById('finEnvelopeDrawer');
+  const env = financeState.envelopes.find(e => e.id === finEnvDrawerId);
+  if (!drawer || !env) return;
+  const progress = finEnvProgress(env, financeMonth);
+  const txns = finEnvTransactions(env, null).sort((a, b) => b.date.localeCompare(a.date));
+  const byCat = {};
+  txns.forEach(t => { byCat[t.categoryId || 'none'] = (byCat[t.categoryId || 'none'] || 0) + Number(t.amount); });
+  const catRows = Object.entries(byCat).map(([catId, total]) => {
+    const cat = financeState.categories.find(c => c.id === catId);
+    const pct = progress.spent > 0 ? Math.round((total / progress.spent) * 100) : 0;
+    return `
+      <div class="fin-env-drawer-cat">
+        <span>${cat ? `${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}` : 'Sem categoria'}</span>
+        <div><div style="width:${pct}%;background:${cat ? finCatBarColor(cat.color) : '#9A9488'}"></div></div>
+        <strong>R$&nbsp;${finFmt(total)}</strong>
+      </div>
+    `;
+  }).join('');
+  const txnRows = txns.map(t => {
+    const cat = financeState.categories.find(c => c.id === t.categoryId);
+    return `
+      <div class="fin-env-drawer-txn">
+        <div>
+          <strong>${escapeHtml(t.description)}</strong>
+          <span>${finFmtDate(t.date)}${cat ? ` · ${escapeHtml(cat.name)}` : ''}</span>
+        </div>
+        <b>R$&nbsp;${finFmt(t.amount)}</b>
+      </div>
+    `;
+  }).join('');
+  const children = env.kind === 'project'
+    ? financeState.envelopes.filter(e => e.parentId === env.id && e.kind === 'sub').map(e => renderFinanceEnvelopeRow(e, true)).join('')
+    : '';
+  const cycles = env.parentId
+    ? financeState.envelopes.filter(e => e.parentId === env.parentId).sort((a, b) => b.periodStart.localeCompare(a.periodStart)).map(e => {
+        const p = finEnvProgress(e, financeMonth);
+        return `<div class="fin-env-drawer-txn"><div><strong>${finEnvPeriodLabel(e)}</strong><span>${e.status === 'closed' ? 'encerrado' : 'ciclo atual'}</span></div><b>R$&nbsp;${finFmt(p.spent)} / ${finFmt(p.budget)}</b></div>`;
+      }).join('')
+    : '';
+
+  drawer.innerHTML = `
+    <div class="fin-env-drawer-hd">
+      <div class="fin-env-drawer-title-row">
+        <h2>${escapeHtml(env.name)}</h2>
+        <button type="button" class="close-btn" id="finEnvDrawerClose">&times;</button>
+      </div>
+      <div class="fin-env-drawer-meta">
+        <span class="fin-cat-badge fin-c-${escapeHtml(env.color)}">${escapeHtml(env.icon || '✉️')} ${escapeHtml(env.eventType || (env.kind === 'project' ? 'Projeto' : 'Envelope'))}</span>
+        <span>${escapeHtml(finEnvPeriodLabel(env))}</span>
+      </div>
+    </div>
+    <div class="fin-env-drawer-bd">
+      <div class="fin-env-drawer-big">
+        <strong>R$&nbsp;${finFmt(progress.spent)}</strong>
+        <span>/ R$&nbsp;${finFmt(progress.budget)}</span>
+      </div>
+      <div class="fin-cat-bar-wrap"><div class="fin-cat-bar" style="width:${progress.pct}%;background:${progress.color}"></div></div>
+      <div class="fin-env-pace ${progress.pctRaw >= 100 ? 'alert' : 'good'}">${escapeHtml(finEnvPaceText(env, progress))}</div>
+      <div class="fin-env-drawer-label">Gastos por categoria</div>
+      ${catRows || '<div class="fin-empty">Nenhum gasto associado ainda.</div>'}
+      ${children ? `<div class="fin-env-drawer-label">Sub-envelopes</div><div>${children}</div>` : ''}
+      ${cycles ? `<div class="fin-env-drawer-label">Histórico de ciclos</div>${cycles}` : ''}
+      <div class="fin-env-drawer-label">Lançamentos</div>
+      ${txnRows || '<div class="fin-empty">Nenhum lançamento neste envelope.</div>'}
+    </div>
+    <div class="fin-env-drawer-ft">
+      <button type="button" class="btn-neutral" id="finEnvEditBtn">Editar</button>
+      <button type="button" class="btn-primary" id="finEnvCloseBtn">${env.status === 'closed' ? 'Reabrir' : 'Encerrar envelope'}</button>
+      <button type="button" class="btn-neutral" id="finEnvDeleteBtn">Excluir</button>
+    </div>
+  `;
+  document.getElementById('finEnvDrawerClose').addEventListener('click', closeFinEnvelopeDrawer);
+  document.getElementById('finEnvCloseBtn').addEventListener('click', () => toggleFinEnvelopeClosed(env.id));
+  document.getElementById('finEnvDeleteBtn').addEventListener('click', () => deleteFinEnvelope(env.id));
+  document.getElementById('finEnvEditBtn').addEventListener('click', () => {
+    closeFinEnvelopeDrawer();
+    openFinEnvelopeModal(null, env);
+  });
+}
+
+function toggleFinEnvelopeClosed(id) {
+  const env = financeState.envelopes.find(e => e.id === id);
+  if (!env) return;
+  env.status = env.status === 'closed' ? 'open' : 'closed';
+  env.closedAt = env.status === 'closed' ? new Date().toISOString() : null;
+  saveFinance();
+  renderFinanceView();
+  renderFinEnvelopeDrawer();
+}
+
+function deleteFinEnvelope(id) {
+  const ids = new Set([id, ...financeState.envelopes.filter(e => e.parentId === id).map(e => e.id)]);
+  const count = financeState.transactions.filter(t => ids.has(t.envelopeId)).length;
+  if (!confirm(count ? `Excluir este envelope? ${count} lançamento(s) virarão avulsos.` : 'Excluir este envelope?')) return;
+  financeState.envelopes = financeState.envelopes.filter(e => !ids.has(e.id));
+  financeState.transactions.forEach(t => { if (ids.has(t.envelopeId)) t.envelopeId = null; });
+  saveFinance();
+  closeFinEnvelopeDrawer();
+  renderFinanceView();
+}
+
 // --- Registrar handlers dos modais de finanças ---
 (function initFinanceModalHandlers() {
   // Transaction modal
@@ -6443,6 +7128,7 @@ function saveFinPurchase() {
     document.getElementById('finTransactionModal').classList.add('hidden');
   });
   document.getElementById('finModalSave').addEventListener('click', saveFinTransaction);
+  document.getElementById('finTxnDate').addEventListener('change', renderFinTransactionModal);
 
   document.querySelectorAll('#finTypeTabs .fin-type-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -6484,6 +7170,38 @@ function saveFinPurchase() {
     if (e.target === document.getElementById('finPurchaseModal'))
       document.getElementById('finPurchaseModal').classList.add('hidden');
   });
+
+  // Envelope modal
+  document.getElementById('finEnvelopeClose').addEventListener('click', closeFinEnvelopeModal);
+  document.getElementById('finEnvelopeCancel').addEventListener('click', closeFinEnvelopeModal);
+  document.getElementById('finEnvelopeSave').addEventListener('click', saveFinEnvelope);
+  document.getElementById('finEnvelopeModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('finEnvelopeModal')) closeFinEnvelopeModal();
+  });
+  document.querySelectorAll('[data-env-kind]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finEnvDraftKind = btn.dataset.envKind;
+      renderFinEnvelopeModal();
+    });
+  });
+  document.querySelectorAll('[data-env-recurrence]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-env-recurrence]').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+  document.querySelectorAll('#finEnvColorPicker .fin-color-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      finEnvDraftColor = btn.dataset.color;
+      renderFinEnvelopeModal();
+    });
+  });
+  document.getElementById('finEnvAddSub').addEventListener('click', () => {
+    const row = document.createElement('div');
+    row.className = 'fin-env-sub-row';
+    row.innerHTML = '<input type="text" placeholder="Nome"><input type="number" min="0" step="0.01" placeholder="0,00">';
+    document.getElementById('finEnvSubRows').appendChild(row);
+  });
+  document.getElementById('finEnvelopeDrawerOverlay').addEventListener('click', closeFinEnvelopeDrawer);
 })();
 
 // --- Modais de Planejamento ---
