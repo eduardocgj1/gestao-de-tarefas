@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finanças – Gastos por Envelope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #FAF7F2;
+  --surface: #FFFFFF;
+  --border: #ECE6D8;
+  --border-strong: #F1ECE0;
+  --neutral-btn: #F5F1E8;
+  --neutral-btn-hover: #ECE6D8;
+  --text: #262420;
+  --text-2: #7A766C;
+  --text-3: #B3AE9F;
+  --text-meta: #8B8778;
+  --green: #3A6604;
+  --green-soft: #EAF0DE;
+  --green-hover: #2F5303;
+  --red: #C1622D;
+  --red-soft: #FBEEE6;
+  --blue: #3E6FBD;
+  --blue-soft: #E8EFF9;
+  --amber: #C07C30;
+  --amber-soft: #FDF0E0;
+  --teal: #1F7A6E;
+  --teal-soft: #E0F5F2;
+  --purple: #7B4FA0;
+  --purple-soft: #F0EBF8;
+  --r-panel: 16px;
+  --r-btn: 10px;
+  --shadow-card: 0 1px 2px rgba(38,36,32,.05);
+  --shadow-modal: 0 20px 50px rgba(38,36,32,.2);
+  --font: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #E3DDCF; border-radius: 8px; }
+.hidden { display: none !important; }
+
+/* =================================================== APP SHELL */
+.app-shell { display: flex; height: 100vh; width: 100%; overflow: hidden; }
+
+/* =================================================== SIDEBAR */
+.sidebar {
+  width: 236px; flex-shrink: 0; background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: 16px 0; overflow: hidden;
+}
+.sidebar-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px 16px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.app-logo {
+  width: 30px; height: 30px; border-radius: 9px; background: var(--green);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 14px;
+}
+.sidebar-name { font: 700 14.5px var(--font); flex: 1; white-space: nowrap; }
+.sidebar-collapse {
+  border: none; background: transparent; color: #9A9488;
+  cursor: pointer; font-size: 15px; padding: 4px; border-radius: 6px;
+}
+.sidebar-collapse:hover { background: var(--border-strong); }
+.sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; overflow-y: auto; }
+.nav-label {
+  font: 700 10px/1 var(--font); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em; padding: 8px 8px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  border: none; cursor: pointer; padding: 9px 8px; border-radius: 10px;
+  text-align: left; background: transparent; color: var(--text);
+  font: 600 13px var(--font); width: 100%;
+}
+.nav-item:hover { background: var(--neutral-btn); }
+.nav-item.active { background: var(--green-soft); color: var(--green); }
+.nav-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.nav-sep { height: 1px; background: var(--border-strong); margin: 10px 4px; }
+.nav-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+.pomo-wrap { padding: 10px; margin-top: auto; }
+.pomo-card { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; background: #FBF9F4; }
+.pomo-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.pomo-dot { width: 8px; height: 8px; border-radius: 50%; background: #E3DDCF; flex-shrink: 0; }
+.pomo-label { font: 600 11.5px var(--font); color: var(--text-2); flex: 1; }
+.pomo-time { font: 700 15px var(--font); font-variant-numeric: tabular-nums; }
+
+/* =================================================== MAIN / TOPBAR */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 26px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.topbar h1 { font: 700 17px var(--font); margin: 0; }
+.spacer { flex: 1; }
+.month-nav { display: flex; align-items: center; gap: 6px; }
+.month-nav button {
+  width: 30px; height: 30px; border: none; background: var(--neutral-btn);
+  color: var(--text); border-radius: var(--r-btn); font-size: 15px; cursor: pointer;
+}
+.month-nav button:hover { background: var(--neutral-btn-hover); }
+.month-chip { font: 600 12.5px var(--font); color: var(--text-2); min-width: 110px; text-align: center; }
+.btn-brand {
+  height: 32px; padding: 0 14px; border: none; border-radius: var(--r-btn);
+  background: var(--green); color: #fff; font: 700 12px var(--font);
+  cursor: pointer; white-space: nowrap;
+}
+.btn-brand:hover { background: var(--green-hover); }
+.btn-neutral {
+  height: 32px; padding: 0 14px; border: none; border-radius: var(--r-btn);
+  background: var(--neutral-btn); color: var(--text); font: 700 12px var(--font); cursor: pointer;
+}
+.btn-neutral:hover { background: var(--neutral-btn-hover); }
+.btn-primary {
+  height: 34px; padding: 0 16px; border: none; border-radius: var(--r-btn);
+  background: var(--green); color: #fff; font: 700 12.5px var(--font); cursor: pointer;
+}
+.btn-primary:hover { background: var(--green-hover); }
+.icon-btn {
+  border: none; background: var(--neutral-btn); color: var(--text-2);
+  border-radius: var(--r-btn); cursor: pointer; width: 32px; height: 32px;
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+}
+.icon-btn:hover { background: var(--neutral-btn-hover); }
+
+/* Tabs */
+.fin-tabs {
+  display: flex; align-items: center; gap: 2px; padding: 0 26px;
+  border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+}
+.fin-tab {
+  padding: 11px 14px; border: none; background: transparent;
+  color: var(--text-2); font: 600 13px var(--font); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.fin-tab:hover { color: var(--text); }
+.fin-tab.active { color: var(--green); border-bottom-color: var(--green); }
+.fin-view { flex: 1; overflow-y: auto; padding: 22px 26px; }
+
+/* Color chips (shared with categorias) */
+.c-blue   { background: var(--blue-soft);  color: var(--blue); }
+.c-green  { background: var(--green-soft); color: var(--green); }
+.c-amber  { background: var(--amber-soft); color: var(--amber); }
+.c-teal   { background: var(--teal-soft);  color: var(--teal); }
+.c-red    { background: var(--red-soft);   color: var(--red); }
+.c-gray   { background: #F0EEE8; color: var(--text-2); }
+.c-purple { background: var(--purple-soft); color: var(--purple); }
+.bar-blue { background: var(--blue); } .bar-green { background: var(--green); }
+.bar-amber { background: var(--amber); } .bar-teal { background: var(--teal); }
+.bar-red { background: var(--red); } .bar-gray { background: #9A9488; }
+.bar-purple { background: var(--purple); }
+.cat-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 20px; font: 600 11.5px var(--font); white-space: nowrap;
+}
+
+/* =================================================== KPIs */
+.env-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+.kpi {
+  background: var(--surface); border-radius: var(--r-panel);
+  padding: 16px 18px; box-shadow: var(--shadow-card); border: 1px solid var(--border-strong);
+}
+.kpi-label {
+  font: 600 10.5px var(--font); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px;
+}
+.kpi-value { font: 800 22px var(--font); line-height: 1.1; margin-bottom: 5px; }
+.kpi-sub { font: 500 11.5px var(--font); color: var(--text-meta); }
+.kpi-bar { height: 4px; background: var(--border-strong); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+.kpi-bar-fill { height: 100%; border-radius: 4px; }
+
+/* =================================================== ENVELOPES (padrão Planejamento) */
+.env-body { display: grid; grid-template-columns: 1fr 300px; gap: 14px; align-items: start; }
+.env-right { display: flex; flex-direction: column; gap: 14px; }
+
+/* Section card (coluna direita — mesmo padrão .sc do Planejamento) */
+.sc {
+  background: var(--surface); border-radius: var(--r-panel);
+  box-shadow: var(--shadow-card); border: 1px solid var(--border-strong); overflow: hidden;
+}
+.sc-head { padding: 14px 18px 10px; border-bottom: 1px solid var(--border-strong); display: flex; align-items: center; gap: 8px; }
+.sc-title { font: 700 13px var(--font); flex: 1; }
+.sc-sub { font: 600 11px var(--font); color: var(--text-3); }
+.sc-body { padding: 12px 18px; }
+.env-total-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border-strong);
+}
+.env-total-row:last-child { border-bottom: none; padding-bottom: 0; }
+.env-total-name { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--font); }
+.env-total-val { font: 700 12.5px var(--font); }
+.env-tip {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border-strong);
+  font: 500 11.5px var(--font); color: var(--text); line-height: 1.55;
+}
+.env-tip:last-child { border-bottom: none; padding-bottom: 0; }
+.env-tip-icon {
+  width: 26px; height: 26px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex-shrink: 0;
+}
+
+/* Card de categoria de envelope (= .plan-cat-card) */
+.env-type-card {
+  background: var(--surface); border-radius: var(--r-panel);
+  box-shadow: var(--shadow-card); border: 1px solid var(--border-strong);
+  overflow: hidden; margin-bottom: 12px;
+}
+.env-type-card:last-child { margin-bottom: 0; }
+.env-type-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 18px; cursor: pointer;
+  border-bottom: 1px solid transparent; transition: background .12s;
+}
+.env-type-header:hover { background: #FAFAF7; }
+.env-type-header.expanded { border-bottom-color: var(--border-strong); }
+.env-type-info { flex: 1; min-width: 0; }
+.env-type-progress-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.env-count { font: 600 10.5px var(--font); color: var(--text-3); white-space: nowrap; }
+.env-bar-wrap { flex: 1; height: 5px; background: var(--border-strong); border-radius: 5px; overflow: hidden; }
+.env-bar { height: 100%; border-radius: 5px; }
+.env-pct { font: 700 11px var(--font); color: var(--text-3); flex-shrink: 0; min-width: 34px; text-align: right; }
+.env-pct.warn { color: var(--amber); } .env-pct.over { color: var(--red); }
+.env-amounts { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; text-align: right; }
+.env-spent { font: 700 13px var(--font); }
+.env-spent.warn { color: var(--amber); } .env-spent.over { color: var(--red); }
+.env-of { font: 500 11px var(--font); color: var(--text-3); }
+.env-expand-icon { font-size: 12px; color: var(--text-3); transition: transform .2s; flex-shrink: 0; }
+.env-expand-icon.open { transform: rotate(90deg); }
+
+/* Lista de envelopes dentro da categoria expandida (= .plan-fixed-list) */
+.env-list { padding: 0 18px 14px; }
+.env-list-head {
+  display: flex; align-items: center; gap: 6px; padding: 10px 0 8px;
+  font: 700 10px var(--font); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.env-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 10px;
+  margin-bottom: 6px; cursor: pointer; transition: border-color .12s;
+}
+.env-row:hover { border-color: #D8D0BC; }
+.env-row.closed { opacity: .58; }
+.env-icon { font-size: 15px; line-height: 1; flex-shrink: 0; }
+.env-row-info { flex: 1; min-width: 0; }
+.env-row-name { font: 600 12.5px var(--font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.env-row-meta { font: 500 10.5px var(--font); color: var(--text-3); margin-top: 1px; }
+.env-row-bar-wrap { width: 96px; height: 4px; background: var(--border-strong); border-radius: 4px; overflow: hidden; flex-shrink: 0; }
+.env-row-chevron { font-size: 12px; color: var(--text-3); flex-shrink: 0; }
+.env-row-sub { margin-left: 26px; }
+.env-cycle-chip {
+  font: 600 10px var(--font); color: var(--text-3); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0;
+}
+.env-add-row {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 7px 12px;
+  border: 1.5px dashed var(--border); border-radius: 10px;
+  background: transparent; cursor: pointer; width: 100%;
+  font: 600 12px var(--font); color: var(--text-3);
+}
+.env-add-row:hover { border-color: var(--text-3); background: var(--neutral-btn); color: var(--text-2); }
+.env-archive-link {
+  border: none; background: transparent;
+  font: 600 11px var(--font); color: var(--text-3); cursor: pointer;
+  border-bottom: 1px dashed var(--border); padding: 0 1px; margin-top: 8px;
+}
+.env-archive-link:hover { color: var(--text-2); border-bottom-color: var(--text-3); }
+
+/* Botão nova categoria de envelope (= .plan-add-cat) */
+.env-add-cat {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px; width: 100%;
+  border: 2px dashed var(--border); border-radius: var(--r-panel);
+  background: transparent; cursor: pointer;
+  font: 600 13px var(--font); color: var(--text-3); margin-top: 4px;
+}
+.env-add-cat:hover { border-color: var(--text-3); background: var(--neutral-btn); color: var(--text-2); }
+
+/* Avulsos (mesmo padrão de linha) */
+.avulso-assign {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-3);
+  font: 600 10.5px var(--font); border-radius: 8px; padding: 4px 8px; cursor: pointer; flex-shrink: 0;
+}
+.avulso-assign:hover { color: var(--text-2); border-color: var(--text-3); }
+.avulso-amt { font: 700 12px var(--font); color: var(--red); white-space: nowrap; flex-shrink: 0; }
+
+/* Usados no drawer */
+.env-bar-row { display: flex; align-items: center; gap: 8px; }
+.env-pace {
+  margin-top: 9px; font: 500 11px var(--font); color: var(--text-2);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 9px; display: inline-flex; align-items: center; gap: 5px;
+}
+.env-pace.alert { background: var(--red-soft); border-color: #F0D9CC; color: var(--red); }
+.env-pace.good { background: var(--green-soft); border-color: #DCE7C9; color: var(--green); }
+.env-sub-bar-wrap { flex: 1; height: 4px; background: var(--border-strong); border-radius: 4px; overflow: hidden; }
+.env-sub-bar { height: 100%; border-radius: 4px; }
+
+/* =================================================== DRAWER (detalhe) */
+.drawer-overlay {
+  position: fixed; inset: 0; background: rgba(38,36,32,.28);
+  z-index: 40; animation: fadeIn .15s ease;
+}
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 92vw;
+  background: var(--surface); z-index: 41; box-shadow: -12px 0 40px rgba(38,36,32,.14);
+  display: flex; flex-direction: column; animation: drawerIn .2s ease;
+}
+.drawer-hd { padding: 20px 22px 14px; border-bottom: 1px solid var(--border-strong); }
+.drawer-hd-row { display: flex; align-items: center; gap: 9px; }
+.drawer-title { font: 800 16px var(--font); flex: 1; }
+.drawer-period { font: 500 11.5px var(--font); color: var(--text-3); margin-top: 5px; }
+.drawer-bd { flex: 1; overflow-y: auto; padding: 18px 22px; }
+.drawer-ft { padding: 12px 22px 18px; border-top: 1px solid var(--border-strong); display: flex; gap: 10px; }
+.drawer-big { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+.drawer-big-value { font: 800 26px var(--font); }
+.drawer-big-of { font: 600 13px var(--font); color: var(--text-3); }
+.drawer-section-label {
+  font: 700 10px var(--font); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em; margin: 18px 0 9px;
+}
+.drawer-txn { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border-strong); }
+.drawer-txn:last-child { border-bottom: none; }
+.drawer-txn-info { flex: 1; min-width: 0; }
+.drawer-txn-name { font: 600 12.5px var(--font); }
+.drawer-txn-meta { font: 500 10.5px var(--font); color: var(--text-3); margin-top: 1px; }
+.drawer-txn-amt { font: 700 12.5px var(--font); white-space: nowrap; }
+.drawer-catbreak { display: flex; flex-direction: column; gap: 8px; }
+.drawer-cat-row { display: flex; align-items: center; gap: 8px; }
+.drawer-cat-name { font: 600 11.5px var(--font); color: var(--text-2); width: 118px; flex-shrink: 0; }
+.drawer-cat-val { font: 600 11px var(--font); color: var(--text-3); min-width: 64px; text-align: right; }
+
+/* =================================================== MODALS */
+.overlay {
+  position: fixed; inset: 0; background: rgba(38,36,32,.42);
+  z-index: 50; display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .15s ease;
+}
+.modal {
+  background: var(--surface); border-radius: 16px; box-shadow: var(--shadow-modal);
+  width: 460px; max-width: 94vw; max-height: 90vh; overflow-y: auto; animation: modalIn .18s ease;
+}
+.modal-hd { padding: 20px 22px 14px; border-bottom: 1px solid var(--border-strong); display: flex; align-items: center; }
+.modal-title { font: 800 16px var(--font); flex: 1; }
+.close-btn {
+  width: 28px; height: 28px; border: none; background: var(--neutral-btn);
+  border-radius: 8px; cursor: pointer; font-size: 17px; color: var(--text-2);
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.close-btn:hover { background: var(--neutral-btn-hover); }
+.modal-bd { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.modal-ft { padding: 12px 22px 18px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border-strong); }
+.field { display: block; font: 700 10.5px var(--font); color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.field input, .field select {
+  display: block; width: 100%; margin-top: 5px;
+  border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px;
+  font: 500 13px var(--font); background: var(--bg); outline: none; color: var(--text);
+}
+.field input:focus, .field select:focus { border-color: var(--green); background: #fff; }
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+
+/* Type toggle (3 tipos de envelope) */
+.env-type-toggle { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.env-type-btn {
+  border: 1.5px solid var(--border); border-radius: 11px; background: var(--bg);
+  cursor: pointer; padding: 10px 8px; text-align: center;
+}
+.env-type-btn .t1 { font-size: 16px; display: block; margin-bottom: 3px; }
+.env-type-btn .t2 { font: 700 11.5px var(--font); display: block; }
+.env-type-btn .t3 { font: 500 9.5px var(--font); color: var(--text-3); display: block; margin-top: 2px; }
+.env-type-btn:hover { background: var(--neutral-btn); }
+.env-type-btn.selected { border-color: var(--green); background: var(--green-soft); }
+.env-type-btn.selected .t2 { color: var(--green); }
+
+/* Pills (mesmo padrão das pills de categoria do app) */
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pill {
+  border: 1.5px solid var(--border); border-radius: 20px; background: var(--bg);
+  cursor: pointer; padding: 5px 11px; font: 600 11.5px var(--font); color: var(--text-2);
+}
+.pill:hover { background: var(--neutral-btn); }
+.pill.selected { border-color: var(--green); background: var(--green-soft); color: var(--green); }
+.pill.ghost { border-style: dashed; color: var(--text-3); }
+
+/* Sub-envelope editor (modal projeto) */
+.sub-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.sub-editor-row { display: flex; gap: 6px; }
+.sub-editor-row input { flex: 1; border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; font: 500 12.5px var(--font); background: var(--bg); outline: none; }
+.sub-editor-row input.amt { flex: 0 0 110px; text-align: right; }
+.sub-editor-add {
+  border: 1.5px dashed var(--border); border-radius: 9px; background: transparent;
+  cursor: pointer; padding: 7px; font: 600 11.5px var(--font); color: var(--text-3);
+}
+.sub-editor-add:hover { border-color: var(--text-3); color: var(--text-2); }
+
+/* Retrospectiva */
+.retro-hero { text-align: center; padding: 6px 0 2px; }
+.retro-emoji { font-size: 34px; }
+.retro-total { font: 800 28px var(--font); margin-top: 8px; }
+.retro-verdict { font: 600 12.5px var(--font); margin-top: 4px; }
+.retro-verdict.good { color: var(--green); } .retro-verdict.bad { color: var(--red); }
+.retro-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.retro-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px; }
+.retro-stat-label { font: 600 9.5px var(--font); color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+.retro-stat-value { font: 700 13.5px var(--font); margin-top: 3px; }
+
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn { from { transform: translateY(10px) scale(.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+@keyframes drawerIn { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ======================== SIDEBAR ======================== -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="app-logo">T</div>
+      <span class="sidebar-name">Tarefas</span>
+      <button class="sidebar-collapse">‹</button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Boards</div>
+      <button class="nav-item"><span class="nav-dot" style="background:#C1622D"></span><span>Trabalho</span></button>
+      <button class="nav-item"><span class="nav-dot" style="background:#3E6FBD"></span><span>Pessoal</span></button>
+      <button class="nav-item" style="color:var(--text-3)"><span style="width:9px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">+</span><span>Novo board</span></button>
+      <div class="nav-sep"></div>
+      <button class="nav-item">
+        <span class="nav-icon"><span style="width:13px;height:12px;border:1.5px solid currentColor;border-radius:3px;position:relative;display:block"><span style="position:absolute;top:3px;left:0;right:0;height:1.5px;background:currentColor"></span></span></span>
+        <span>Calendário</span>
+      </button>
+      <button class="nav-item">
+        <span class="nav-icon"><svg width="14" height="13" viewBox="0 0 14 13" fill="none"><rect x=".75" y=".75" width="12.5" height="11.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/><path d="M4 4.5h6M4 7h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>
+        <span>Atividades</span>
+      </button>
+      <div class="nav-sep"></div>
+      <button class="nav-item active">
+        <span class="nav-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.25" stroke="currentColor" stroke-width="1.5"/><path d="M7 3.5v7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5.2 9.2c0 .77.81 1.3 1.8 1.3s1.8-.53 1.8-1.3c0-.76-.81-1.3-1.8-1.3s-1.8-.53-1.8-1.3c0-.76.81-1.3 1.8-1.3s1.8.54 1.8 1.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+        <span>Finanças</span>
+      </button>
+    </nav>
+    <div class="pomo-wrap">
+      <div class="pomo-card"><div class="pomo-row"><span class="pomo-dot"></span><span class="pomo-label">Foco</span><span class="pomo-time">24:12</span></div></div>
+    </div>
+  </aside>
+
+  <!-- ======================== MAIN ======================== -->
+  <div class="main">
+
+    <header class="topbar">
+      <h1>Finanças</h1>
+      <div class="month-nav">
+        <button>‹</button><span class="month-chip">Julho 2026</span><button>›</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn-brand" onclick="openModal('lancarModal')">+ Lançar</button>
+      <button class="icon-btn">⚙</button>
+    </header>
+
+    <div class="fin-tabs">
+      <button class="fin-tab" title="Fora do escopo deste protótipo">Visão geral</button>
+      <button class="fin-tab" title="Fora do escopo deste protótipo">Lançamentos</button>
+      <button class="fin-tab active">Envelopes</button>
+      <button class="fin-tab" title="Fora do escopo deste protótipo">Planejamento</button>
+      <button class="fin-tab" title="Fora do escopo deste protótipo">Planejados</button>
+    </div>
+
+    <!-- ============ TAB: ENVELOPES ============ -->
+    <div class="fin-view">
+
+      <!-- KPIs -->
+      <div class="env-kpis">
+        <div class="kpi">
+          <div class="kpi-label">Orçado · envelopes abertos</div>
+          <div class="kpi-value">R$&nbsp;5.870</div>
+          <div class="kpi-sub">7 envelopes ativos em julho</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Realizado no mês</div>
+          <div class="kpi-value">R$&nbsp;3.520</div>
+          <div class="kpi-sub">60% do orçado · 15 dias</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill bar-amber" style="width:60%"></div></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Avulsos do mês</div>
+          <div class="kpi-value" style="color:var(--text-2)">R$&nbsp;486</div>
+          <div class="kpi-sub">gastos sem envelope</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Gastos com contexto</div>
+          <div class="kpi-value" style="color:var(--green)">72%</div>
+          <div class="kpi-sub">dos gastos de julho têm envelope</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill bar-green" style="width:72%"></div></div>
+        </div>
+      </div>
+
+      <div class="env-body">
+
+        <!-- ═══════════ COLUNA ESQUERDA: categorias de envelope ═══════════ -->
+        <div>
+
+          <!-- ── VIAGEM ── -->
+          <div class="env-type-card">
+            <div class="env-type-header expanded" onclick="toggleType(this)">
+              <span class="cat-badge c-blue">✈️ Viagem</span>
+              <div class="env-type-info">
+                <div class="env-type-progress-row">
+                  <div class="env-bar-wrap"><div class="env-bar bar-blue" style="width:63%"></div></div>
+                  <span class="env-pct">63%</span>
+                </div>
+              </div>
+              <span class="env-count">1 envelope</span>
+              <div class="env-amounts">
+                <span class="env-spent">R$&nbsp;2.840</span>
+                <span class="env-of">/ R$&nbsp;4.500</span>
+              </div>
+              <span class="env-expand-icon open">›</span>
+            </div>
+            <div class="env-list">
+              <div class="env-list-head">Envelopes</div>
+              <div class="env-row" onclick="openDrawer()">
+                <span class="env-icon">🇦🇷</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Viagem a Buenos Aires</div>
+                  <div class="env-row-meta">10 – 17 ago · compras antecipadas no planejado</div>
+                </div>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-blue" style="width:63%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent" style="font-size:12px">R$&nbsp;2.840</span>
+                  <span class="env-of">/ 4.500</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <button class="env-add-row" onclick="openModal('novoEnvModal')"><span style="font-size:15px">+</span> Novo envelope em Viagem</button>
+            </div>
+          </div>
+
+          <!-- ── SOCIAL ── -->
+          <div class="env-type-card">
+            <div class="env-type-header expanded" onclick="toggleType(this)">
+              <span class="cat-badge c-amber">🎉 Social</span>
+              <div class="env-type-info">
+                <div class="env-type-progress-row">
+                  <div class="env-bar-wrap"><div class="env-bar bar-red" style="width:100%"></div></div>
+                  <span class="env-pct over">105%</span>
+                </div>
+              </div>
+              <span class="env-count">1 envelope</span>
+              <div class="env-amounts">
+                <span class="env-spent over">R$&nbsp;630</span>
+                <span class="env-of">/ R$&nbsp;600</span>
+              </div>
+              <span class="env-expand-icon open">›</span>
+            </div>
+            <div class="env-list">
+              <div class="env-list-head">Envelopes</div>
+              <div class="env-row" onclick="openModal('retroModal')">
+                <span class="env-icon">🎂</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Aniversário da Bia</div>
+                  <div class="env-row-meta">12 jul · evento passou — clique para encerrar</div>
+                </div>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-red" style="width:100%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent over" style="font-size:12px">R$&nbsp;630</span>
+                  <span class="env-of">/ 600</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <button class="env-add-row" onclick="openModal('novoEnvModal')"><span style="font-size:15px">+</span> Novo envelope em Social</button>
+              <button class="env-archive-link">ver arquivo (2 encerrados)</button>
+            </div>
+          </div>
+
+          <!-- ── CASAL ── -->
+          <div class="env-type-card">
+            <div class="env-type-header" onclick="toggleType(this)">
+              <span class="cat-badge c-red">💛 Casal</span>
+              <div class="env-type-info">
+                <div class="env-type-progress-row">
+                  <div class="env-bar-wrap"><div class="env-bar bar-amber" style="width:80%"></div></div>
+                  <span class="env-pct warn">80%</span>
+                </div>
+              </div>
+              <span class="env-count">1 envelope</span>
+              <div class="env-amounts">
+                <span class="env-spent warn">R$&nbsp;280</span>
+                <span class="env-of">/ R$&nbsp;350</span>
+              </div>
+              <span class="env-expand-icon">›</span>
+            </div>
+            <div class="env-list hidden">
+              <div class="env-list-head">Envelopes</div>
+              <div class="env-row">
+                <span class="env-icon">🍷</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Jantar romântico</div>
+                  <div class="env-row-meta">18 jul · reserva paga, restam R$ 70</div>
+                </div>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-amber" style="width:80%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent warn" style="font-size:12px">R$&nbsp;280</span>
+                  <span class="env-of">/ 350</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <button class="env-add-row" onclick="openModal('novoEnvModal')"><span style="font-size:15px">+</span> Novo envelope em Casal</button>
+            </div>
+          </div>
+
+          <!-- ── RECORRENTES ── -->
+          <div class="env-type-card">
+            <div class="env-type-header expanded" onclick="toggleType(this)">
+              <span class="cat-badge c-teal">🔁 Recorrentes</span>
+              <div class="env-type-info">
+                <div class="env-type-progress-row">
+                  <div class="env-bar-wrap"><div class="env-bar bar-teal" style="width:72%"></div></div>
+                  <span class="env-pct">72%</span>
+                </div>
+              </div>
+              <span class="env-count">2 envelopes</span>
+              <div class="env-amounts">
+                <span class="env-spent">R$&nbsp;730</span>
+                <span class="env-of">/ R$&nbsp;1.020</span>
+              </div>
+              <span class="env-expand-icon open">›</span>
+            </div>
+            <div class="env-list">
+              <div class="env-list-head">Ciclos atuais</div>
+              <div class="env-row">
+                <span class="env-icon">🍱</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Marmita da semana</div>
+                  <div class="env-row-meta">↓ 25% abaixo da média das últimas 4 semanas</div>
+                </div>
+                <span class="env-cycle-chip">13–19 jul</span>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-teal" style="width:70%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent" style="font-size:12px">R$&nbsp;84</span>
+                  <span class="env-of">/ 120</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <div class="env-row">
+                <span class="env-icon">🛒</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Compras do mês</div>
+                  <div class="env-row-meta">⚡ no ritmo atual, estoura 4 dias antes do fim</div>
+                </div>
+                <span class="env-cycle-chip">julho</span>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-amber" style="width:72%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent" style="font-size:12px">R$&nbsp;646</span>
+                  <span class="env-of">/ 900</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <button class="env-add-row" onclick="openModal('novoEnvModal')"><span style="font-size:15px">+</span> Novo envelope recorrente</button>
+            </div>
+          </div>
+
+          <!-- ── PROJETOS ── -->
+          <div class="env-type-card">
+            <div class="env-type-header expanded" onclick="toggleType(this)">
+              <span class="cat-badge c-purple">🎯 Projetos</span>
+              <div class="env-type-info">
+                <div class="env-type-progress-row">
+                  <div class="env-bar-wrap"><div class="env-bar bar-purple" style="width:39%"></div></div>
+                  <span class="env-pct">39%</span>
+                </div>
+              </div>
+              <span class="env-count">1 projeto</span>
+              <div class="env-amounts">
+                <span class="env-spent">R$&nbsp;3.150</span>
+                <span class="env-of">/ R$&nbsp;8.000</span>
+              </div>
+              <span class="env-expand-icon open">›</span>
+            </div>
+            <div class="env-list">
+              <div class="env-list-head">Projetos e sub-envelopes</div>
+              <div class="env-row">
+                <span class="env-icon">📸</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Marca de fotografia</div>
+                  <div class="env-row-meta">sem prazo · 3 sub-envelopes</div>
+                </div>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-purple" style="width:39%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent" style="font-size:12px">R$&nbsp;3.150</span>
+                  <span class="env-of">/ 8.000</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <div class="env-row env-row-sub">
+                <span class="env-icon">🎨</span>
+                <div class="env-row-info"><div class="env-row-name">Identidade visual</div></div>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-amber" style="width:90%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent warn" style="font-size:12px">R$&nbsp;1.800</span>
+                  <span class="env-of">/ 2.000</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <div class="env-row env-row-sub">
+                <span class="env-icon">📷</span>
+                <div class="env-row-info"><div class="env-row-name">Equipamento</div></div>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-purple" style="width:30%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent" style="font-size:12px">R$&nbsp;1.350</span>
+                  <span class="env-of">/ 4.500</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <div class="env-row env-row-sub">
+                <span class="env-icon">📣</span>
+                <div class="env-row-info"><div class="env-row-name">Marketing</div></div>
+                <div class="env-row-bar-wrap"><div class="env-bar bar-gray" style="width:0%"></div></div>
+                <div class="env-amounts">
+                  <span class="env-spent" style="font-size:12px">R$&nbsp;0</span>
+                  <span class="env-of">/ 1.500</span>
+                </div>
+                <span class="env-row-chevron">›</span>
+              </div>
+              <button class="env-add-row" onclick="openModal('novoEnvModal')"><span style="font-size:15px">+</span> Novo projeto</button>
+            </div>
+          </div>
+
+          <!-- ── AVULSOS ── -->
+          <div class="env-type-card">
+            <div class="env-type-header" onclick="toggleType(this)">
+              <span class="cat-badge c-gray">📦 Avulsos</span>
+              <div class="env-type-info">
+                <div class="env-type-progress-row">
+                  <div class="env-bar-wrap"><div class="env-bar bar-gray" style="width:28%"></div></div>
+                  <span class="env-pct">28%</span>
+                </div>
+              </div>
+              <span class="env-count">gastos sem envelope</span>
+              <div class="env-amounts">
+                <span class="env-spent">R$&nbsp;486</span>
+                <span class="env-of">no mês</span>
+              </div>
+              <span class="env-expand-icon">›</span>
+            </div>
+            <div class="env-list hidden">
+              <div class="env-list-head">Gastos sem envelope em julho</div>
+              <div class="env-row" style="cursor:default">
+                <span class="cat-badge c-amber" style="font-size:10.5px">🚗 Transporte</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Uber centro</div>
+                  <div class="env-row-meta">14 jul</div>
+                </div>
+                <button class="avulso-assign">+ envelope</button>
+                <span class="avulso-amt">−&nbsp;R$&nbsp;24</span>
+              </div>
+              <div class="env-row" style="cursor:default">
+                <span class="cat-badge c-teal" style="font-size:10.5px">💊 Saúde</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Farmácia</div>
+                  <div class="env-row-meta">13 jul</div>
+                </div>
+                <button class="avulso-assign">+ envelope</button>
+                <span class="avulso-amt">−&nbsp;R$&nbsp;62</span>
+              </div>
+              <div class="env-row" style="cursor:default">
+                <span class="cat-badge c-green" style="font-size:10.5px">🍽 Alimentação</span>
+                <div class="env-row-info">
+                  <div class="env-row-name">Padaria</div>
+                  <div class="env-row-meta">12 jul</div>
+                </div>
+                <button class="avulso-assign">+ envelope</button>
+                <span class="avulso-amt">−&nbsp;R$&nbsp;18</span>
+              </div>
+            </div>
+          </div>
+
+          <button class="env-add-cat" onclick="openModal('novoEnvModal')">
+            <span style="font-size:16px">+</span> Novo envelope
+          </button>
+        </div>
+
+        <!-- ═══════════ COLUNA DIREITA: resumo ═══════════ -->
+        <div class="env-right">
+          <div class="sc">
+            <div class="sc-head">
+              <span class="sc-title">Resumo por tipo</span>
+              <span class="sc-sub">Julho 2026</span>
+            </div>
+            <div class="sc-body" style="padding-top:8px;padding-bottom:8px">
+              <div class="env-total-row">
+                <span class="env-total-name"><span>✈️</span> Viagem</span>
+                <span class="env-total-val">R$&nbsp;2.840</span>
+              </div>
+              <div class="env-total-row">
+                <span class="env-total-name"><span>🎉</span> Social</span>
+                <span class="env-total-val" style="color:var(--red)">R$&nbsp;630</span>
+              </div>
+              <div class="env-total-row">
+                <span class="env-total-name"><span>💛</span> Casal</span>
+                <span class="env-total-val">R$&nbsp;280</span>
+              </div>
+              <div class="env-total-row">
+                <span class="env-total-name"><span>🔁</span> Recorrentes</span>
+                <span class="env-total-val">R$&nbsp;730</span>
+              </div>
+              <div class="env-total-row">
+                <span class="env-total-name"><span>🎯</span> Projetos</span>
+                <span class="env-total-val">R$&nbsp;3.150</span>
+              </div>
+              <div style="height:1px;background:var(--border);margin:8px 0"></div>
+              <div class="env-total-row" style="font-weight:700">
+                <span class="env-total-name">Total em envelopes</span>
+                <span class="env-total-val">R$&nbsp;3.520</span>
+              </div>
+              <div class="env-total-row">
+                <span class="env-total-name" style="color:var(--text-2)">Avulsos</span>
+                <span class="env-total-val" style="color:var(--text-2)">R$&nbsp;486</span>
+              </div>
+            </div>
+          </div>
+          <div class="sc">
+            <div class="sc-head"><span class="sc-title">Dicas</span></div>
+            <div class="sc-body" style="padding-top:8px;padding-bottom:8px">
+              <div class="env-tip">
+                <div class="env-tip-icon" style="background:var(--red-soft)">🏁</div>
+                <div><strong>Aniversário da Bia</strong> já passou — encerre o envelope para ver a retrospectiva.</div>
+              </div>
+              <div class="env-tip">
+                <div class="env-tip-icon" style="background:#FEF2E4">⚡</div>
+                <div><strong>Compras do mês</strong> estoura o ciclo 4 dias antes do fim no ritmo atual.</div>
+              </div>
+              <div class="env-tip">
+                <div class="env-tip-icon" style="background:var(--green-soft)">✅</div>
+                <div><strong>72%</strong> dos gastos de julho têm envelope — seu melhor mês até agora.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== DRAWER: DETALHE DO ENVELOPE ======================== -->
+<div class="drawer-overlay hidden" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer hidden" id="drawer">
+  <div class="drawer-hd">
+    <div class="drawer-hd-row">
+      <span class="env-icon" style="font-size:20px">🇦🇷</span>
+      <span class="drawer-title">Viagem a Buenos Aires</span>
+      <span class="cat-badge c-blue">✈️ Viagem</span>
+      <button class="close-btn" onclick="closeDrawer()">×</button>
+    </div>
+    <div class="drawer-period">10 – 17 de agosto · envelope aberto · criado em 2 jul</div>
+  </div>
+  <div class="drawer-bd">
+    <div class="drawer-big">
+      <span class="drawer-big-value">R$&nbsp;2.840</span>
+      <span class="drawer-big-of">/ R$&nbsp;4.500 orçados</span>
+    </div>
+    <div class="env-bar-row">
+      <div class="env-bar-wrap" style="height:6px"><div class="env-bar bar-blue" style="width:63%"></div></div>
+      <span class="env-pct">63%</span>
+    </div>
+    <div class="env-pace good" style="margin-top:10px">✓ 63% comprometidos antes da viagem — restam R$ 1.660 para os 8 dias</div>
+
+    <div class="drawer-section-label">Por categoria dentro do envelope</div>
+    <div class="drawer-catbreak">
+      <div class="drawer-cat-row">
+        <span class="drawer-cat-name">✈️ Transporte</span>
+        <div class="env-sub-bar-wrap"><div class="env-sub-bar bar-amber" style="width:100%"></div></div>
+        <span class="drawer-cat-val">R$&nbsp;1.980</span>
+      </div>
+      <div class="drawer-cat-row">
+        <span class="drawer-cat-name">🏠 Moradia</span>
+        <div class="env-sub-bar-wrap"><div class="env-sub-bar bar-blue" style="width:38%"></div></div>
+        <span class="drawer-cat-val">R$&nbsp;760</span>
+      </div>
+      <div class="drawer-cat-row">
+        <span class="drawer-cat-name">🎮 Lazer</span>
+        <div class="env-sub-bar-wrap"><div class="env-sub-bar bar-red" style="width:5%"></div></div>
+        <span class="drawer-cat-val">R$&nbsp;100</span>
+      </div>
+    </div>
+
+    <div class="drawer-section-label">Gastos (3)</div>
+    <div class="drawer-txn">
+      <span class="cat-badge c-amber" style="font-size:10.5px">🚗 Transporte</span>
+      <div class="drawer-txn-info">
+        <div class="drawer-txn-name">Passagens GRU ✈ EZE <span style="color:var(--amber);font-size:10px" title="Data fora do período do envelope — normal em gastos antecipados">· antecipado</span></div>
+        <div class="drawer-txn-meta">3 jul</div>
+      </div>
+      <span class="drawer-txn-amt" style="color:var(--red)">−&nbsp;R$&nbsp;1.980</span>
+    </div>
+    <div class="drawer-txn">
+      <span class="cat-badge c-blue" style="font-size:10.5px">🏠 Moradia</span>
+      <div class="drawer-txn-info">
+        <div class="drawer-txn-name">Airbnb Palermo (sinal)</div>
+        <div class="drawer-txn-meta">6 jul</div>
+      </div>
+      <span class="drawer-txn-amt" style="color:var(--red)">−&nbsp;R$&nbsp;760</span>
+    </div>
+    <div class="drawer-txn">
+      <span class="cat-badge c-red" style="font-size:10.5px">🎮 Lazer</span>
+      <div class="drawer-txn-info">
+        <div class="drawer-txn-name">Ingressos tango show</div>
+        <div class="drawer-txn-meta">11 jul</div>
+      </div>
+      <span class="drawer-txn-amt" style="color:var(--red)">−&nbsp;R$&nbsp;100</span>
+    </div>
+  </div>
+  <div class="drawer-ft">
+    <button class="btn-neutral" style="flex:1">Editar</button>
+    <button class="btn-neutral" style="flex:1" onclick="closeDrawer();openModal('retroModal')">🏁 Encerrar envelope</button>
+  </div>
+</div>
+
+<!-- ======================== MODAL: NOVO ENVELOPE ======================== -->
+<div class="overlay hidden" id="novoEnvModal">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-title">Novo envelope</span>
+      <button class="close-btn" onclick="closeModal('novoEnvModal')">×</button>
+    </div>
+    <div class="modal-bd">
+      <div class="env-type-toggle">
+        <button class="env-type-btn selected" data-kind="event" onclick="pickKind(this)">
+          <span class="t1">🎟</span><span class="t2">Evento único</span><span class="t3">começo e fim</span>
+        </button>
+        <button class="env-type-btn" data-kind="recurring" onclick="pickKind(this)">
+          <span class="t1">🔁</span><span class="t2">Recorrente</span><span class="t3">hábito com ciclo</span>
+        </button>
+        <button class="env-type-btn" data-kind="project" onclick="pickKind(this)">
+          <span class="t1">🎯</span><span class="t2">Projeto</span><span class="t3">objetivo progressivo</span>
+        </button>
+      </div>
+
+      <label class="field">Nome
+        <input type="text" placeholder="Ex.: Viagem a Buenos Aires" value="">
+      </label>
+
+      <div id="fEventType">
+        <span class="field">Tipo de evento</span>
+        <div class="pills">
+          <button class="pill">🎉 Social</button>
+          <button class="pill">💛 Casal</button>
+          <button class="pill selected">✈️ Viagem</button>
+          <button class="pill">🔄 Rotina</button>
+          <button class="pill">💊 Saúde</button>
+          <button class="pill">🏠 Casa</button>
+          <button class="pill">💼 Profissional</button>
+          <button class="pill ghost">+ novo tipo</button>
+        </div>
+      </div>
+
+      <!-- Evento único -->
+      <div id="fEvent">
+        <div class="field-row">
+          <label class="field">Orçamento <input type="text" placeholder="R$ 0,00"></label>
+          <label class="field">Início <input type="date" value="2026-08-10"></label>
+          <label class="field">Fim <input type="date" value="2026-08-17"></label>
+        </div>
+      </div>
+
+      <!-- Recorrente -->
+      <div id="fRecurring" class="hidden">
+        <div class="field-row">
+          <label class="field">Orçamento por ciclo <input type="text" placeholder="R$ 0,00"></label>
+          <label class="field">Cadência
+            <select><option>Semanal</option><option>Mensal</option></select>
+          </label>
+        </div>
+        <div style="font:500 11px var(--font);color:var(--text-3);margin-top:8px">A cada ciclo, uma nova instância é criada automaticamente e a anterior entra no histórico.</div>
+      </div>
+
+      <!-- Projeto -->
+      <div id="fProject" class="hidden">
+        <label class="field">Orçamento total <input type="text" placeholder="R$ 0,00"></label>
+        <span class="field" style="margin-top:12px;display:block">Sub-envelopes</span>
+        <div class="sub-editor">
+          <div class="sub-editor-row"><input type="text" value="Identidade visual"><input class="amt" type="text" value="R$ 2.000"></div>
+          <div class="sub-editor-row"><input type="text" value="Equipamento"><input class="amt" type="text" value="R$ 4.500"></div>
+          <button class="sub-editor-add">+ Adicionar sub-envelope</button>
+        </div>
+        <div style="font:500 11px var(--font);color:var(--text-3);margin-top:8px">Os gastos são associados aos sub-envelopes, não ao projeto diretamente.</div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-neutral" onclick="closeModal('novoEnvModal')">Cancelar</button>
+      <button class="btn-primary" onclick="closeModal('novoEnvModal')">Criar envelope</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== MODAL: NOVO LANÇAMENTO (com envelope) ======================== -->
+<div class="overlay hidden" id="lancarModal">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-title">Novo lançamento</span>
+      <button class="close-btn" onclick="closeModal('lancarModal')">×</button>
+    </div>
+    <div class="modal-bd">
+      <div class="env-type-toggle" style="grid-template-columns:1fr 1fr">
+        <button class="env-type-btn selected"><span class="t2">− Gasto</span></button>
+        <button class="env-type-btn"><span class="t2">+ Receita</span></button>
+      </div>
+      <div class="field-row">
+        <label class="field">Valor <input type="text" placeholder="R$ 0,00" value="R$ 145,00"></label>
+        <label class="field">Data <input type="date" value="2026-07-15"></label>
+      </div>
+      <label class="field">Descrição <input type="text" value="Reserva restaurante Don Julio"></label>
+      <div>
+        <span class="field">Categoria</span>
+        <div class="pills">
+          <button class="pill">🏠 Moradia</button>
+          <button class="pill selected">🍽 Alimentação</button>
+          <button class="pill">🚗 Transporte</button>
+          <button class="pill">💊 Saúde</button>
+          <button class="pill">🎮 Lazer</button>
+          <button class="pill">📦 Outros</button>
+        </div>
+      </div>
+      <div>
+        <span class="field">Envelope <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--text-3)">— opcional; sem seleção = avulso</span></span>
+        <div class="pills">
+          <button class="pill selected">🇦🇷 Viagem a Buenos Aires</button>
+          <button class="pill">🍷 Jantar romântico</button>
+          <button class="pill">🍱 Marmita · sem 13–19</button>
+          <button class="pill">🛒 Compras · julho</button>
+          <button class="pill">📸 Marca de fotografia › Identidade</button>
+          <button class="pill">📸 Marca de fotografia › Equipamento</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-neutral" onclick="closeModal('lancarModal')">Cancelar</button>
+      <button class="btn-primary" onclick="closeModal('lancarModal')">Salvar lançamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== MODAL: RETROSPECTIVA (encerramento) ======================== -->
+<div class="overlay hidden" id="retroModal">
+  <div class="modal" style="width:420px">
+    <div class="modal-hd">
+      <span class="modal-title">Encerrar · Aniversário da Bia</span>
+      <button class="close-btn" onclick="closeModal('retroModal')">×</button>
+    </div>
+    <div class="modal-bd">
+      <div class="retro-hero">
+        <div class="retro-emoji">🎂</div>
+        <div class="retro-total">R$&nbsp;630</div>
+        <div class="retro-verdict bad">R$ 30 acima do orçamento (+5%)</div>
+      </div>
+      <div class="retro-stats">
+        <div class="retro-stat">
+          <div class="retro-stat-label">Orçado</div>
+          <div class="retro-stat-value">R$&nbsp;600</div>
+        </div>
+        <div class="retro-stat">
+          <div class="retro-stat-label">Gastos lançados</div>
+          <div class="retro-stat-value">6</div>
+        </div>
+        <div class="retro-stat">
+          <div class="retro-stat-label">Maior gasto</div>
+          <div class="retro-stat-value">Bolo · R$&nbsp;180</div>
+        </div>
+        <div class="retro-stat">
+          <div class="retro-stat-label">Categoria dominante</div>
+          <div class="retro-stat-value">🍽 Alimentação · 58%</div>
+        </div>
+      </div>
+      <div style="font:500 11.5px var(--font);color:var(--text-3);text-align:center">O envelope encerrado fica no arquivo do grupo Social — o custo continua consultável para sempre.</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-neutral" onclick="closeModal('retroModal')">Manter aberto</button>
+      <button class="btn-primary" onclick="closeModal('retroModal')">Encerrar envelope</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function openDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('hidden');
+  document.getElementById('drawer').classList.remove('hidden');
+}
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.add('hidden');
+  document.getElementById('drawer').classList.add('hidden');
+}
+function toggleType(header) {
+  if (event.target.tagName === 'BUTTON' || event.target.tagName === 'INPUT') return;
+  header.classList.toggle('expanded');
+  header.querySelector('.env-expand-icon').classList.toggle('open');
+  header.nextElementSibling.classList.toggle('hidden');
+}
+function pickKind(btn) {
+  document.querySelectorAll('.env-type-btn[data-kind]').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  const k = btn.dataset.kind;
+  document.getElementById('fEvent').classList.toggle('hidden', k !== 'event');
+  document.getElementById('fRecurring').classList.toggle('hidden', k !== 'recurring');
+  document.getElementById('fProject').classList.toggle('hidden', k !== 'project');
+  document.getElementById('fEventType').classList.toggle('hidden', k === 'project');
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeDrawer();
+    document.querySelectorAll('.overlay').forEach(o => o.classList.add('hidden'));
+  }
+});
+</script>
+</body>
+</html>

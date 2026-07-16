@@ -172,6 +172,30 @@ CREATE TABLE IF NOT EXISTS finance_wallets (
   sort_order  INTEGER NOT NULL DEFAULT 0
 );
 
+-- Envelopes financeiros: eventos, templates recorrentes, instâncias e sub-envelopes de projeto
+CREATE TABLE IF NOT EXISTS finance_envelopes (
+  id                 TEXT PRIMARY KEY,
+  name               TEXT NOT NULL,
+  kind               TEXT NOT NULL CHECK (kind IN ('event', 'recurring', 'project', 'sub')),
+  event_type         TEXT,
+  icon               TEXT DEFAULT '✉️',
+  color              TEXT DEFAULT 'gray',
+  budget             NUMERIC(12,2),
+  period_start       DATE,
+  period_end         DATE,
+  status             TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+  closed_at          TIMESTAMPTZ,
+  parent_id          TEXT REFERENCES finance_envelopes(id) ON DELETE CASCADE,
+  recurrence         TEXT CHECK (recurrence IN ('weekly', 'monthly')),
+  linked_activity_id TEXT,
+  sort_order         INTEGER NOT NULL DEFAULT 0,
+  created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Migração para bancos já existentes:
+-- CREATE TABLE IF NOT EXISTS finance_envelopes (... bloco acima ...);
+-- ALTER TABLE finance_transactions ADD COLUMN IF NOT EXISTS envelope_id TEXT REFERENCES finance_envelopes(id) ON DELETE SET NULL;
+
 -- Transações (receitas e despesas)
 CREATE TABLE IF NOT EXISTS finance_transactions (
   id          TEXT PRIMARY KEY,
@@ -181,11 +205,13 @@ CREATE TABLE IF NOT EXISTS finance_transactions (
   amount      NUMERIC(12,2) NOT NULL,
   date        DATE NOT NULL,
   category_id TEXT REFERENCES finance_categories(id) ON DELETE SET NULL,
-  wallet_id   TEXT REFERENCES finance_wallets(id) ON DELETE SET NULL
+  wallet_id   TEXT REFERENCES finance_wallets(id) ON DELETE SET NULL,
+  envelope_id TEXT REFERENCES finance_envelopes(id) ON DELETE SET NULL
 );
 
 -- Migração para bancos já existentes (rodar se a tabela finance_transactions já existia sem a coluna):
 -- ALTER TABLE finance_transactions ADD COLUMN IF NOT EXISTS wallet_id TEXT REFERENCES finance_wallets(id) ON DELETE SET NULL;
+-- ALTER TABLE finance_transactions ADD COLUMN IF NOT EXISTS envelope_id TEXT REFERENCES finance_envelopes(id) ON DELETE SET NULL;
 
 -- Compras planejadas
 CREATE TABLE IF NOT EXISTS finance_planned_purchases (
@@ -214,7 +240,10 @@ CREATE INDEX IF NOT EXISTS fin_txn_date_idx    ON finance_transactions(date);
 CREATE INDEX IF NOT EXISTS fin_txn_type_idx    ON finance_transactions(type);
 CREATE INDEX IF NOT EXISTS fin_txn_cat_idx     ON finance_transactions(category_id);
 CREATE INDEX IF NOT EXISTS fin_txn_wallet_idx  ON finance_transactions(wallet_id);
+CREATE INDEX IF NOT EXISTS fin_txn_envelope_idx ON finance_transactions(envelope_id);
 CREATE INDEX IF NOT EXISTS fin_budget_cat_idx  ON finance_budget_items(category_id);
+CREATE INDEX IF NOT EXISTS fin_env_status_idx  ON finance_envelopes(status);
+CREATE INDEX IF NOT EXISTS fin_env_parent_idx  ON finance_envelopes(parent_id);
 
 -- ============================================================
 -- Feature: Multi-usuário com login Google
@@ -232,6 +261,7 @@ ALTER TABLE finance_wallets          ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE finance_transactions     ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE finance_planned_purchases ADD COLUMN IF NOT EXISTS user_id TEXT;
 ALTER TABLE finance_budget_items     ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE finance_envelopes        ADD COLUMN IF NOT EXISTS user_id TEXT;
 
 -- Índices de performance por usuário
 CREATE INDEX IF NOT EXISTS boards_user_id_idx         ON boards(user_id);
@@ -244,3 +274,4 @@ CREATE INDEX IF NOT EXISTS fin_wallet_user_id_idx     ON finance_wallets(user_id
 CREATE INDEX IF NOT EXISTS fin_txn_user_id_idx        ON finance_transactions(user_id);
 CREATE INDEX IF NOT EXISTS fin_purchase_user_id_idx   ON finance_planned_purchases(user_id);
 CREATE INDEX IF NOT EXISTS fin_budget_user_id_idx     ON finance_budget_items(user_id);
+CREATE INDEX IF NOT EXISTS fin_env_user_id_idx        ON finance_envelopes(user_id);
