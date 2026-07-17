@@ -517,7 +517,10 @@ function renderSidebar() {
   sidebarCalendarItemEl.classList.toggle('active', currentView === 'calendar');
   sidebarActivitiesItemEl.classList.toggle('active', currentView === 'activities');
   const finItem = document.getElementById('sidebarFinanceItem');
-  if (finItem) finItem.classList.toggle('active', currentView === 'finance');
+  if (finItem) {
+    finItem.classList.toggle('active', currentView === 'finance');
+    finItem.classList.toggle('hidden', !posthog.isFeatureEnabled('financas'));
+  }
 }
 
 function renderSidebarAddBoardArea() {
@@ -600,6 +603,9 @@ function updateAppTitle() {
 
 // ---------- view mode (board vs calendário vs atividades vs finanças) ----------
 function setView(view) {
+  // Feature flag: Finanças. Mantenha a flag em 100% no painel do PostHog.
+  // Baixar para 0% funciona como kill switch (a view de Finanças fica inacessível).
+  if (view === 'finance' && !posthog.isFeatureEnabled('financas')) view = 'board';
   currentView = view;
   const isCalendar   = view === 'calendar';
   const isActivities = view === 'activities';
