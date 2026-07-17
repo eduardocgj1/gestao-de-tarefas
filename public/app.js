@@ -2640,9 +2640,13 @@ function toggleDayDrawerExpand() {
 }
 
 function openDayPopup(dateKey) {
-  // Feature flag: Visão do Dia. Mantenha a flag em 100% no painel do PostHog.
-  // Baixar para 0% funciona como kill switch (a Visão do Dia deixa de abrir).
-  if (!posthog.isFeatureEnabled('visao-do-dia')) return;
+  // Experimento A/B "Impacto da Visão do Dia".
+  // getFeatureFlag retorna a variante em que o usuário caiu:
+  //   'test'    -> vê a Visão do Dia (feature ligada)
+  //   'control' -> não vê (comportamento sem a feature)
+  //   false     -> experimento desligado no painel = kill switch (ninguém vê)
+  // Ler a flag aqui também matricula o usuário no experimento (evento $feature_flag_called).
+  if (posthog.getFeatureFlag('experimento-visao-do-dia') !== 'test') return;
   dayPopupDate = dateKey;
   dayPopupMode = 'plan';
   dayPopupGrouping = {};
