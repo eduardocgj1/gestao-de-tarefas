@@ -391,6 +391,7 @@ function togglePomodoro() {
   } else {
     startPomodoroInterval();
     pomodoro.running = true;
+    if (pomodoro.mode === 'focus') posthog.capture('pomodoro_iniciado');
   }
   savePomodoro();
   renderPomodoro();
@@ -742,6 +743,7 @@ function setCompleted(task, completed, board = currentBoard()) {
     task.completed = true;
     task.completedAt = Date.now();
     task.priority = null;
+    posthog.capture('tarefa_completada', { urgent: !!task.urgent, board_id: board && board.id });
     if (!task.urgent) {
       const normal = siblingTasks(board, dateKey, task.id).filter(t => !t.urgent && !t.completed)
         .sort((a, b) => (a.priority || 0) - (b.priority || 0));
@@ -1245,6 +1247,7 @@ function addTask(dateKey, name) {
     delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
     fieldValues: {}, team: [],
   });
+  posthog.capture('tarefa_criada', { board_id: activeBoardId });
   save(); render();
 }
 function findTask(id, board = currentBoard()) { return board.tasks.find(t => t.id === id); }
@@ -2631,6 +2634,9 @@ function toggleDayDrawerExpand() {
 }
 
 function openDayPopup(dateKey) {
+  // Feature flag: Visão do Dia. Mantenha a flag em 100% no painel do PostHog.
+  // Baixar para 0% funciona como kill switch (a Visão do Dia deixa de abrir).
+  if (!posthog.isFeatureEnabled('visao-do-dia')) return;
   dayPopupDate = dateKey;
   dayPopupMode = 'plan';
   dayPopupGrouping = {};
@@ -7383,6 +7389,7 @@ async function initAuth() {
     if (session) {
       currentUser = session.user;
       authToken = session.access_token;
+      posthog.identify(currentUser.id, { email: currentUser.email });
       updateUserMenu(currentUser);
       hideLoginScreen();
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
@@ -7392,6 +7399,7 @@ async function initAuth() {
     } else {
       currentUser = null;
       authToken = null;
+      posthog.reset();
       updateUserMenu(null);
       showLoginScreen();
     }
