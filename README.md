@@ -2,6 +2,8 @@
 
 Aplicativo web pessoal para organizar o dia a dia: um board de tarefas por colunas de dia, calendário, lista de atividades, controle financeiro e timer pomodoro — tudo num só lugar, com dados salvos na nuvem.
 
+> Revisão em andamento: esta branch reúne as alterações recentes do app e da documentação para avaliação do pull request.
+
 🔗 **Demo:** [bussola.onrender.com](https://bussola.onrender.com)
 
 > O plano gratuito do Render hiberna após 15 min sem uso. Na primeira visita pode demorar ~30s para carregar.
