@@ -1,5 +1,5 @@
 -- ============================================================
--- Schema para o app Gestão de Tarefas
+-- Schema para o app Bússola
 -- Rodar no SQL Editor do Supabase
 -- ============================================================
 

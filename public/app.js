@@ -598,7 +598,7 @@ function deleteBoard(id) {
 
 function updateAppTitle() {
   const titles = { calendar: 'Calendário', activities: 'Atividades', finance: 'Finanças' };
-  document.getElementById('appTitle').textContent = titles[currentView] || (currentBoard() ? currentBoard().name : 'Tarefas 2026');
+  document.getElementById('appTitle').textContent = titles[currentView] || (currentBoard() ? currentBoard().name : 'Bússola');
 }
 
 // ---------- view mode (board vs calendário vs atividades vs finanças) ----------

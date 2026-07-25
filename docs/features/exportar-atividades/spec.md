@@ -1,7 +1,7 @@
 # Handoff: Exportar atividades para report semanal
 
 ## Overview
-Feature for the **Tarefas** app (a day-column task board, Node/Express backend +
+Feature for the **Bússola** app (a day-column task board, Node/Express backend +
 vanilla JS/DOM frontend — see `public/index.html`, `public/app.js`,
 `public/styles.css`, `server.js`, `data.json` in the main repo). It lets a user
 select a week and generate a formatted, PPT-ready list of that week's

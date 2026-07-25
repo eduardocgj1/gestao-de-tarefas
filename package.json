@@ -1,7 +1,7 @@
 {
-  "name": "gestao-de-tarefas",
+  "name": "bussola",
   "version": "1.0.0",
-  "description": "App de gestão de tarefas pessoal",
+  "description": "Bússola — app pessoal de organização: tarefas, calendário, pomodoro e finanças",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

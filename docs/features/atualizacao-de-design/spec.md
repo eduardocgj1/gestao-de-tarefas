@@ -1,4 +1,4 @@
-# Handoff: Modernização visual — Tarefas 2026
+# Handoff: Modernização visual — Bússola
 
 ## Overview
 Redesign visual e de interação do app de gestão de tarefas existente (board por colunas-de-dia, calendário mensal, pomodoro, boards múltiplos) + implementação da feature nova "Visão do Dia" (popup de planejamento/fechamento do dia). O app roda hoje em Node/Express (`server.js`) com estado em `data.json` — **isso não muda**. Este handoff é só sobre a camada de UI (`public/index.html`, `public/styles.css`, `public/app.js`).

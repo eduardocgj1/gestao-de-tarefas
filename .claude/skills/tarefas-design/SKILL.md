@@ -1,6 +1,6 @@
 ---
 name: tarefas-design
-description: Use esta skill para gerar interfaces e assets com a identidade visual do Tarefas (app de gestão de tarefas por colunas de dia, em português BR), tanto para produção quanto para protótipos descartáveis. Contém tokens de design, guias de cores, tipografia, componentes e UI kit completo do app.
+description: Use esta skill para gerar interfaces e assets com a identidade visual do Bússola (app de gestão de tarefas por colunas de dia, em português BR), tanto para produção quanto para protótipos descartáveis. Contém tokens de design, guias de cores, tipografia, componentes e UI kit completo do app.
 user-invocable: true
 ---
 

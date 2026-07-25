@@ -25,8 +25,8 @@ Este documento descreve exatamente o que fazer, onde fazer e o que acontece em c
 ### 1. Clone o repositório
 No terminal do seu computador:
 ```bash
-git clone https://github.com/eduardocgj1/gestao-de-tarefas.git
-cd gestao-de-tarefas
+git clone https://github.com/eduardocgj1/bussola.git
+cd bussola
 ```
 **O que acontece:** o Git baixa todos os arquivos do GitHub para uma pasta no seu computador.
 
@@ -63,14 +63,14 @@ O processo tem duas grandes fases: **produto** (no Cowork) e **desenvolvimento**
 
 No terminal:
 ```bash
-cd gestao-de-tarefas
+cd bussola
 git checkout -b feature/nome-da-feature
 ```
 **O que acontece:** o Git cria uma cópia paralela do código chamada `feature/nome-da-feature`. Tudo que for criado ou modificado a partir de agora fica isolado nessa branch, sem afetar a versão em produção (`main`).
 
 #### Passo 2 — Conectar o Cowork à pasta local
 
-Abra o Claude Cowork e conecte a pasta `gestao-de-tarefas` do seu computador.
+Abra o Claude Cowork e conecte a pasta `bussola` do seu computador.
 
 **O que acontece:** o Cowork passa a enxergar todos os arquivos da pasta — incluindo `CLAUDE.md`, `docs/`, `.claude/skills/` e a branch que está ativa no momento. Ele não acessa o GitHub, só a pasta local.
 
@@ -176,7 +176,7 @@ git push
 
 #### Passo 1 — Abrir o projeto no VS Code
 
-Abra o VS Code na pasta `gestao-de-tarefas`. Confirme que está na branch correta:
+Abra o VS Code na pasta `bussola`. Confirme que está na branch correta:
 ```bash
 git branch
 # deve mostrar * feature/nome-da-feature
@@ -245,7 +245,7 @@ git push origin feature/nome-da-feature
 ```
 **O que acontece:** a branch com todos os commits vai para o GitHub.
 
-Abra o GitHub em `github.com/eduardocgj1/gestao-de-tarefas`, clique em "Compare & pull request", revise e faça o merge na `main`.
+Abra o GitHub em `github.com/eduardocgj1/bussola`, clique em "Compare & pull request", revise e faça o merge na `main`.
 
 **O que acontece após o merge:** o Render detecta a mudança na `main` em segundos e inicia um novo deploy automaticamente. Em 1–2 minutos o app em produção está atualizado.
 

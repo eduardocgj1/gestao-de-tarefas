@@ -1,6 +1,6 @@
 # Tarefas — Design System
 
-Sistema de design do **Tarefas**, um app pessoal de gestão de tarefas por colunas de dia (board semanal, calendário mensal, timer pomodoro, múltiplos boards) com a feature "Visão do Dia" — um drawer de planejamento e fechamento do dia.
+Sistema de design do **Bússola**, um app pessoal de gestão de tarefas por colunas de dia (board semanal, calendário mensal, timer pomodoro, múltiplos boards) com a feature "Visão do Dia" — um drawer de planejamento e fechamento do dia.
 
 ## Índice de arquivos
 
@@ -23,7 +23,7 @@ Badge, BoardPill, Button, Checkbox, EventChip, Fab, IconButton, Input, Modal, Pr
 
 ## Produto
 
-**Tarefas** — board de tarefas por dia da semana, pense num Kanban leve organizado por dia útil, com visualização mensal, timer pomodoro, múltiplos boards coloridos e o drawer "Visão do Dia" para planejamento e fechamento do dia. Interface e textos em português brasileiro.
+**Bússola** — board de tarefas por dia da semana, pense num Kanban leve organizado por dia útil, com visualização mensal, timer pomodoro, múltiplos boards coloridos e o drawer "Visão do Dia" para planejamento e fechamento do dia. Interface e textos em português brasileiro.
 
 ---
 

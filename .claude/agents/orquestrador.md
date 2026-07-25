@@ -70,7 +70,7 @@ Revise o diff completo da feature seguindo o checklist do `code-reviewer`. Se ho
 ### Etapa 5 — Pull Request
 Quando tudo estiver aprovado:
 1. Faça o push final: `git push origin feature/[nome]`
-2. Informe ao usuário para abrir o PR no GitHub: `github.com/eduardocgj1/gestao-de-tarefas/compare/feature/[nome]`
+2. Informe ao usuário para abrir o PR no GitHub: `github.com/eduardocgj1/bussola/compare/feature/[nome]`
 3. Sugira o título do PR: `feat: [nome da feature]`
 4. Sugira a descrição com base na spec v1 (objetivo e solução)
 5. Após o merge, o Render faz o deploy automaticamente

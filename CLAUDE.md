@@ -1,4 +1,4 @@
-# Gestão de Tarefas — Contexto para o Claude
+# Bússola — Contexto para o Claude
 
 ## O que é este app
 
@@ -12,7 +12,7 @@ App pessoal de gestão de tarefas com board por colunas de dia, calendário mens
 | Frontend | HTML + CSS + JavaScript vanilla (sem React, sem Vue) |
 | Banco de dados | Supabase (PostgreSQL) via `@supabase/supabase-js` v2 |
 | Hospedagem | Render (Web Service, plano Free) |
-| Repositório | GitHub — `eduardocgj1/gestao-de-tarefas` |
+| Repositório | GitHub — `eduardocgj1/bussola` |
 
 ## Estrutura de arquivos
 
