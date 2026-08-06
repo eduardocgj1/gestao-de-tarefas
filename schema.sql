@@ -275,3 +275,48 @@ CREATE INDEX IF NOT EXISTS fin_txn_user_id_idx        ON finance_transactions(us
 CREATE INDEX IF NOT EXISTS fin_purchase_user_id_idx   ON finance_planned_purchases(user_id);
 CREATE INDEX IF NOT EXISTS fin_budget_user_id_idx     ON finance_budget_items(user_id);
 CREATE INDEX IF NOT EXISTS fin_env_user_id_idx        ON finance_envelopes(user_id);
+
+-- ============================================================
+-- Feature: Visão do Dia v2
+-- Ver docs/features/visao-do-dia/spec-v2.md
+--
+-- ATENÇÃO: rodar este bloco manualmente no SQL Editor do Supabase —
+-- não é aplicado automaticamente por este repositório (sem acesso de
+-- rede ao painel a partir do ambiente de desenvolvimento).
+-- ============================================================
+
+-- Uma linha por usuário por data: teto do dia, prioridades (MIT), nota de
+-- fechamento e prioridades pré-selecionadas para o dia seguinte. Substitui o
+-- MIT que hoje vive em localStorage (chave mit-{boardId}-{date}).
+CREATE TABLE IF NOT EXISTS day_logs (
+  id                 TEXT PRIMARY KEY,        -- gerado com uid(), mesmo padrão de boards.id/tasks.id — não é UUID
+  user_id            TEXT,
+  date               DATE NOT NULL,
+  capacity           INTEGER DEFAULT NULL,    -- teto de tarefas do dia
+  mit_ids            JSONB DEFAULT '[]',      -- ids das prioridades do dia (até 3)
+  mit_when           JSONB DEFAULT '{}',      -- { taskId: 'manha' | 'tarde' | 'noite' }
+  note               TEXT DEFAULT NULL,       -- nota do dia, escrita no fechamento
+  next_day_mit_ids   JSONB DEFAULT '[]',      -- prioridades escolhidas para o dia seguinte, no fechamento
+  closed_at          TIMESTAMPTZ DEFAULT NULL -- NULL = dia aberto; setado ao "Encerrar o dia"
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS day_logs_user_id_date_idx ON day_logs(user_id, date);
+CREATE INDEX IF NOT EXISTS day_logs_user_id_idx ON day_logs(user_id);
+
+-- Novos campos em tasks: destino/motivo de uma pendência no fechamento do dia.
+-- archived é um campo próprio (não reaproveita completed) — ver v2 "Perguntas respondidas pelo design".
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deferral_reason TEXT DEFAULT NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE;
+
+-- ============================================================
+-- Feature: Visão do Dia v2 — remoção de `duration` (DESTRUTIVO)
+--
+-- ATENÇÃO — NÃO RODAR JUNTO COM O BLOCO ACIMA SEM REVISAR ANTES.
+-- Este ALTER TABLE apaga permanentemente os valores de `duration` (estimativa
+-- de minutos por tarefa) já salvos no banco. O app parou de ler/escrever essa
+-- coluna a partir da task cl-03/cl-04 (ver Registro de desenvolvimento), mas
+-- os dados continuam no banco até este comando ser executado deliberadamente.
+-- Rodar somente depois de confirmar que a perda desses dados é aceitável.
+-- ============================================================
+
+-- ALTER TABLE tasks DROP COLUMN IF EXISTS duration;

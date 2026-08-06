@@ -18,6 +18,7 @@ const memoryDb = {
   boards: [], tasks: [], calendar_events: [], people: [], app_state: [], activities: [],
   finance_categories: [], finance_wallets: [], finance_transactions: [],
   finance_planned_purchases: [], finance_budget_items: [], finance_envelopes: [],
+  day_logs: [],
 };
 
 function makeMemorySupabaseClient() {
@@ -94,7 +95,12 @@ function makeMemorySupabaseClient() {
               }
               const inner = String(pattern).replace(/^\(|\)$/g, '');
               const allowed = new Set(inner.split(',').filter(Boolean));
-              memoryDb[table] = memoryDb[table].filter(r => !allowed.has(String(r[column])) && matchesFilters(r, filters));
+              // Mantém a linha se ela NÃO bate nos filtros (outro usuário, não deve ser tocada)
+              // OU se o id está na lista de sobreviventes — a versão anterior desta condição
+              // estava invertida e apagava exatamente o oposto do pretendido (achado ao testar
+              // localmente a feature Visão do Dia v2; bug pré-existente no fallback de dev sem
+              // Supabase, não relacionado à feature, mas corrigido aqui por bloquear o teste manual).
+              memoryDb[table] = memoryDb[table].filter(r => !matchesFilters(r, filters) || allowed.has(String(r[column])));
               return Promise.resolve({ error: null });
             },
           };
@@ -167,6 +173,7 @@ async function loadState(userId) {
     { data: people,     error: e4 },
     { data: state,      error: e5 },
     { data: activities, error: e6 },
+    { data: dayLogs,    error: e7 },
   ] = await Promise.all([
     supabase.from('boards').select('*').eq('user_id', userId),
     supabase.from('tasks').select('*').eq('user_id', userId),
@@ -174,10 +181,11 @@ async function loadState(userId) {
     supabase.from('people').select('*').eq('user_id', userId),
     supabase.from('app_state').select('*').like('key', `${userId}:%`),
     supabase.from('activities').select('*').eq('user_id', userId),
+    supabase.from('day_logs').select('*').eq('user_id', userId),
   ]);
 
-  if (e1 || e2 || e3 || e4 || e5 || e6) {
-    throw new Error([e1, e2, e3, e4, e5, e6].filter(Boolean).map(e => e.message).join('; '));
+  if (e1 || e2 || e3 || e4 || e5 || e6 || e7) {
+    throw new Error([e1, e2, e3, e4, e5, e6, e7].filter(Boolean).map(e => e.message).join('; '));
   }
 
   // Indexar estado global — strip do prefixo userId: das chaves
@@ -215,19 +223,18 @@ async function loadState(userId) {
       tasks: tasksByBoard[b.id] || [],
     })),
     activeBoardId:     appState.activeBoardId    ?? null,
-    pomodoroSettings:  appState.pomodoroSettings ?? { focus: 25, short: 5, long: 15 },
-    pomodoro:          appState.pomodoro         ?? { mode: 'focus', remaining: 25 * 60, running: false, cycle: 0, updatedAt: Date.now() },
     calendarEvents:    (events || []).map(dbEventToApp),
     people:            people || [],
     exportViews:       appState.exportViews      ?? {},
     activities:        mappedActivities,
+    dayLogs:           Object.fromEntries((dayLogs || []).map(l => [l.date, dbDayLogToApp(l)])),
   };
 }
 
 // ── Escrita: sincroniza estado completo no Supabase ─────────
 async function saveState(state, userId) {
   const { boards = [], activities = [], calendarEvents = [], people = [], activeBoardId,
-          pomodoroSettings, pomodoro, exportViews = {} } = state;
+          exportViews = {}, dayLogs = {} } = state;
 
   // 1. Upsert boards
   if (boards.length > 0) {
@@ -322,11 +329,23 @@ async function saveState(state, userId) {
     if (error) throw error;
   }
 
+  // 6.5. Upsert day_logs — SEM delete-missing, ao contrário do padrão acima.
+  // day_logs é um registro histórico que cresce um item por dia; o frontend não
+  // mantém o histórico completo em memória, então aplicar o mesmo delete-missing
+  // dos outros arrays apagaria dias fechados antigos a cada save(). Ver risco
+  // "day_logs e o padrão upsert+delete" em spec-v2.md.
+  const dayLogRows = Object.entries(dayLogs).map(([dateKey, log]) => ({
+    ...appDayLogToDb(dateKey, log, userId),
+    user_id: userId,
+  }));
+  if (dayLogRows.length > 0) {
+    const { error } = await supabase.from('day_logs').upsert(dayLogRows, { onConflict: 'id' });
+    if (error) throw error;
+  }
+
   // 7. Upsert app_state — chaves prefixadas com userId: para isolamento por usuário
   const stateRows = [
     { key: `${userId}:activeBoardId`,    value: activeBoardId    ?? null },
-    { key: `${userId}:pomodoroSettings`, value: pomodoroSettings ?? {} },
-    { key: `${userId}:pomodoro`,         value: pomodoro         ?? {} },
     { key: `${userId}:exportViews`,      value: exportViews      ?? {} },
   ];
   const { error: stateErr } = await supabase.from('app_state').upsert(stateRows, { onConflict: 'key' });
@@ -343,7 +362,6 @@ function appTaskToDb(t, boardId, activityId = null) {
     task_date:      t.date       || null,
     delivery_date:  t.deliveryDate || null,
     link:           t.link       || '',
-    duration:       t.duration   ?? 0,
     priority:       t.priority   ?? null,
     urgent:         t.urgent     ?? false,
     urgent_rank:    t.urgentRank ?? 0,
@@ -361,6 +379,8 @@ function appTaskToDb(t, boardId, activityId = null) {
     antecedencia_minima_dias: t.antecedenciaMiniDias ?? null,
     antecedencia_max_dias:    t.antecedenciaMaxDias  ?? null,
     antecedencia_rec_dias:    t.antecedenciaRecDias  ?? null,
+    deferral_reason: t.deferralReason ?? null,
+    archived:        t.archived       ?? false,
   };
 }
 
@@ -373,7 +393,6 @@ function dbTaskToApp(t) {
     date:          t.task_date      || '',
     deliveryDate:  t.delivery_date  || '',
     link:          t.link           || '',
-    duration:      t.duration       ?? 0,
     priority:      t.priority       ?? null,
     urgent:        t.urgent         ?? false,
     urgentRank:    t.urgent_rank    ?? 0,
@@ -391,6 +410,8 @@ function dbTaskToApp(t) {
     antecedenciaMiniDias: t.antecedencia_minima_dias ?? null,
     antecedenciaMaxDias:  t.antecedencia_max_dias    ?? null,
     antecedenciaRecDias:  t.antecedencia_rec_dias    ?? null,
+    deferralReason: t.deferral_reason ?? null,
+    archived:       t.archived        ?? false,
   };
 }
 
@@ -413,6 +434,36 @@ function dbEventToApp(e) {
     endDate:   e.end_date   || '',
     boardIds:  e.board_ids  ?? [],
     isHoliday: e.is_holiday ?? false,
+  };
+}
+
+// day_logs: uma linha por usuário por data (teto, prioridades do dia, nota,
+// prioridades de amanhã, marca de fechamento). Ver "Feature: Visão do Dia v2"
+// em schema.sql e spec-v2.md §"v3 — Discovery Técnico".
+// O frontend guarda dayLogs indexado por dateKey (sem id próprio) — o id da
+// linha é derivado de userId+date (mesma convenção de app_state.key), o que
+// mantém o upsert idempotente por (user_id, date) usando onConflict: 'id'.
+function appDayLogToDb(dateKey, l, userId) {
+  return {
+    id:               `${userId}:${dateKey}`,
+    date:             dateKey,
+    capacity:         l.capacity      ?? null,
+    mit_ids:          l.mitIds        ?? [],
+    mit_when:         l.mitWhen       ?? {},
+    note:             l.note          ?? null,
+    next_day_mit_ids: l.nextDayMitIds ?? [],
+    closed_at:        l.closedAt      ?? null,
+  };
+}
+
+function dbDayLogToApp(l) {
+  return {
+    capacity:      l.capacity         ?? null,
+    mitIds:        l.mit_ids          ?? [],
+    mitWhen:       l.mit_when         ?? {},
+    note:          l.note             ?? null,
+    nextDayMitIds: l.next_day_mit_ids ?? [],
+    closedAt:      l.closed_at        ?? null,
   };
 }
 

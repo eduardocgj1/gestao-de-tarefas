@@ -19,14 +19,15 @@ let calendarLoadedMonths = [];
 let calendarInitialized = false;
 
 let dayPopupDate = null;       // dateKey string, or null when closed
-let dayPopupMode = 'plan';     // 'plan' | 'shutdown'
-let dayPopupGrouping = {};     // boardId -> fieldId (in-memory only, resets on open)
-let shutdownChoices = {};      // `${boardId}:${taskId}` -> { boardId, taskId, mode: 'tomorrow'|'custom'|'ignore', date }
-
-let pomodoroSettings = { focus: 25, short: 5, long: 15 };
-let pomodoro = { mode: 'focus', remaining: 25 * 60, running: false, cycle: 0, updatedAt: Date.now() };
-let pomodoroTimerId = null;
-let pomodoroExpanded = false;
+let dayPopupMode = 'plan';     // 'plan' | 'close'
+let dayPopupGroupField = '';   // nome do campo custom usado para agrupar "demais tarefas" (só aparece com >8 tarefas no dia); resets on open
+let closeChoices = {};         // taskId -> { boardId, choice: 'amanha'|'outra'|'arquivar'|'ignorar', reason, customDate } — transiente, montado ao entrar no modo Fechar
+let dayLogs = {};              // dateKey -> { capacity, mitIds, mitWhen, note, nextDayMitIds, closedAt } — vem do payload de /api/tasks (day_logs)
+let dayNoteDraft = '';
+let daySettingsOpen = false;
+let dayTrayOpen = false;
+let dayCaptureText = '';
+let dayCaptureBoardId = null;
 
 let sidebarOpen = false;
 let addingBoard = false;
@@ -171,14 +172,6 @@ function markExceptionIfMoved(t, previousDate) {
   if (t.seriesId && t.date !== previousDate) t.isException = true;
 }
 function label(d) { return `${String(d.getDate()).padStart(2, '0')}/${MON[d.getMonth()]} - ${DOW[d.getDay()]}`; }
-function fmtMin(m) {
-  m = Number(m) || 0;
-  if (m === 0) return '0min';
-  const h = Math.floor(m / 60), r = m % 60;
-  if (h === 0) return `${r}min`;
-  if (r === 0) return `${h}h`;
-  return `${h}h${String(r).padStart(2, '0')}`;
-}
 function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -263,22 +256,11 @@ async function load(isRetry = false) {
   exportViews = data.exportViews || {};
   activities = data.activities || [];
   activities.forEach(a => { if (!a.checklistTasks) a.checklistTasks = []; });
+  dayLogs = data.dayLogs || {};
 
-  pomodoroSettings = data.pomodoroSettings || { focus: 25, short: 5, long: 15 };
-  pomodoro = data.pomodoro || { mode: 'focus', remaining: pomodoroSettings.focus * 60, running: false, cycle: 0, updatedAt: Date.now() };
-  if (pomodoro.running) {
-    const elapsed = Math.floor((Date.now() - pomodoro.updatedAt) / 1000);
-    pomodoro.remaining -= elapsed;
-    if (pomodoro.remaining <= 0) {
-      pomodoro.remaining = 0;
-      pomodoro.running = false;
-    }
-  }
   renderSidebar();
   updateAppTitle();
   render();
-  renderPomodoro();
-  if (pomodoro.running) startPomodoroInterval();
   if (migrated) save();
   initWeather();
 }
@@ -288,162 +270,9 @@ function save() {
   saveTimer = setTimeout(() => {
     const headers = { 'Content-Type': 'application/json' };
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-    fetch('/api/tasks', { method: 'POST', headers, body: JSON.stringify({ boards, activeBoardId, pomodoroSettings, pomodoro, calendarEvents, people, exportViews, activities }) });
+    fetch('/api/tasks', { method: 'POST', headers, body: JSON.stringify({ boards, activeBoardId, calendarEvents, people, exportViews, activities, dayLogs }) });
   }, 250);
 }
-function savePomodoro() {
-  pomodoro.updatedAt = Date.now();
-  save();
-}
-
-// ---------- pomodoro ----------
-const POMO_DOT_COLORS = { focus: '#3A6604', short: '#C1622D', long: '#3E6FBD' };
-const POMO_LABELS = { focus: 'Foco', short: 'Pausa curta', long: 'Pausa longa' };
-
-const pomodoroWidgetEl = document.getElementById('pomodoroWidget');
-const pomoHeaderToggleEl = document.getElementById('pomoHeaderToggle');
-const pomoTimeEl = document.getElementById('pomoTime');
-const pomoDotEl = document.getElementById('pomoDot');
-const pomoModeLabelEl = document.getElementById('pomoModeLabel');
-const pomoToggleBtn = document.getElementById('pomoToggle');
-const pomoResetBtn = document.getElementById('pomoReset');
-const pomoDotsEl = document.getElementById('pomoDots');
-const pomoTabs = document.querySelectorAll('.pomo-tab');
-
-function fmtTime(s) {
-  s = Math.max(0, Math.round(s));
-  const m = Math.floor(s / 60).toString().padStart(2, '0');
-  const sec = (s % 60).toString().padStart(2, '0');
-  return `${m}:${sec}`;
-}
-
-function togglePomodoroExpanded() {
-  pomodoroExpanded = !pomodoroExpanded;
-  pomodoroWidgetEl.classList.toggle('expanded', pomodoroExpanded);
-}
-
-function renderPomodoro() {
-  pomoTimeEl.textContent = fmtTime(pomodoro.remaining);
-  pomoDotEl.style.background = POMO_DOT_COLORS[pomodoro.mode];
-  pomoModeLabelEl.textContent = POMO_LABELS[pomodoro.mode];
-  pomoToggleBtn.textContent = pomodoro.running ? '⏸' : '▶';
-  pomoToggleBtn.title = pomodoro.running ? 'Pausar' : `Iniciar ${POMO_LABELS[pomodoro.mode]}`;
-  pomoTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === pomodoro.mode));
-  const filled = pomodoro.cycle % 4;
-  pomoDotsEl.innerHTML = '';
-  for (let i = 0; i < 4; i++) {
-    const dot = document.createElement('span');
-    if (i < filled) dot.classList.add('filled');
-    pomoDotsEl.appendChild(dot);
-  }
-}
-
-function pomoBeep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const playTone = (freq, delay) => setTimeout(() => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value = freq;
-      g.gain.value = 0.08;
-      o.start();
-      setTimeout(() => o.stop(), 260);
-    }, delay);
-    playTone(880, 0);
-    playTone(1046, 300);
-    setTimeout(() => ctx.close(), 700);
-  } catch (e) {}
-}
-
-function stopPomodoroInterval() {
-  clearInterval(pomodoroTimerId);
-  pomodoroTimerId = null;
-}
-function startPomodoroInterval() {
-  stopPomodoroInterval();
-  pomodoroTimerId = setInterval(tickPomodoro, 1000);
-}
-
-function setPomodoroMode(mode) {
-  stopPomodoroInterval();
-  pomodoro.mode = mode;
-  pomodoro.remaining = pomodoroSettings[mode] * 60;
-  pomodoro.running = false;
-  savePomodoro();
-  renderPomodoro();
-}
-
-function nextPomodoroMode() {
-  if (pomodoro.mode === 'focus') {
-    pomodoro.cycle++;
-    pomodoro.mode = (pomodoro.cycle % 4 === 0) ? 'long' : 'short';
-  } else {
-    pomodoro.mode = 'focus';
-  }
-  pomodoro.remaining = pomodoroSettings[pomodoro.mode] * 60;
-}
-
-function togglePomodoro() {
-  if (pomodoro.running) {
-    stopPomodoroInterval();
-    pomodoro.running = false;
-  } else {
-    startPomodoroInterval();
-    pomodoro.running = true;
-    if (pomodoro.mode === 'focus') posthog.capture('pomodoro_iniciado');
-  }
-  savePomodoro();
-  renderPomodoro();
-}
-
-function resetPomodoro() {
-  stopPomodoroInterval();
-  pomodoro.running = false;
-  pomodoro.remaining = pomodoroSettings[pomodoro.mode] * 60;
-  savePomodoro();
-  renderPomodoro();
-}
-
-function tickPomodoro() {
-  pomodoro.remaining--;
-  if (pomodoro.remaining <= 0) {
-    stopPomodoroInterval();
-    pomodoro.running = false;
-    pomoBeep();
-    nextPomodoroMode();
-    savePomodoro();
-  } else if (pomodoro.remaining % 15 === 0) {
-    savePomodoro();
-  }
-  renderPomodoro();
-}
-
-function editPomodoroTime() {
-  if (pomodoro.running) return;
-  const input = prompt('Novo tempo (mm:ss ou minutos):', fmtTime(pomodoro.remaining));
-  if (input == null) return;
-  const trimmed = input.trim();
-  let seconds = null;
-  if (trimmed.includes(':')) {
-    const [m, s] = trimmed.split(':').map(Number);
-    if (!isNaN(m) && !isNaN(s)) seconds = m * 60 + s;
-  } else {
-    const minutes = Number(trimmed);
-    if (!isNaN(minutes)) seconds = Math.round(minutes * 60);
-  }
-  if (seconds == null || seconds < 0) return;
-  pomodoro.remaining = seconds;
-  savePomodoro();
-  renderPomodoro();
-}
-
-pomoTabs.forEach(btn => btn.addEventListener('click', () => setPomodoroMode(btn.dataset.mode)));
-pomoToggleBtn.addEventListener('click', togglePomodoro);
-pomoResetBtn.addEventListener('click', resetPomodoro);
-pomoTimeEl.addEventListener('click', e => { e.stopPropagation(); editPomodoroTime(); });
-pomoTimeEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); editPomodoroTime(); } });
-pomoHeaderToggleEl.addEventListener('click', togglePomodoroExpanded);
 
 // ---------- sidebar (boards + calendar nav) ----------
 function toggleSidebar() {
@@ -766,24 +595,47 @@ function setCompleted(task, completed, board = currentBoard()) {
   }
 }
 
-// ---------- MIT (prioridades do dia) ----------
-function mitStorageKey(boardId, dateKey) { return `mit-${boardId}-${dateKey}`; }
-function getMitIds(boardId, dateKey) {
-  try { return JSON.parse(localStorage.getItem(mitStorageKey(boardId, dateKey))) || []; }
-  catch (e) { return []; }
+// ---------- day_logs: teto, prioridades (MIT), nota, fechamento ----------
+// Substitui o MIT que vivia em localStorage por board (mit-{boardId}-{date}). Agora é uma
+// prioridade por dia, cruzando boards — day_logs viaja no mesmo payload de /api/tasks.
+const DAY_DEFAULT_CAPACITY_KEY = 'dayPopupDefaultCapacity';
+function getDefaultCapacity() {
+  const v = Number(localStorage.getItem(DAY_DEFAULT_CAPACITY_KEY));
+  return v > 0 ? v : 6;
 }
-function setMitIds(boardId, dateKey, ids) {
-  localStorage.setItem(mitStorageKey(boardId, dateKey), JSON.stringify(ids.slice(0, 3)));
+function setDefaultCapacity(v) {
+  const n = Math.max(1, Math.round(Number(v)) || getDefaultCapacity());
+  localStorage.setItem(DAY_DEFAULT_CAPACITY_KEY, String(n));
 }
-function toggleMit(boardId, dateKey, taskId) {
-  const ids = getMitIds(boardId, dateKey);
-  const i = ids.indexOf(taskId);
-  if (i >= 0) ids.splice(i, 1);
-  else {
-    if (ids.length >= 3) return;
-    ids.push(taskId);
-  }
-  setMitIds(boardId, dateKey, ids);
+function getDayLog(dateKey) {
+  return dayLogs[dateKey] || { capacity: null, mitIds: [], mitWhen: {}, note: '', nextDayMitIds: [], closedAt: null };
+}
+function patchDayLog(dateKey, patch) {
+  dayLogs[dateKey] = { ...getDayLog(dateKey), ...patch };
+  save();
+}
+function toggleMit(dateKey, taskId) {
+  const log = getDayLog(dateKey);
+  const has = log.mitIds.includes(taskId);
+  if (!has && log.mitIds.length >= 3) return;
+  const mitIds = has ? log.mitIds.filter(id => id !== taskId) : [...log.mitIds, taskId];
+  const mitWhen = { ...log.mitWhen };
+  if (has) delete mitWhen[taskId];
+  patchDayLog(dateKey, { mitIds, mitWhen });
+}
+function setMitWhen(dateKey, taskId, when) {
+  const log = getDayLog(dateKey);
+  const mitWhen = { ...log.mitWhen };
+  if (mitWhen[taskId] === when) delete mitWhen[taskId]; else mitWhen[taskId] = when;
+  patchDayLog(dateKey, { mitWhen });
+}
+function toggleTomorrowMit(dateKey, taskId) {
+  const log = getDayLog(dateKey);
+  const ids = log.nextDayMitIds || [];
+  const has = ids.includes(taskId);
+  if (!has && ids.length >= 3) return;
+  const nextDayMitIds = has ? ids.filter(id => id !== taskId) : [...ids, taskId];
+  patchDayLog(dateKey, { nextDayMitIds });
 }
 
 // ---------- weather ----------
@@ -1162,7 +1014,7 @@ function noDateColumnHtml() {
       </div>
     </div>
     <div class="col-body" data-date="">
-      ${items.map(t => cardHtml(t, false, currentBoard())).join('')}
+      ${items.map(t => cardHtml(t, currentBoard())).join('')}
     </div>
   </div>`;
 }
@@ -1173,32 +1025,26 @@ function columnHtml(d) {
   const total = items.length;
   const done = items.filter(t => t.completed).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const planned = items.reduce((s, t) => s + (Number(t.duration) || 0), 0);
-  const doneMin = items.filter(t => t.completed).reduce((s, t) => s + (Number(t.duration) || 0), 0);
-  const remaining = planned - doneMin;
   const events = eventsForBoardDate(activeBoardId, key);
-
-  const mitIds = getMitIds(activeBoardId, key).filter(id => items.some(t => t.id === id));
-  const orderedItems = [
-    ...mitIds.map(id => items.find(t => t.id === id)),
-    ...items.filter(t => !mitIds.includes(t.id)),
-  ];
+  const closed = !!getDayLog(key).closedAt;
 
   return `
-  <div class="column">
+  <div class="column${closed ? ' day-closed' : ''}">
     <div class="col-header" data-date="${key}">
       <div class="col-header-top">
-        <div class="col-title">${label(d)}</div>
+        <div class="col-title-group">
+          <div class="col-title">${label(d)}</div>
+          ${closed ? '<span class="col-closed-pill">✓ Fechado</span>' : ''}
+        </div>
         <span class="col-progress-ring"></span>
       </div>
       <div class="col-stats">
         <span>${total} tarefas · ${done} concluídas · ${pct}%</span>
-        <span>Previsto ${fmtMin(planned)} · Feito ${fmtMin(doneMin)} · Resta ${fmtMin(remaining)}</span>
       </div>
     </div>
     ${events.length ? `<div class="col-events">${events.map(ev => eventChipHtml(ev, key)).join('')}</div>` : ''}
     <div class="col-body" data-date="${key}">
-      ${orderedItems.map(t => cardHtml(t, mitIds.includes(t.id), currentBoard())).join('')}
+      ${items.map(t => cardHtml(t, currentBoard())).join('')}
     </div>
     <form class="add-form" data-date="${key}">
       <input type="text" placeholder="+ nova tarefa" required>
@@ -1220,8 +1066,8 @@ function eventChipHtml(ev, key) {
   </div>`;
 }
 
-function cardHtml(t, isMit = false, board = currentBoard()) {
-  const cls = ['card', t.urgent ? 'urgent' : 'normal', t.completed ? 'completed' : '', isMit ? 'mit' : ''].join(' ');
+function cardHtml(t, board = currentBoard()) {
+  const cls = ['card', t.urgent ? 'urgent' : 'normal', t.completed ? 'completed' : ''].join(' ');
   const fields = (board && board.fields) || [];
   const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id], board) : '').join('');
   return `
@@ -1230,11 +1076,9 @@ function cardHtml(t, isMit = false, board = currentBoard()) {
     <div class="card-top">
       <input type="checkbox" class="chk-done" ${t.completed ? 'checked' : ''}>
       <div class="card-name">${escapeHtml(t.name)}</div>
-      ${isMit ? '<span class="badge mit-badge" title="Prioridade do dia">⭐</span>' : ''}
       ${t.urgent ? '<span class="badge">URGENTE</span>' : ''}
     </div>
     <div class="card-meta">
-      ${t.duration ? `<span>⏱ ${fmtMin(t.duration)}</span>` : ''}
       ${!t.completed && t.priority ? `<span>#${t.priority}</span>` : ''}
       ${t.delegated ? `<span>👤 ${escapeHtml(t.delegatedTo || '-')}</span>` : ''}
       ${t.link ? `<a href="${escapeHtml(t.link)}" target="_blank" rel="noopener">🔗</a>` : ''}
@@ -1244,17 +1088,20 @@ function cardHtml(t, isMit = false, board = currentBoard()) {
 }
 
 // ---------- add / update / delete ----------
-function addTask(dateKey, name) {
-  const tasks = currentBoard().tasks;
+// board é opcional (default currentBoard()) para preservar o único call site original (form
+// "+ nova tarefa" da coluna); a captura inline do painel da Visão do Dia passa um board explícito
+// escolhido no seletor, que pode ser diferente de activeBoardId.
+function addTask(dateKey, name, board = currentBoard()) {
+  const tasks = board.tasks;
   const normalMax = tasks.filter(t => t.date === dateKey && !t.urgent).reduce((m, t) => Math.max(m, t.priority || 0), 0);
   tasks.push({
-    id: uid(), name, date: dateKey, deliveryDate: dateKey, link: '', duration: 0,
+    id: uid(), name, date: dateKey, deliveryDate: dateKey, link: '',
     priority: normalMax + 1, urgent: false, urgentRank: 0,
     delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
-    fieldValues: {}, team: [],
+    fieldValues: {}, team: [], archived: false,
   });
-  posthog.capture('tarefa_criada', { board_id: activeBoardId });
-  save(); render();
+  posthog.capture('tarefa_criada', { board_id: board.id });
+  save(); refreshCalendarAndBoard();
 }
 function findTask(id, board = currentBoard()) { return board.tasks.find(t => t.id === id); }
 
@@ -1527,10 +1374,10 @@ function commitRecurrenceForEditingTask(rule, dates) {
   function pushInstance(dateKey) {
     const normalMax = tasks.filter(x => x.date === dateKey && !x.urgent).reduce((m, x) => Math.max(m, x.priority || 0), 0);
     tasks.push({
-      id: uid(), name: t.name, date: dateKey, deliveryDate: dateKey, link: t.link, duration: 0,
+      id: uid(), name: t.name, date: dateKey, deliveryDate: dateKey, link: t.link,
       priority: normalMax + 1, urgent: false, urgentRank: 0,
       delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
-      fieldValues: {}, team: [],
+      fieldValues: {}, team: [], archived: false,
       seriesId, recurrenceRule: rule, isException: false,
     });
   }
@@ -1552,7 +1399,6 @@ const f = {
   name: document.getElementById('f-name'),
   date: document.getElementById('f-date'),
   link: document.getElementById('f-link'),
-  duration: document.getElementById('f-duration'),
   delegated: document.getElementById('f-delegated'),
   delegatedTo: document.getElementById('f-delegatedTo'),
   delegatedDate: document.getElementById('f-delegatedDate'),
@@ -1744,7 +1590,6 @@ function openModal(id, board) {
     ? taskModalMetaHtml(t, fieldsBoard)
     : (found.activity ? `Checklist de <strong>${escapeHtml(found.activity.name)}</strong> · atividade ainda não planejada` : '');
   renderTeamSection(t);
-  f.duration.value = t.duration || 0;
   f.delegated.checked = t.delegated;
   f.delegatedTo.value = t.delegatedTo || '';
   f.delegatedDate.value = t.delegatedDate || '';
@@ -1877,7 +1722,6 @@ f.date.addEventListener('change', () => {
   updateRecurrenceSummary();
 });
 f.link.addEventListener('input', () => patch(t => (t.link = f.link.value)));
-f.duration.addEventListener('input', () => patch(t => (t.duration = Number(f.duration.value) || 0)));
 f.priority.addEventListener('change', () => patch((t, board) => { if (!t.urgent && !t.completed) setPriority(t, Number(f.priority.value) || 1, board); }));
 f.completed.addEventListener('change', () => {
   priorityField.classList.toggle('hidden', f.completed.checked);
@@ -2110,9 +1954,6 @@ function openSettings() {
   renderFieldsSettings();
   renderPeopleSettings();
   renderWalletSettings();
-  pomoSetFocus.value = pomodoroSettings.focus;
-  pomoSetShort.value = pomodoroSettings.short;
-  pomoSetLong.value = pomodoroSettings.long;
   settingsOverlay.classList.remove('hidden');
 }
 function closeSettings() { settingsOverlay.classList.add('hidden'); }
@@ -2177,13 +2018,6 @@ fieldsSettingsEl.addEventListener('change', e => {
     renameFieldValue(fieldId, valueId, e.target.value.trim());
   }
 });
-
-const pomoSetFocus = document.getElementById('pomoSetFocus');
-const pomoSetShort = document.getElementById('pomoSetShort');
-const pomoSetLong = document.getElementById('pomoSetLong');
-pomoSetFocus.addEventListener('change', () => { pomodoroSettings.focus = Number(pomoSetFocus.value) || pomodoroSettings.focus; save(); });
-pomoSetShort.addEventListener('change', () => { pomodoroSettings.short = Number(pomoSetShort.value) || pomodoroSettings.short; save(); });
-pomoSetLong.addEventListener('change', () => { pomodoroSettings.long = Number(pomoSetLong.value) || pomodoroSettings.long; save(); });
 
 // ---------- settings (pessoas) ----------
 const peopleListEl = document.getElementById('peopleList');
@@ -2422,12 +2256,17 @@ function monthBlockHtml(year, month) {
     const events = eventsForDate(key);
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
     const isHoliday = events.some(ev => ev.isHoliday);
+    const closed = !!getDayLog(key).closedAt;
     const classes = ['day-cell'];
     if (isToday) classes.push('today');
     if (isWeekend || isHoliday) classes.push('weekend');
+    if (closed) classes.push('day-closed');
     return `<div class="${classes.join(' ')}" data-date="${key}">
       <button type="button" class="day-cell-add-event" data-date="${key}" title="Novo evento">+</button>
-      <div class="day-num">${d.getDate()}</div>
+      <div class="day-num-row">
+        <div class="day-num">${d.getDate()}</div>
+        ${closed ? '<span class="day-closed-check" title="Dia fechado">✓</span>' : ''}
+      </div>
       ${events.map(ev => calEventHtml(ev, key)).join('')}
     </div>`;
   }).join('');
@@ -2603,6 +2442,62 @@ function toggleBoardVisibility(boardId) {
   localStorage.setItem(DAYPOPUP_HIDDEN_KEY, JSON.stringify(hidden));
   renderDayPopup();
 }
+function visibleBoards() { return boards.filter(b => isBoardVisibleInPopup(b.id)); }
+
+// Lista unificada do dia: tasksFor() de cada board visível, concatenada e reordenada por
+// compare() — o board deixa de segmentar a lista e vira só o dot colorido em cada linha.
+function unifiedDayItems(dateKey) {
+  return visibleBoards()
+    .flatMap(b => tasksFor(dateKey, b).filter(t => !t.archived).map(t => ({ t, b })))
+    .sort((x, y) => compare(x.t, y.t));
+}
+function dayPopupAgendaEvents(dateKey) {
+  const visIds = visibleBoards().map(b => b.id);
+  return eventsForDate(dateKey).filter(ev => ev.boardIds.some(id => visIds.includes(id)));
+}
+// Todas as tarefas com data de um board (próprias + checklist já promovido), sem filtrar por
+// uma data exata — usado pela bandeja de pendências para varrer uma janela de dias.
+function allDatedTasksForBoard(board) {
+  const own = (board.tasks || []).filter(t => t.date);
+  const promoted = activities.flatMap(a => (a.checklistTasks || [])).filter(t => t.boardId === board.id && t.date);
+  return [...own, ...promoted];
+}
+// Bandeja de pendências: atrasadas (até 14 dias atrás) + sem data, dos boards visíveis.
+function dayPendingTrayItems(dateKey) {
+  const cutoff = toKey(addDays(new Date(dateKey + 'T00:00:00'), -14));
+  const result = [];
+  visibleBoards().forEach(b => {
+    const overdue = allDatedTasksForBoard(b).filter(t => !t.completed && !t.archived && t.date < dateKey && t.date >= cutoff);
+    const dateless = tasksWithoutDate(b).filter(t => !t.completed && !t.archived);
+    [...overdue, ...dateless].forEach(t => result.push({ t, b }));
+  });
+  return result;
+}
+// Campos customizados em comum entre os boards visíveis, casados por nome (ex.: "Projeto"),
+// para o select de agrupamento da lista unificada (só aparece com >8 tarefas no dia).
+function dayGroupFieldOptions() {
+  const seen = new Map();
+  visibleBoards().forEach(b => (b.fields || []).forEach(f => { if (!seen.has(f.name)) seen.set(f.name, f); }));
+  return [...seen.values()];
+}
+function groupRestItems(restItems) {
+  if (!dayPopupGroupField) return null;
+  const buckets = new Map();
+  const unclassified = [];
+  restItems.forEach(({ t, b }) => {
+    const field = (b.fields || []).find(f => f.name === dayPopupGroupField);
+    const val = field && t.fieldValues && field.values.find(v => v.id === t.fieldValues[field.id]);
+    if (val) {
+      if (!buckets.has(val.name)) buckets.set(val.name, []);
+      buckets.get(val.name).push({ t, b });
+    } else {
+      unclassified.push({ t, b });
+    }
+  });
+  const groups = [...buckets.entries()].map(([groupLabel, items]) => ({ label: groupLabel, items }));
+  if (unclassified.length) groups.push({ label: 'Sem classificação', items: unclassified });
+  return groups;
+}
 
 // ---------- day drawer: docked / expanded hosting ----------
 const dayDrawerDockedEl = document.getElementById('dayDrawerDocked');
@@ -2611,6 +2506,7 @@ const dayPopupPanelEl = document.getElementById('dayPopupPanel');
 const dayPopupOverlayEl = document.getElementById('dayPopupOverlay');
 const dayPopupModalHostEl = document.getElementById('dayPopupModalHost');
 const dayPopupExpandBtnEl = document.getElementById('dayPopupExpandBtn');
+const dayPopupSettingsBtnEl = document.getElementById('dayPopupSettingsBtn');
 
 function attachDayPopupPanel() {
   if (!dayPopupDate) {
@@ -2636,6 +2532,8 @@ function attachDayPopupPanel() {
 
 function toggleDayDrawerExpand() {
   dayDrawerExpanded = !dayDrawerExpanded;
+  if (dayDrawerExpanded) dayPopupMode = 'plan';
+  renderDayPopup();
   attachDayPopupPanel();
 }
 
@@ -2645,9 +2543,16 @@ function openDayPopup(dateKey) {
   if (!posthog.isFeatureEnabled('visao-do-dia')) return;
   dayPopupDate = dateKey;
   dayPopupMode = 'plan';
-  dayPopupGrouping = {};
-  shutdownChoices = {};
-  dayDrawerExpanded = false;
+  dayPopupGroupField = '';
+  closeChoices = {};
+  dayNoteDraft = '';
+  daySettingsOpen = false;
+  dayCaptureText = '';
+  dayCaptureBoardId = activeBoardId;
+  // Painel abre sempre expandido em modo Planejar (ver v1 "Jornada do usuário"); dia sem
+  // nenhuma tarefa abre com a bandeja de pendências já expandida (bifurcação do design).
+  dayDrawerExpanded = true;
+  dayTrayOpen = unifiedDayItems(dateKey).length === 0;
   weatherSearchOpen = false;
   weatherSearchQuery = '';
   weatherSearchResults = [];
@@ -2657,7 +2562,9 @@ function openDayPopup(dateKey) {
 function closeDayPopup() {
   dayPopupDate = null;
   dayPopupMode = 'plan';
-  shutdownChoices = {};
+  closeChoices = {};
+  dayNoteDraft = '';
+  daySettingsOpen = false;
   dayDrawerExpanded = false;
   attachDayPopupPanel();
 }
@@ -2688,26 +2595,8 @@ dayDrawerResizeHandleEl.addEventListener('mousedown', e => {
   window.addEventListener('mouseup', onMouseUp);
 });
 
-function dayPopupBoardChecklistHtml() {
-  return boards.map(b => {
-    const visible = isBoardVisibleInPopup(b.id);
-    return `
-    <label class="day-popup-board-check${visible ? ' checked' : ''}">
-      <input type="checkbox" class="day-popup-board-toggle" data-board-id="${b.id}" ${visible ? 'checked' : ''}>
-      <span class="dot" style="background:${b.color}"></span>${escapeHtml(b.name)}
-    </label>
-  `;
-  }).join('');
-}
-
-function dayPopupLoadBarHtml(items) {
-  const planned = items.reduce((s, t) => s + (Number(t.duration) || 0), 0);
-  const doneMin = items.filter(t => t.completed).reduce((s, t) => s + (Number(t.duration) || 0), 0);
-  const remaining = planned - doneMin;
-  return `Previsto ${fmtMin(planned)} · Feito ${fmtMin(doneMin)} · Resta ${fmtMin(remaining)}`;
-}
-
-function dayPopupTaskRowHtml(t, b, isMit, mitCount) {
+// ---------- linhas de tarefa reutilizadas nos vários blocos do painel ----------
+function dayUnifiedTaskRowHtml(t, b, isMit, mitCount) {
   const cls = ['day-popup-task-row', t.completed ? 'completed' : ''].join(' ');
   const fields = b.fields || [];
   const fieldTags = fields.map(f => (t.fieldValues && t.fieldValues[f.id]) ? fieldTagHtml(f.id, t.fieldValues[f.id], b) : '').join('');
@@ -2715,148 +2604,399 @@ function dayPopupTaskRowHtml(t, b, isMit, mitCount) {
   return `
   <div class="${cls}">
     <input type="checkbox" class="daypopup-chk-done" data-task-id="${t.id}" data-board-id="${b.id}" ${t.completed ? 'checked' : ''}>
+    <span class="dot" style="background:${b.color}"></span>
     <button type="button" class="day-popup-task-name" data-task-id="${t.id}" data-board-id="${b.id}">${escapeHtml(t.name)}</button>
     <div class="day-popup-task-meta">
-      ${t.duration ? `<span>⏱ ${fmtMin(t.duration)}</span>` : ''}
       ${fieldTags}
-      <button type="button" class="mit-star ${isMit ? 'active' : ''} ${starDisabled ? 'disabled' : ''}" data-task-id="${t.id}" data-board-id="${b.id}" title="Marcar como prioridade do dia">⭐</button>
-      <button type="button" class="adiar-btn" data-task-id="${t.id}" data-board-id="${b.id}" title="Adiar para amanhã">→</button>
+      <button type="button" class="mit-star ${isMit ? 'active' : ''} ${starDisabled ? 'disabled' : ''}" data-task-id="${t.id}" title="Marcar como prioridade do dia">⭐</button>
     </div>
   </div>`;
 }
+const MIT_WHEN_LABELS = { manha: 'Manhã', tarde: 'Tarde', noite: 'Noite' };
+function mitCardHtml(t, b, dateKey) {
+  const when = getDayLog(dateKey).mitWhen[t.id] || '';
+  const opts = [['manha', 'M'], ['tarde', 'T'], ['noite', 'N']];
+  return `
+  <div class="day-popup-mit-card">
+    <button type="button" class="mit-star active" data-task-id="${t.id}" title="Remover prioridade">⭐</button>
+    <span class="dot" style="background:${b.color}"></span>
+    <span class="day-popup-mit-name ${t.completed ? 'completed' : ''}">${escapeHtml(t.name)}</span>
+    <div class="day-popup-when-group">
+      ${opts.map(([key, letter]) => `<button type="button" class="day-popup-when-btn ${when === key ? 'active' : ''}" data-when="${key}" data-task-id="${t.id}">${letter}</button>`).join('')}
+    </div>
+  </div>`;
+}
+function mitLeanRowHtml(t, dateKey) {
+  const when = getDayLog(dateKey).mitWhen[t.id];
+  return `
+  <div class="day-popup-mit-card lean">
+    <span>⭐</span>
+    <span class="day-popup-mit-name ${t.completed ? 'completed' : ''}">${escapeHtml(t.name)}</span>
+    ${when ? `<span class="day-popup-when-tag">${MIT_WHEN_LABELS[when]}</span>` : ''}
+  </div>`;
+}
+function dayTrayRowHtml(t, b, dateKey) {
+  return `
+  <div class="day-popup-tray-row">
+    <span class="dot" style="background:${b.color}"></span>
+    <span class="day-popup-tray-name">${escapeHtml(t.name)}</span>
+    <span class="day-popup-tray-date">${t.date ? fmtDateBR(t.date) : 'Sem data'}</span>
+    <button type="button" class="day-pull-btn" data-task-id="${t.id}" data-board-id="${b.id}">→ hoje</button>
+  </div>`;
+}
+function tomorrowMitRowHtml(t, b, tomorrowMitIds) {
+  const isMit = tomorrowMitIds.includes(t.id);
+  const disabled = !isMit && tomorrowMitIds.length >= 3;
+  return `
+  <div class="day-popup-task-row">
+    <span class="dot" style="background:${b.color}"></span>
+    <span class="day-popup-task-name-static ${t.completed ? 'completed' : ''}">${escapeHtml(t.name)}</span>
+    <button type="button" class="tomorrow-mit-star ${isMit ? 'active' : ''} ${disabled ? 'disabled' : ''}" data-task-id="${t.id}" title="Marcar como prioridade de amanhã">⭐</button>
+  </div>`;
+}
+function loadPillHtml(count, capacity) {
+  const state = count > capacity ? 'over' : count === capacity ? 'warn' : 'ok';
+  const text = `${count} de ${capacity} tarefas${state === 'over' ? ' — acima do teto' : ''}`;
+  return `<span class="day-load-pill ${state}">${text}</span>`;
+}
+function reopenBannerHtml(log) {
+  const d = new Date(log.closedAt);
+  const dateLabel = isNaN(d) ? '' : d.toLocaleDateString('pt-BR');
+  return `
+  <div class="day-popup-reopen-banner">
+    <span>Este dia foi fechado ${dateLabel}.</span>
+    <button type="button" id="dayReopenBtn" class="day-reopen-btn">Reabrir o dia</button>
+  </div>`;
+}
 
-function dayPopupBoardSectionHtml(b) {
-  const key = dayPopupDate;
-  const items = tasksFor(key, b);
-  let mitIds = getMitIds(b.id, key);
-  const resolvable = mitIds.filter(id => items.some(t => t.id === id));
-  if (resolvable.length !== mitIds.length) { setMitIds(b.id, key, resolvable); mitIds = resolvable; }
-  const mitTasks = mitIds.map(id => items.find(t => t.id === id));
-  const restTasks = items.filter(t => !mitIds.includes(t.id));
-  const events = eventsForBoardDate(b.id, key);
-  const fieldId = dayPopupGrouping[b.id] || '';
-  const field = fieldId ? findField(fieldId, b) : null;
+// ---------- modo Planejar ----------
+function dayPlanBodyHtml(dateKey) {
+  const log = getDayLog(dateKey);
+  const capacity = log.capacity ?? getDefaultCapacity();
+  const items = unifiedDayItems(dateKey);
+  const mitIds = log.mitIds.filter(id => items.some(({ t }) => t.id === id));
+  const mitItems = mitIds.map(id => items.find(({ t }) => t.id === id));
+  const restItems = items.filter(({ t }) => !mitIds.includes(t.id));
+  const total = items.length;
+  const agenda = dayPopupAgendaEvents(dateKey);
+  const trayItems = dayPendingTrayItems(dateKey);
 
-  let groupsHtml;
-  if (!field) {
-    groupsHtml = restTasks.map(t => dayPopupTaskRowHtml(t, b, false, mitIds.length)).join('');
-  } else {
-    const buckets = field.values.map(v => ({
-      label: v.name,
-      items: restTasks.filter(t => t.fieldValues && t.fieldValues[fieldId] === v.id),
-    })).filter(bucket => bucket.items.length);
-    const unclassified = restTasks.filter(t => !t.fieldValues || !field.values.some(v => v.id === t.fieldValues[fieldId]));
-    if (unclassified.length) buckets.push({ label: 'Sem classificação', items: unclassified });
-    groupsHtml = buckets.map(bucket => `
-      <div class="day-popup-group-label">${escapeHtml(bucket.label)}</div>
-      ${bucket.items.map(t => dayPopupTaskRowHtml(t, b, false, mitIds.length)).join('')}
-    `).join('');
-  }
+  const groupOptions = dayGroupFieldOptions();
+  const showGroupSelect = total > 8 && groupOptions.length > 0;
+  const groups = showGroupSelect ? groupRestItems(restItems) : null;
+  const restHtml = groups
+    ? groups.map(g => `
+        <div class="day-popup-group-label">${escapeHtml(g.label)}</div>
+        ${g.items.map(({ t, b }) => dayUnifiedTaskRowHtml(t, b, false, mitIds.length)).join('')}
+      `).join('')
+    : restItems.map(({ t, b }) => dayUnifiedTaskRowHtml(t, b, false, mitIds.length)).join('');
 
   return `
-  <div class="day-popup-board-section" data-board-id="${b.id}">
-    <div class="day-popup-board-section-header">
-      <div class="day-popup-board-name"><span class="dot" style="background:${b.color}"></span>${escapeHtml(b.name)}</div>
-      <select class="day-popup-group-select" data-board-id="${b.id}">
-        <option value="">Sem agrupamento</option>
-        ${(b.fields || []).map(f => `<option value="${f.id}" ${fieldId === f.id ? 'selected' : ''}>Por ${escapeHtml(f.name)}</option>`).join('')}
-      </select>
+    ${log.closedAt ? reopenBannerHtml(log) : ''}
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">Captura rápida</div>
+      <div class="day-popup-capture-row">
+        <select id="dayCaptureBoardSelect">
+          ${boards.map(b => `<option value="${b.id}" ${b.id === dayCaptureBoardId ? 'selected' : ''}>${escapeHtml(b.name)}</option>`).join('')}
+        </select>
+        <input type="text" id="dayCaptureInput" placeholder="Nova tarefa para hoje…" value="${escapeHtml(dayCaptureText)}">
+        <button type="button" id="dayCaptureSubmitBtn">Adicionar</button>
+      </div>
     </div>
-    <div class="day-popup-load-bar">${dayPopupLoadBarHtml(items)}</div>
-    ${events.length ? `<div class="day-popup-events">${events.map(ev => eventChipHtml(ev, key)).join('')}</div>` : ''}
-    <div class="day-popup-mit-section">
-      <h4>Prioridades do Dia</h4>
-      ${mitTasks.length ? mitTasks.map(t => dayPopupTaskRowHtml(t, b, true, mitIds.length)).join('') : '<div class="day-popup-mit-placeholder">Marque até 3 prioridades</div>'}
+    <div class="day-popup-section">
+      <div class="day-popup-section-header">
+        <div class="day-popup-section-label">Teto do dia</div>
+        ${loadPillHtml(total, capacity)}
+      </div>
+      <div class="day-popup-capacity-row">
+        <span>Quantas tarefas hoje?</span>
+        <input type="number" min="1" id="dayCapacityInput" value="${capacity}">
+      </div>
     </div>
-    ${groupsHtml}
-  </div>`;
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">⭐ Prioridades do dia</div>
+      ${mitItems.length
+        ? mitItems.map(({ t, b }) => mitCardHtml(t, b, dateKey)).join('')
+        : `<div class="day-popup-mit-placeholder">Marque até 3 prioridades na lista abaixo</div>`}
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">Agenda</div>
+      ${agenda.length ? `<div class="day-popup-events">${agenda.map(ev => eventChipHtml(ev, dateKey)).join('')}</div>` : `<div class="day-popup-empty-hint">Nenhum evento no dia.</div>`}
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-section-header">
+        <div class="day-popup-section-label">Demais tarefas do dia</div>
+        ${showGroupSelect ? `
+          <select class="day-popup-group-select" id="dayGroupSelect">
+            <option value="">Sem agrupamento</option>
+            ${groupOptions.map(f => `<option value="${escapeHtml(f.name)}" ${dayPopupGroupField === f.name ? 'selected' : ''}>Por ${escapeHtml(f.name)}</option>`).join('')}
+          </select>` : ''}
+      </div>
+      ${restItems.length ? restHtml : `<div class="day-popup-empty-hint">Nenhuma outra tarefa.</div>`}
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-tray-header" id="dayTrayToggle">
+        <span class="day-popup-section-label">Pendências (${trayItems.length})</span>
+        <span class="day-popup-tray-arrow">${dayTrayOpen ? '▲' : '▼'}</span>
+      </div>
+      ${dayTrayOpen ? (trayItems.length
+        ? trayItems.map(({ t, b }) => dayTrayRowHtml(t, b, dateKey)).join('')
+        : `<div class="day-popup-empty-hint">Nada atrasado nos últimos 14 dias.</div>`) : ''}
+    </div>
+  `;
 }
 
-function shutdownTaskRowHtml(t, b) {
-  const key = `${b.id}:${t.id}`;
-  const choice = shutdownChoices[key] || { boardId: b.id, taskId: t.id, mode: 'tomorrow', date: '' };
+// ---------- modo Executar (drawer encaixado, expanded:false) ----------
+// Não é um terceiro valor de `mode` — renderDayPopup() sempre usa este corpo quando o painel
+// está encaixado, independente de dayPopupMode ser 'plan' ou 'close' por trás.
+function dayDockedBodyHtml(dateKey) {
+  const log = getDayLog(dateKey);
+  const items = unifiedDayItems(dateKey);
+  const mitItems = log.mitIds.map(id => items.find(({ t }) => t.id === id)).filter(Boolean);
+  const agenda = dayPopupAgendaEvents(dateKey);
+  const nextEvent = agenda[0];
   return `
-  <div class="shutdown-task-row">
-    <span class="shutdown-task-name">${escapeHtml(t.name)}</span>
-    <div class="shutdown-choices" data-choice-key="${key}">
-      <button type="button" class="shutdown-choice-btn ${choice.mode === 'tomorrow' ? 'selected' : ''}" data-mode="tomorrow">Amanhã</button>
-      <button type="button" class="shutdown-choice-btn ${choice.mode === 'custom' ? 'selected' : ''}" data-mode="custom">Outra data</button>
-      ${choice.mode === 'custom' ? `<input type="date" class="shutdown-date-input" data-choice-key="${key}" value="${choice.date || ''}">` : ''}
-      <button type="button" class="shutdown-choice-btn ${choice.mode === 'ignore' ? 'selected' : ''}" data-mode="ignore">Ignorar</button>
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">⭐ Prioridades</div>
+      ${mitItems.length ? mitItems.map(({ t }) => mitLeanRowHtml(t, dateKey)).join('') : `<div class="day-popup-mit-placeholder">Marque até 3 prioridades</div>`}
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">Próximo evento</div>
+      ${nextEvent ? `<div class="day-popup-next-event">${eventChipHtml(nextEvent, dateKey)}</div>` : `<div class="day-popup-empty-hint">Nenhum evento hoje.</div>`}
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">Captura rápida</div>
+      <div class="day-popup-capture-row">
+        <input type="text" id="dayCaptureInput" placeholder="Nova tarefa para o dia…" value="${escapeHtml(dayCaptureText)}">
+        <button type="button" id="dayCaptureSubmitBtn">+</button>
+      </div>
+    </div>
+  `;
+}
+
+// ---------- modo Fechar ----------
+const CLOSE_CHOICE_OPTS = [['amanha', 'Amanhã'], ['outra', 'Outra data'], ['arquivar', 'Arquivar'], ['ignorar', 'Ignorar']];
+const CLOSE_REASON_OPTS = [['time', 'faltou tempo'], ['blocked', 'bloqueado por terceiro'], ['reprioritized', 'mudei de prioridade']];
+function closeTaskRowHtml(t, b, c) {
+  return `
+  <div class="day-popup-close-row" data-task-id="${t.id}">
+    <div class="day-popup-close-row-top">
+      <span class="dot" style="background:${b.color}"></span>
+      <span class="day-popup-close-name">${escapeHtml(t.name)}</span>
+    </div>
+    <div class="day-popup-choice-row">
+      ${CLOSE_CHOICE_OPTS.map(([key, lbl]) => `<button type="button" class="day-choice-btn ${c.choice === key ? 'active' : ''}" data-task-id="${t.id}" data-choice="${key}">${lbl}</button>`).join('')}
+    </div>
+    ${c.choice === 'outra' ? `<input type="date" class="day-choice-date-input" data-task-id="${t.id}" value="${c.customDate || ''}">` : ''}
+    <div class="day-popup-reason-row">
+      ${CLOSE_REASON_OPTS.map(([key, lbl]) => `<button type="button" class="day-reason-chip ${c.reason === key ? 'active' : ''}" data-task-id="${t.id}" data-reason="${key}">${lbl}</button>`).join('')}
     </div>
   </div>`;
 }
+function dayCloseBodyHtml(dateKey) {
+  const log = getDayLog(dateKey);
+  const items = unifiedDayItems(dateKey);
+  const total = items.length;
+  const done = items.filter(({ t }) => t.completed).length;
+  const mitDone = log.mitIds.filter(id => { const it = items.find(({ t }) => t.id === id); return it && it.t.completed; }).length;
+  const resultLine = `${done} de ${total} tarefas concluídas · ${mitDone} de 3 prioridades`;
 
-function shutdownPanelHtml() {
-  const visible = boards.filter(b => isBoardVisibleInPopup(b.id));
-  const groups = visible.map(b => {
-    const items = tasksFor(dayPopupDate, b).filter(t => !t.completed);
-    if (!items.length) return '';
-    return `
-    <div class="shutdown-board-group">
-      <h4><span class="dot" style="background:${b.color}"></span>${escapeHtml(b.name)}</h4>
-      ${items.map(t => shutdownTaskRowHtml(t, b)).join('')}
-    </div>`;
+  const pendingIds = Object.keys(closeChoices);
+  const pendingRows = pendingIds.map(taskId => {
+    const c = closeChoices[taskId];
+    const board = boards.find(b => b.id === c.boardId);
+    const t = board && findTaskInBoard(taskId, board);
+    return (t && board) ? closeTaskRowHtml(t, board, c) : '';
   }).join('');
-  const hasAny = visible.some(b => tasksFor(dayPopupDate, b).some(t => !t.completed));
-  return hasAny ? groups : '<div class="shutdown-empty">Nenhuma tarefa pendente nos boards visíveis.</div>';
+
+  const tomorrow = toKey(addDays(new Date(dateKey + 'T00:00:00'), 1));
+  const tomorrowItems = unifiedDayItems(tomorrow);
+  const tomorrowMitIds = log.nextDayMitIds || [];
+
+  return `
+    <div class="day-popup-section day-popup-result-card">
+      <div class="day-popup-section-label">Resultado</div>
+      <div class="day-popup-result-line">${resultLine}</div>
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">Pendências</div>
+      ${pendingIds.length ? pendingRows : `<div class="day-popup-mit-placeholder">Nenhuma tarefa pendente 🎉</div>`}
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">Nota do dia</div>
+      <div class="day-popup-note-prompts">
+        <button type="button" class="day-note-prompt-btn" data-prompt="stuck">o que travou?</button>
+        <button type="button" class="day-note-prompt-btn" data-prompt="well">o que foi bem?</button>
+      </div>
+      <textarea id="dayNoteTextarea" placeholder="Como foi o dia?">${escapeHtml(dayNoteDraft)}</textarea>
+    </div>
+    <div class="day-popup-section">
+      <div class="day-popup-section-label">Amanhã — escolha até 3 prioridades</div>
+      ${tomorrowItems.length ? tomorrowItems.map(({ t, b }) => tomorrowMitRowHtml(t, b, tomorrowMitIds)).join('') : `<div class="day-popup-empty-hint">Nenhuma tarefa datada para amanhã ainda.</div>`}
+    </div>
+  `;
 }
 
-function enterShutdownMode() {
-  dayPopupMode = 'shutdown';
-  shutdownChoices = {};
-  boards.filter(b => isBoardVisibleInPopup(b.id)).forEach(b => {
-    tasksFor(dayPopupDate, b).filter(t => !t.completed).forEach(t => {
-      shutdownChoices[`${b.id}:${t.id}`] = { boardId: b.id, taskId: t.id, mode: 'tomorrow', date: '' };
-    });
+function openDayCloseMode() {
+  if (!dayPopupDate) return;
+  const dateKey = dayPopupDate;
+  const tomorrow = toKey(addDays(new Date(dateKey + 'T00:00:00'), 1));
+  closeChoices = {};
+  unifiedDayItems(dateKey).filter(({ t }) => !t.completed).forEach(({ t, b }) => {
+    closeChoices[t.id] = { boardId: b.id, choice: 'amanha', reason: null, customDate: tomorrow };
   });
+  dayNoteDraft = getDayLog(dateKey).note || '';
+  dayPopupMode = 'close';
+  dayDrawerExpanded = true;
+  renderDayPopup();
+  attachDayPopupPanel();
+}
+function setCloseChoice(taskId, choice) {
+  const c = closeChoices[taskId];
+  if (!c) return;
+  c.choice = choice;
+  if (choice === 'outra' && !c.customDate) c.customDate = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
   renderDayPopup();
 }
-function exitShutdownMode() {
-  dayPopupMode = 'plan';
-  shutdownChoices = {};
+function setCloseReason(taskId, reason) {
+  const c = closeChoices[taskId];
+  if (!c) return;
+  c.reason = c.reason === reason ? null : reason;
   renderDayPopup();
 }
-function applyShutdown() {
-  const tomorrow = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
-  Object.values(shutdownChoices).forEach(choice => {
-    if (choice.mode === 'ignore') return;
-    const board = boards.find(b => b.id === choice.boardId);
-    const t = board && findTaskInBoard(choice.taskId, board);
+function setCloseCustomDate(taskId, value) {
+  const c = closeChoices[taskId];
+  if (c) c.customDate = value;
+}
+// Reabrir só limpa closed_at — não desfaz adiamentos/arquivamentos já aplicados no fechamento.
+function reopenDayLog() {
+  if (!dayPopupDate) return;
+  patchDayLog(dayPopupDate, { closedAt: null });
+  renderDayPopup();
+}
+function finalizeClose() {
+  if (!dayPopupDate) return;
+  const dateKey = dayPopupDate;
+  const tomorrow = toKey(addDays(new Date(dateKey + 'T00:00:00'), 1));
+  Object.entries(closeChoices).forEach(([taskId, c]) => {
+    const board = boards.find(b => b.id === c.boardId);
+    const t = board && findTaskInBoard(taskId, board);
     if (!t) return;
-    const newDate = (choice.mode === 'custom' && choice.date) ? choice.date : tomorrow;
-    const prevDate = t.date;
-    t.date = newDate;
-    t.deliveryDate = newDate;
-    markExceptionIfMoved(t, prevDate);
+    if (c.choice === 'amanha' || c.choice === 'outra') {
+      const newDate = (c.choice === 'outra' && c.customDate) ? c.customDate : tomorrow;
+      const prevDate = t.date;
+      t.date = newDate;
+      t.deliveryDate = newDate;
+      markExceptionIfMoved(t, prevDate);
+    } else if (c.choice === 'arquivar') {
+      // Arquivar uma ocorrência tira ela da série (mesmo padrão de mover/editar individualmente).
+      t.archived = true;
+      if (t.seriesId) t.isException = true;
+    }
+    t.deferralReason = c.reason || null;
   });
+  const nextMit = getDayLog(dateKey).nextDayMitIds || [];
+  patchDayLog(dateKey, { note: dayNoteDraft, closedAt: new Date().toISOString() });
+  if (nextMit.length) patchDayLog(tomorrow, { mitIds: nextMit });
+  closeChoices = {};
+  dayNoteDraft = '';
+  closeDayPopup();
+  refreshCalendarAndBoard();
+}
+
+// ---------- captura inline ----------
+function submitDayCapture() {
+  const name = dayCaptureText.trim();
+  if (!name || !dayPopupDate) return;
+  const board = (dayCaptureBoardId && boards.find(b => b.id === dayCaptureBoardId)) || currentBoard();
+  addTask(dayPopupDate, name, board);
+  dayCaptureText = '';
+  renderDayPopup();
+}
+
+// ---------- teto do dia ----------
+function setDayCapacity(dateKey, value) {
+  const n = Math.max(1, Math.round(Number(value)) || getDefaultCapacity());
+  patchDayLog(dateKey, { capacity: n });
+  renderDayPopup();
+}
+
+// ---------- bandeja: puxar pendência para hoje ----------
+function pullTaskToToday(taskId, boardId, dateKey) {
+  const board = boards.find(b => b.id === boardId);
+  const t = board && findTaskInBoard(taskId, board);
+  if (!t) return;
+  const prevDate = t.date;
+  t.date = dateKey;
+  t.deliveryDate = dateKey;
+  markExceptionIfMoved(t, prevDate);
   save();
   refreshCalendarAndBoard();
-  closeDayPopup();
+  renderDayPopup();
 }
 
+// ---------- ⚙ configurações do painel ----------
+function toggleDaySettings() {
+  daySettingsOpen = !daySettingsOpen;
+  renderDayPopup();
+}
+function daySettingsPopoverHtml() {
+  return `
+    <div class="day-popup-settings-label">Boards visíveis</div>
+    ${boards.map(b => `
+      <label class="day-popup-settings-board-toggle">
+        <input type="checkbox" class="day-popup-board-toggle" data-board-id="${b.id}" ${isBoardVisibleInPopup(b.id) ? 'checked' : ''}>
+        <span class="dot" style="background:${b.color}"></span>${escapeHtml(b.name)}
+      </label>`).join('')}
+    <div class="day-popup-settings-divider"></div>
+    <div class="day-popup-settings-label">Teto padrão</div>
+    <input type="number" min="1" id="dayDefaultCapacityInput" value="${getDefaultCapacity()}">
+  `;
+}
+
+// ---------- render principal ----------
+function dayPopupSubtitleText(log) {
+  if (!dayDrawerExpanded) return 'Executar · painel encaixado';
+  if (log.closedAt) return 'Dia fechado';
+  return dayPopupMode === 'close' ? 'Fechando o dia' : 'Planejando o dia';
+}
 function renderDayPopup() {
   if (!dayPopupDate) return;
-  const d = new Date(dayPopupDate + 'T00:00:00');
-  document.getElementById('dayPopupHeader').textContent = label(d);
-  document.getElementById('dayPopupSubtitle').textContent = dayPopupMode === 'shutdown' ? 'Fechando o dia' : 'Visão do dia';
-  renderWeatherInDayPopup(dayPopupDate);
-  document.getElementById('dayPopupBoardChecklist').innerHTML = dayPopupBoardChecklistHtml();
+  const dateKey = dayPopupDate;
+  const d = new Date(dateKey + 'T00:00:00');
+  const log = getDayLog(dateKey);
 
-  const bodyEl = document.getElementById('dayPopupBody');
-  if (dayPopupMode === 'shutdown') {
-    bodyEl.innerHTML = shutdownPanelHtml();
+  document.getElementById('dayPopupHeader').textContent = label(d);
+  document.getElementById('dayPopupSubtitle').textContent = dayPopupSubtitleText(log);
+
+  const weatherEl = document.getElementById('dayPopupWeather');
+  weatherEl.style.display = dayDrawerExpanded ? '' : 'none';
+  if (dayDrawerExpanded) renderWeatherInDayPopup(dateKey);
+
+  dayPopupSettingsBtnEl.classList.toggle('hidden', !dayDrawerExpanded);
+  const settingsEl = document.getElementById('dayPopupSettingsPopover');
+  if (daySettingsOpen && dayDrawerExpanded) {
+    settingsEl.classList.remove('hidden');
+    settingsEl.innerHTML = daySettingsPopoverHtml();
   } else {
-    const visible = boards.filter(b => isBoardVisibleInPopup(b.id));
-    bodyEl.innerHTML = visible.length
-      ? visible.map(dayPopupBoardSectionHtml).join('')
-      : '<div class="shutdown-empty">Nenhum board selecionado.</div>';
+    settingsEl.classList.add('hidden');
+    settingsEl.innerHTML = '';
   }
 
-  document.getElementById('dayPopupFooter').innerHTML = dayPopupMode === 'shutdown'
-    ? `<button type="button" id="shutdownBackBtn" class="shutdown-back-btn">Voltar</button>
-       <button type="button" id="shutdownApplyBtn" class="shutdown-apply-btn">Encerrar</button>`
-    : `<button type="button" id="shutdownEnterBtn" class="shutdown-btn">Fechar o Dia</button>`;
+  const bodyEl = document.getElementById('dayPopupBody');
+  const footerEl = document.getElementById('dayPopupFooter');
+
+  if (!dayDrawerExpanded) {
+    bodyEl.innerHTML = dayDockedBodyHtml(dateKey);
+    footerEl.innerHTML = `<button type="button" id="dayOpenCloseBtn" class="shutdown-btn">Fechar o dia</button>`;
+  } else if (dayPopupMode === 'close') {
+    bodyEl.innerHTML = dayCloseBodyHtml(dateKey);
+    footerEl.innerHTML = `<button type="button" id="dayBackToPlanBtn" class="shutdown-back-btn">Voltar</button>
+       <button type="button" id="dayFinalizeCloseBtn" class="shutdown-apply-btn">Encerrar o dia</button>`;
+  } else {
+    bodyEl.innerHTML = dayPlanBodyHtml(dateKey);
+    footerEl.innerHTML = `<button type="button" id="dayOpenCloseBtn" class="shutdown-btn">Fechar o dia</button>`;
+  }
 }
 
 document.getElementById('closeDayPopup').addEventListener('click', closeDayPopup);
@@ -2866,31 +3006,30 @@ dayPopupOverlayEl.addEventListener('click', e => {
 });
 
 dayPopupPanelEl.addEventListener('click', e => {
+  if (e.target.id === 'dayPopupSettingsBtn') { toggleDaySettings(); return; }
+
   const star = e.target.closest('.mit-star');
   if (star) {
     if (star.classList.contains('disabled')) return;
-    toggleMit(star.dataset.boardId, dayPopupDate, star.dataset.taskId);
+    toggleMit(dayPopupDate, star.dataset.taskId);
     refreshCalendarAndBoard();
     renderDayPopup();
     return;
   }
-
-  const adiar = e.target.closest('.adiar-btn');
-  if (adiar) {
-    const board = boards.find(b => b.id === adiar.dataset.boardId);
-    const t = board && findTaskInBoard(adiar.dataset.taskId, board);
-    if (t) {
-      const prevDate = t.date;
-      const tomorrowKey = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
-      t.date = tomorrowKey;
-      t.deliveryDate = tomorrowKey;
-      markExceptionIfMoved(t, prevDate);
-      save();
-      refreshCalendarAndBoard();
-      renderDayPopup();
-    }
+  const tomorrowStar = e.target.closest('.tomorrow-mit-star');
+  if (tomorrowStar) {
+    if (tomorrowStar.classList.contains('disabled')) return;
+    toggleTomorrowMit(dayPopupDate, tomorrowStar.dataset.taskId);
+    renderDayPopup();
     return;
   }
+  const whenBtn = e.target.closest('.day-popup-when-btn');
+  if (whenBtn) { setMitWhen(dayPopupDate, whenBtn.dataset.taskId, whenBtn.dataset.when); renderDayPopup(); return; }
+
+  const pullBtn = e.target.closest('.day-pull-btn');
+  if (pullBtn) { pullTaskToToday(pullBtn.dataset.taskId, pullBtn.dataset.boardId, dayPopupDate); return; }
+
+  if (e.target.closest('#dayTrayToggle')) { dayTrayOpen = !dayTrayOpen; renderDayPopup(); return; }
 
   const nameBtn = e.target.closest('.day-popup-task-name');
   if (nameBtn) {
@@ -2899,23 +3038,23 @@ dayPopupPanelEl.addEventListener('click', e => {
     return;
   }
 
-  const shutdownChoiceBtn = e.target.closest('.shutdown-choice-btn');
-  if (shutdownChoiceBtn) {
-    const choiceKey = shutdownChoiceBtn.closest('.shutdown-choices').dataset.choiceKey;
-    const choice = shutdownChoices[choiceKey];
-    if (choice) {
-      choice.mode = shutdownChoiceBtn.dataset.mode;
-      if (choice.mode === 'custom' && !choice.date) {
-        choice.date = toKey(addDays(new Date(dayPopupDate + 'T00:00:00'), 1));
-      }
-      renderDayPopup();
-    }
+  if (e.target.id === 'dayCaptureSubmitBtn') { submitDayCapture(); return; }
+  if (e.target.id === 'dayOpenCloseBtn') { openDayCloseMode(); return; }
+  if (e.target.id === 'dayBackToPlanBtn') { dayPopupMode = 'plan'; renderDayPopup(); return; }
+  if (e.target.id === 'dayFinalizeCloseBtn') { finalizeClose(); return; }
+  if (e.target.id === 'dayReopenBtn') { reopenDayLog(); return; }
+
+  const choiceBtn = e.target.closest('.day-choice-btn');
+  if (choiceBtn) { setCloseChoice(choiceBtn.dataset.taskId, choiceBtn.dataset.choice); return; }
+  const reasonChip = e.target.closest('.day-reason-chip');
+  if (reasonChip) { setCloseReason(reasonChip.dataset.taskId, reasonChip.dataset.reason); return; }
+  const promptBtn = e.target.closest('.day-note-prompt-btn');
+  if (promptBtn) {
+    const promptLabel = promptBtn.dataset.prompt === 'stuck' ? 'O que travou: ' : 'O que foi bem: ';
+    dayNoteDraft = (dayNoteDraft ? dayNoteDraft + '\n' : '') + promptLabel;
+    renderDayPopup();
     return;
   }
-
-  if (e.target.id === 'shutdownEnterBtn') { enterShutdownMode(); return; }
-  if (e.target.id === 'shutdownBackBtn') { exitShutdownMode(); return; }
-  if (e.target.id === 'shutdownApplyBtn') { applyShutdown(); return; }
 
   const cityOption = e.target.closest('.weather-city-option');
   if (cityOption) {
@@ -2941,14 +3080,22 @@ dayPopupPanelEl.addEventListener('click', e => {
   }
 });
 
+dayPopupPanelEl.addEventListener('keydown', e => {
+  if (e.target.id === 'dayCaptureInput' && e.key === 'Enter') { e.preventDefault(); submitDayCapture(); }
+});
+
 dayPopupPanelEl.addEventListener('input', e => {
-  if (e.target.id !== 'weatherCityInput') return;
-  weatherSearchQuery = e.target.value;
-  clearTimeout(weatherSearchTimer);
-  weatherSearchTimer = setTimeout(async () => {
-    weatherSearchResults = await searchCity(weatherSearchQuery);
-    renderWeatherCityResults();
-  }, 400);
+  if (e.target.id === 'weatherCityInput') {
+    weatherSearchQuery = e.target.value;
+    clearTimeout(weatherSearchTimer);
+    weatherSearchTimer = setTimeout(async () => {
+      weatherSearchResults = await searchCity(weatherSearchQuery);
+      renderWeatherCityResults();
+    }, 400);
+    return;
+  }
+  if (e.target.id === 'dayCaptureInput') { dayCaptureText = e.target.value; return; }
+  if (e.target.id === 'dayNoteTextarea') { dayNoteDraft = e.target.value; return; }
 });
 
 dayPopupPanelEl.addEventListener('change', e => {
@@ -2967,16 +3114,11 @@ dayPopupPanelEl.addEventListener('change', e => {
     }
     return;
   }
-  if (e.target.classList.contains('day-popup-group-select')) {
-    dayPopupGrouping[e.target.dataset.boardId] = e.target.value;
-    renderDayPopup();
-    return;
-  }
-  if (e.target.classList.contains('shutdown-date-input')) {
-    const choice = shutdownChoices[e.target.dataset.choiceKey];
-    if (choice) { choice.mode = 'custom'; choice.date = e.target.value; }
-    return;
-  }
+  if (e.target.id === 'dayCaptureBoardSelect') { dayCaptureBoardId = e.target.value; return; }
+  if (e.target.id === 'dayGroupSelect') { dayPopupGroupField = e.target.value; renderDayPopup(); return; }
+  if (e.target.id === 'dayCapacityInput') { setDayCapacity(dayPopupDate, e.target.value); return; }
+  if (e.target.id === 'dayDefaultCapacityInput') { setDefaultCapacity(e.target.value); renderDayPopup(); return; }
+  if (e.target.classList.contains('day-choice-date-input')) { setCloseCustomDate(e.target.dataset.taskId, e.target.value); return; }
 });
 
 // ================================================================
@@ -4710,10 +4852,10 @@ function renderActivityFormStep5(a) {
       patchActivity(a, x => {
         x.checklistTasks = x.checklistTasks || [];
         const newTask = {
-          id: uid(), name, date: null, deliveryDate: null, link: '', duration: 0,
+          id: uid(), name, date: null, deliveryDate: null, link: '',
           priority: null, urgent: false, urgentRank: 0,
           delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: Date.now(),
-          fieldValues: {}, team: [], boardId: null, activityId: a.id,
+          fieldValues: {}, team: [], boardId: null, activityId: a.id, archived: false,
           antecedenciaMiniDias: mini === '' ? null : Number(mini),
           antecedenciaRecDias: rec === '' ? null : Number(rec),
           antecedenciaMaxDias: max === '' ? null : Number(max),
@@ -5209,10 +5351,10 @@ function importJsonToActivity(json) {
   });
   const activityId = uid();
   const checklistTasks = (json.checklist_sugerido || []).map(c => ({
-    id: uid(), name: c.name, date: null, deliveryDate: null, link: '', duration: 0,
+    id: uid(), name: c.name, date: null, deliveryDate: null, link: '',
     priority: null, urgent: false, urgentRank: 0,
     delegated: false, delegatedTo: '', delegatedDate: '', completed: false, createdAt: now,
-    fieldValues: {}, team: [], boardId: null, activityId,
+    fieldValues: {}, team: [], boardId: null, activityId, archived: false,
     antecedenciaMiniDias: c.antecedencia_minima_dias ?? null,
     antecedenciaMaxDias: c.antecedencia_max_dias ?? null,
     antecedenciaRecDias: c.antecedencia_rec_dias ?? null,
