@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/colors.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/typography.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/tokens/effects.css">
+<link rel="stylesheet" href="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/styles.css">
+<script src="_ds/tarefas-design-system-67195386-239a-4b60-a1e8-45766f37bce9/_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--bg-page); }
+  * { box-sizing: border-box; }
+  a { color: var(--brand); }
+  a:hover { color: var(--brand-hover); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--sand-500); border-radius: 4px; }
+</style>
+</helmet>
+
+<div style="display:flex; height:100vh; width:100%; font-family: var(--font-sans); overflow:hidden; position:relative;">
+
+  <div style="width:64px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border-default); display:flex; flex-direction:column; align-items:center; padding:16px 0; gap:10px;">
+    <div style="width:34px; height:34px; border-radius:10px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font:800 15px var(--font-sans);">B</div>
+  </div>
+
+  <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+    <div style="height:60px; flex-shrink:0; background:var(--surface); border-bottom:1px solid var(--border-default); display:flex; align-items:center; padding:0 24px; gap:16px;">
+      <div style="font:800 17px var(--font-sans); color:var(--text-primary);">Bússola</div>
+      <div style="flex:1;"></div>
+      <div style="display:flex; background:var(--surface-neutral-button); border-radius:10px; padding:3px; gap:2px;">
+        <button type="button" onClick="{{ setViewBoard }}" style="{{ boardTabStyle }}">Board</button>
+        <button type="button" onClick="{{ setViewCalendar }}" style="{{ calendarTabStyle }}">Calendário</button>
+      </div>
+    </div>
+
+    <sc-if value="{{ isBoardView }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; overflow:auto; padding:26px;">
+        <div style="display:flex; gap:16px; align-items:flex-start;">
+          <sc-for list="{{ columns }}" as="col" hint-placeholder-count="5">
+            <div style="{{ col.wrapStyle }}">
+              <div style="{{ col.headerStyle }}" onClick="{{ col.onOpen }}">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="font:700 13.5px var(--font-sans); color:var(--text-primary); text-transform:capitalize;">{{ col.weekday }}</span>
+                  <span style="font:600 12px var(--font-sans); color:var(--text-tertiary);">{{ col.short }}</span>
+                </div>
+                <sc-if value="{{ col.closed }}" hint-placeholder-val="{{ false }}">
+                  <span style="display:flex; align-items:center; gap:4px; background:var(--brand-soft); color:var(--brand); font:700 10px var(--font-sans); padding:3px 8px; border-radius:20px;">✓ Fechado</span>
+                </sc-if>
+              </div>
+              <div style="padding:10px; display:flex; flex-direction:column; gap:6px; min-height:40px;">
+                <sc-for list="{{ col.rows }}" as="row" hint-placeholder-count="2">
+                  <div style="{{ row.rowStyle }}">
+                    <span style="{{ row.dotStyle }}"></span>
+                    <span style="{{ row.nameStyle }}">{{ row.name }}</span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}">
+                  <div style="font:500 11.5px var(--font-sans); color:var(--text-tertiary); padding:6px 2px;">Sem tarefas</div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isCalendarView }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; overflow:auto; padding:26px; display:flex; justify-content:center;">
+        <div style="width:100%; max-width:760px;">
+          <div style="font:700 17px var(--font-sans); color:var(--text-primary); margin-bottom:14px;">{{ monthLabel }}</div>
+          <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:6px;">
+            <sc-for list="{{ weekdayHeaders }}" as="wd" hint-placeholder-count="7">
+              <div style="font:700 10.5px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; text-align:center; padding-bottom:4px;">{{ wd }}</div>
+            </sc-for>
+            <sc-for list="{{ calendarCells }}" as="cell" hint-placeholder-count="35">
+              <div style="{{ cell.cellStyle }}" onClick="{{ cell.onOpen }}">
+                <sc-if value="{{ cell.hasDay }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <span style="{{ cell.numStyle }}">{{ cell.dayNumber }}</span>
+                    <sc-if value="{{ cell.closed }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size:10px; color:var(--brand);">✓</span>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex; gap:3px; margin-top:5px;">
+                    <sc-for list="{{ cell.dots }}" as="dot" hint-placeholder-count="0">
+                      <span style="width:6px; height:6px; border-radius:50%; background:{{ dot.color }};"></span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ showDocked }}" hint-placeholder-val="{{ false }}">
+    <div style="width:400px; flex-shrink:0; background:var(--surface); border-left:1px solid var(--border-default); display:flex; flex-direction:column; overflow:hidden;">
+      <div style="padding:18px 20px 12px; border-bottom:1px solid var(--border-subtle); display:flex; align-items:flex-start;">
+        <div>
+          <div style="font:800 16px var(--font-sans); color:var(--text-primary);">{{ panel.fullLabel }}</div>
+          <div style="font:600 11.5px var(--font-sans); color:var(--text-tertiary); margin-top:2px;">Executar · painel encaixado</div>
+        </div>
+        <div style="flex:1;"></div>
+        <button type="button" title="Abrir como pop-up" onClick="{{ toggleExpand }}" style="border:none; background:var(--surface-neutral-button); width:28px; height:28px; border-radius:8px; color:var(--text-secondary); font-size:13px; cursor:pointer; margin-right:6px;">⤢</button>
+        <button type="button" onClick="{{ closePanel }}" style="border:none; background:var(--surface-neutral-button); width:28px; height:28px; border-radius:8px; color:var(--text-secondary); font-size:15px; cursor:pointer;">×</button>
+      </div>
+      <div style="flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:16px;">
+        <div>
+          <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">⭐ Prioridades</div>
+          <sc-if value="{{ panel.mitEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1.5px dashed var(--border-dashed); border-radius:11px; padding:12px; font:500 12px var(--font-sans); color:var(--text-tertiary); text-align:center;">Marque até 3 prioridades</div>
+          </sc-if>
+          <sc-for list="{{ panel.mitList }}" as="mt" hint-placeholder-count="0">
+            <div style="display:flex; align-items:center; gap:8px; background:var(--priority-bg); border:1px solid var(--priority-border); border-radius:11px; padding:8px 10px; margin-bottom:6px;">
+              <span>⭐</span>
+              <span style="flex:1; font:600 12.5px var(--font-sans); color:var(--text-primary); text-decoration:{{ mt.strike }};">{{ mt.name }}</span>
+              <sc-if value="{{ mt.hasWhen }}" hint-placeholder-val="{{ false }}">
+                <span style="font:700 10px var(--font-sans); color:var(--ink-600); background:var(--surface); padding:2px 7px; border-radius:20px;">{{ mt.whenLabel }}</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div>
+          <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Próximo evento</div>
+          <sc-if value="{{ panel.nextEvent }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:8px; background:var(--surface-sunken); border-radius:10px; padding:9px 11px;">
+              <span style="width:8px; height:8px; border-radius:50%; background:{{ panel.nextEvent.color }}; flex-shrink:0;"></span>
+              <span style="flex:1; font:600 12.5px var(--font-sans); color:var(--text-primary);">{{ panel.nextEvent.name }}</span>
+              <span style="font:700 11px var(--font-sans); color:var(--text-meta);">{{ panel.nextEvent.time }}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ panel.noNextEvent }}" hint-placeholder-val="{{ false }}">
+            <div style="font:500 12px var(--font-sans); color:var(--text-tertiary);">Nenhum evento hoje.</div>
+          </sc-if>
+        </div>
+        <div>
+          <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Captura rápida</div>
+          <div style="display:flex; gap:6px;">
+            <input value="{{ captureText }}" onChange="{{ onCaptureChange }}" onKeyDown="{{ onCaptureKeyDown }}" placeholder="Nova tarefa para o dia…" style="flex:1; border:1px solid var(--border-default); border-radius:9px; padding:9px 11px; font:500 12.5px var(--font-sans); color:var(--text-primary); background:var(--surface);"/>
+            <button type="button" onClick="{{ onCaptureSubmit }}" style="border:none; background:var(--brand); color:#fff; font:700 12px var(--font-sans); padding:0 14px; border-radius:9px; cursor:pointer;">+</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:14px 20px; border-top:1px solid var(--border-subtle);">
+        <button type="button" onClick="{{ openCloseMode }}" style="width:100%; border:none; background:var(--dark-action); color:#fff; font:700 13px var(--font-sans); padding:11px; border-radius:11px; cursor:pointer;">Fechar o dia</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showExpanded }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:var(--overlay-scrim-strong); z-index:96; display:flex; align-items:center; justify-content:center; animation:fadeIn .15s ease;" onClick="{{ closePanel }}">
+      <div style="width:700px; max-width:94vw; height:84vh; background:var(--surface); border-radius:20px; box-shadow:var(--shadow-modal-lg); display:flex; flex-direction:column; overflow:hidden; animation:modalIn .18s ease; position:relative;" onClick="{{ stopClick }}">
+
+        <div style="padding:22px 26px 14px; border-bottom:1px solid var(--border-subtle); display:flex; align-items:flex-start;">
+          <div>
+            <div style="font:800 19px var(--font-sans); color:var(--text-primary);">{{ panel.fullLabel }}</div>
+            <div style="font:600 12px var(--font-sans); color:var(--text-tertiary); margin-top:2px;">{{ panel.modeLabel }} · {{ panel.weatherLine }}</div>
+          </div>
+          <div style="flex:1;"></div>
+          <button type="button" title="Configurações" onClick="{{ toggleSettings }}" style="border:none; background:var(--surface-neutral-button); width:30px; height:30px; border-radius:8px; color:var(--text-secondary); font-size:14px; cursor:pointer; margin-right:6px;">⚙</button>
+          <button type="button" title="Encaixar na lateral" onClick="{{ toggleExpand }}" style="border:none; background:var(--surface-neutral-button); width:30px; height:30px; border-radius:8px; color:var(--text-secondary); font-size:13px; cursor:pointer; margin-right:6px;">⤡</button>
+          <button type="button" onClick="{{ closePanel }}" style="border:none; background:var(--surface-neutral-button); width:30px; height:30px; border-radius:8px; color:var(--text-secondary); font-size:16px; cursor:pointer;">×</button>
+
+          <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; top:60px; right:26px; width:230px; background:var(--surface); border:1px solid var(--border-default); border-radius:14px; box-shadow:var(--shadow-modal); padding:14px; z-index:10;">
+              <div style="font:700 10.5px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Boards visíveis</div>
+              <sc-for list="{{ boardToggles }}" as="bt" hint-placeholder-count="2">
+                <label onClick="{{ bt.onToggle }}" style="display:flex; align-items:center; gap:8px; padding:5px 0; cursor:pointer;">
+                  <input type="checkbox" checked="{{ bt.checked }}" readOnly style="pointer-events:none;"/>
+                  <span style="width:8px; height:8px; border-radius:50%; background:{{ bt.color }};"></span>
+                  <span style="font:600 12px var(--font-sans); color:var(--text-primary);">{{ bt.name }}</span>
+                </label>
+              </sc-for>
+              <div style="height:1px; background:var(--border-subtle); margin:8px 0;"></div>
+              <div style="font:700 10.5px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Teto padrão</div>
+              <input type="number" value="{{ defaultCapacity }}" onChange="{{ onDefaultCapacityChange }}" style="width:100%; border:1px solid var(--border-default); border-radius:8px; padding:6px 9px; font:600 12.5px var(--font-sans);"/>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="flex:1; overflow-y:auto; padding:20px 26px; display:flex; flex-direction:column; gap:20px;">
+
+          <sc-if value="{{ panel.showReopenBanner }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:10px; background:var(--brand-soft); border-radius:11px; padding:12px 14px;">
+              <span style="font:600 12.5px var(--font-sans); color:var(--text-primary); flex:1;">Este dia foi fechado {{ panel.closedAtLabel }}.</span>
+              <button type="button" onClick="{{ reopenDay }}" style="border:none; background:var(--surface); color:var(--brand); font:700 11.5px var(--font-sans); padding:7px 12px; border-radius:8px; cursor:pointer;">Reabrir o dia</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ panel.isPlan }}" hint-placeholder-val="{{ true }}">
+
+            <div>
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Captura rápida</div>
+              <div style="display:flex; gap:8px;">
+                <select value="{{ captureBoardId }}" onChange="{{ onCaptureBoardChange }}" style="border:1px solid var(--border-default); border-radius:9px; padding:0 8px; font:600 12px var(--font-sans); background:var(--surface); color:var(--text-primary);">
+                  <sc-for list="{{ boardOptions }}" as="bo" hint-placeholder-count="2">
+                    <option value="{{ bo.id }}">{{ bo.name }}</option>
+                  </sc-for>
+                </select>
+                <input value="{{ captureText }}" onChange="{{ onCaptureChange }}" onKeyDown="{{ onCaptureKeyDown }}" placeholder="Nova tarefa para hoje…" style="flex:1; border:1px solid var(--border-default); border-radius:9px; padding:10px 12px; font:500 13px var(--font-sans); color:var(--text-primary); background:var(--surface);"/>
+                <button type="button" onClick="{{ onCaptureSubmit }}" style="border:none; background:var(--brand); color:#fff; font:700 12px var(--font-sans); padding:0 16px; border-radius:9px; cursor:pointer;">Adicionar</button>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em;">Teto do dia</div>
+                <div style="flex:1;"></div>
+                <span style="{{ panel.loadPillStyle }}">{{ panel.loadLabel }}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font:500 12.5px var(--font-sans); color:var(--text-secondary);">Quantas tarefas hoje?</span>
+                <input type="number" min="1" value="{{ panel.capacity }}" onChange="{{ onCapacityChange }}" style="width:64px; border:1px solid var(--border-default); border-radius:9px; padding:6px 8px; font:700 13px var(--font-sans); text-align:center;"/>
+              </div>
+            </div>
+
+            <div>
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">⭐ Prioridades do dia</div>
+              <sc-if value="{{ panel.mitEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1.5px dashed var(--border-dashed); border-radius:11px; padding:14px; font:500 12.5px var(--font-sans); color:var(--text-tertiary); text-align:center;">Marque até 3 prioridades na lista abaixo</div>
+              </sc-if>
+              <sc-for list="{{ panel.mitList }}" as="mt" hint-placeholder-count="0">
+                <div style="display:flex; align-items:center; gap:8px; background:var(--priority-bg); border:1px solid var(--priority-border); border-radius:11px; padding:9px 11px; margin-bottom:6px;">
+                  <button type="button" onClick="{{ mt.onRemove }}" style="border:none; background:transparent; cursor:pointer; font-size:14px;">⭐</button>
+                  <span style="flex:1; font:600 13px var(--font-sans); color:var(--text-primary);">{{ mt.name }}</span>
+                  <div style="display:flex; gap:4px;">
+                    <sc-for list="{{ mt.whenOptions }}" as="wo" hint-placeholder-count="3">
+                      <button type="button" onClick="{{ wo.onClick }}" style="{{ wo.style }}">{{ wo.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div>
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Agenda</div>
+              <sc-if value="{{ panel.agendaEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="font:500 12.5px var(--font-sans); color:var(--text-tertiary);">Nenhum evento no dia.</div>
+              </sc-if>
+              <sc-for list="{{ panel.agenda }}" as="ev" hint-placeholder-count="0">
+                <div style="display:flex; align-items:center; gap:9px; padding:6px 0;">
+                  <span style="width:8px; height:8px; border-radius:50%; background:{{ ev.color }}; flex-shrink:0;"></span>
+                  <span style="flex:1; font:600 12.5px var(--font-sans); color:var(--text-primary);">{{ ev.name }}</span>
+                  <span style="font:700 11px var(--font-sans); color:var(--text-meta);">{{ ev.time }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div>
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Demais tarefas do dia</div>
+              <sc-if value="{{ panel.restEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="font:500 12.5px var(--font-sans); color:var(--text-tertiary);">Nenhuma outra tarefa.</div>
+              </sc-if>
+              <sc-for list="{{ panel.restList }}" as="rt" hint-placeholder-count="0">
+                <div style="display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px solid var(--border-subtle);">
+                  <input type="checkbox" checked="{{ rt.completed }}" onChange="{{ rt.onToggle }}"/>
+                  <span style="width:8px; height:8px; border-radius:50%; background:{{ rt.color }}; flex-shrink:0;"></span>
+                  <span style="flex:1; font:600 13px var(--font-sans); color:var(--text-primary); text-decoration:{{ rt.strike }};">{{ rt.name }}</span>
+                  <button type="button" onClick="{{ rt.onStar }}" disabled="{{ rt.starDisabled }}" style="{{ rt.starStyle }}" title="Marcar como prioridade">⭐</button>
+                </div>
+              </sc-for>
+            </div>
+
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:8px;" onClick="{{ toggleTray }}">
+                <span style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em;">Pendências ({{ panel.trayCount }})</span>
+                <span style="font:600 11px var(--font-sans); color:var(--text-tertiary);">{{ panel.trayArrow }}</span>
+              </div>
+              <sc-if value="{{ trayOpen }}" hint-placeholder-val="{{ false }}">
+                <sc-if value="{{ panel.trayEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="font:500 12.5px var(--font-sans); color:var(--text-tertiary);">Nada atrasado nos últimos 14 dias.</div>
+                </sc-if>
+                <sc-for list="{{ panel.trayList }}" as="pt" hint-placeholder-count="0">
+                  <div style="display:flex; align-items:center; gap:9px; padding:7px 0;">
+                    <span style="width:8px; height:8px; border-radius:50%; background:{{ pt.color }}; flex-shrink:0;"></span>
+                    <span style="flex:1; font:600 12.5px var(--font-sans); color:var(--text-primary);">{{ pt.name }}</span>
+                    <span style="font:600 10.5px var(--font-sans); color:var(--text-meta);">{{ pt.dateLabel }}</span>
+                    <button type="button" onClick="{{ pt.onPull }}" style="border:none; background:var(--surface-neutral-button); color:var(--text-primary); font:700 10.5px var(--font-sans); padding:5px 10px; border-radius:8px; cursor:pointer;">→ hoje</button>
+                  </div>
+                </sc-for>
+              </sc-if>
+            </div>
+
+          </sc-if>
+
+          <sc-if value="{{ panel.isClose }}" hint-placeholder-val="{{ false }}">
+
+            <div style="background:var(--surface-sunken); border-radius:12px; padding:14px 16px;">
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Resultado</div>
+              <div style="font:700 15px var(--font-sans); color:var(--text-primary);">{{ panel.resultLine }}</div>
+            </div>
+
+            <div>
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Pendências</div>
+              <sc-if value="{{ panel.pendingEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px dashed var(--border-dashed); border-radius:11px; padding:16px; font:500 12.5px var(--font-sans); color:var(--text-tertiary); text-align:center;">Nenhuma tarefa pendente 🎉</div>
+              </sc-if>
+              <sc-for list="{{ panel.closeList }}" as="cp" hint-placeholder-count="0">
+                <div style="border-bottom:1px solid var(--border-subtle); padding:10px 0; display:flex; flex-direction:column; gap:8px;">
+                  <div style="display:flex; align-items:center; gap:9px;">
+                    <span style="width:8px; height:8px; border-radius:50%; background:{{ cp.color }}; flex-shrink:0;"></span>
+                    <span style="flex:1; font:600 13px var(--font-sans); color:var(--text-primary);">{{ cp.name }}</span>
+                  </div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <sc-for list="{{ cp.choiceButtons }}" as="cb" hint-placeholder-count="4">
+                      <button type="button" onClick="{{ cb.onClick }}" style="{{ cb.style }}">{{ cb.label }}</button>
+                    </sc-for>
+                  </div>
+                  <sc-if value="{{ cp.showDateInput }}" hint-placeholder-val="{{ false }}">
+                    <input type="date" value="{{ cp.customDate }}" onChange="{{ cp.onDateChange }}" style="border:1px solid var(--border-default); border-radius:8px; padding:6px 9px; font:600 12px var(--font-sans); width:160px;"/>
+                  </sc-if>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <sc-for list="{{ cp.reasonChips }}" as="rc" hint-placeholder-count="3">
+                      <button type="button" onClick="{{ rc.onClick }}" style="{{ rc.style }}">{{ rc.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div>
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Nota do dia</div>
+              <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <button type="button" onClick="{{ onPromptStuck }}" style="border:1px solid var(--border-default); background:var(--surface); color:var(--text-secondary); font:600 11px var(--font-sans); padding:6px 10px; border-radius:20px; cursor:pointer;">o que travou?</button>
+                <button type="button" onClick="{{ onPromptWell }}" style="border:1px solid var(--border-default); background:var(--surface); color:var(--text-secondary); font:600 11px var(--font-sans); padding:6px 10px; border-radius:20px; cursor:pointer;">o que foi bem?</button>
+              </div>
+              <textarea value="{{ noteDraft }}" onChange="{{ onNoteChange }}" placeholder="Como foi o dia?" style="width:100%; min-height:70px; border:1px solid var(--border-default); border-radius:11px; padding:10px 12px; font:500 12.5px var(--font-sans); color:var(--text-primary); resize:vertical; font-family:var(--font-sans);"></textarea>
+            </div>
+
+            <div>
+              <div style="font:700 11px var(--font-sans); color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Amanhã — escolha até 3 prioridades</div>
+              <sc-if value="{{ panel.tomorrowEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="font:500 12.5px var(--font-sans); color:var(--text-tertiary);">Nenhuma tarefa datada para amanhã ainda.</div>
+              </sc-if>
+              <sc-for list="{{ panel.tomorrowList }}" as="tt" hint-placeholder-count="0">
+                <div style="display:flex; align-items:center; gap:9px; padding:6px 0;">
+                  <span style="width:8px; height:8px; border-radius:50%; background:{{ tt.color }}; flex-shrink:0;"></span>
+                  <span style="flex:1; font:600 12.5px var(--font-sans); color:var(--text-primary);">{{ tt.name }}</span>
+                  <button type="button" onClick="{{ tt.onToggle }}" disabled="{{ tt.disabled }}" style="{{ tt.starStyle }}">⭐</button>
+                </div>
+              </sc-for>
+            </div>
+
+          </sc-if>
+
+        </div>
+
+        <div style="padding:16px 26px; border-top:1px solid var(--border-subtle); display:flex; gap:8px;">
+          <sc-if value="{{ panel.isPlan }}" hint-placeholder-val="{{ true }}">
+            <button type="button" onClick="{{ openCloseMode }}" style="flex:1; border:none; background:var(--dark-action); color:#fff; font:700 13px var(--font-sans); padding:12px; border-radius:11px; cursor:pointer;">Fechar o dia</button>
+          </sc-if>
+          <sc-if value="{{ panel.isClose }}" hint-placeholder-val="{{ false }}">
+            <button type="button" onClick="{{ backToPlan }}" style="flex:1; border:none; background:var(--surface-neutral-button); color:var(--text-primary); font:700 13px var(--font-sans); padding:12px; border-radius:11px; cursor:pointer;">Voltar</button>
+            <button type="button" onClick="{{ finalizeClose }}" style="flex:1; border:none; background:var(--dark-action); color:#fff; font:700 13px var(--font-sans); padding:12px; border-radius:11px; cursor:pointer;">Encerrar o dia</button>
+          </sc-if>
+        </div>
+
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = this.initialState();
+  }
+
+  initialState() {
+    return {
+      view: 'board',
+      today: '2026-08-06',
+      boards: [
+        { id: 'trabalho', name: 'Trabalho', color: 'var(--brand)' },
+        { id: 'pessoal', name: 'Pessoal', color: 'var(--danger)' },
+      ],
+      tasks: [
+        { id: 't1', boardId: 'trabalho', name: 'Enviar proposta pro cliente X', date: '2026-08-03', completed: true, archived: false },
+        { id: 't2', boardId: 'trabalho', name: 'Revisar contrato', date: '2026-08-03', completed: true, archived: false },
+        { id: 't3', boardId: 'pessoal', name: 'Levar carro na revisão', date: '2026-08-03', completed: false, archived: false },
+        { id: 't4', boardId: 'trabalho', name: 'Preparar slides do kickoff', date: '2026-08-03', completed: true, archived: false },
+        { id: 't5', boardId: 'trabalho', name: 'Follow-up com fornecedor', date: '2026-08-04', completed: false, archived: false },
+        { id: 't6', boardId: 'trabalho', name: 'Revisar PR do redesign', date: '2026-08-06', completed: false, archived: false },
+        { id: 't7', boardId: 'pessoal', name: 'Pagar conta de luz', date: '2026-08-06', completed: false, archived: false },
+        { id: 't8', boardId: 'trabalho', name: 'Atualizar changelog', date: '2026-08-06', completed: false, archived: false },
+        { id: 't9', boardId: 'trabalho', name: 'Responder e-mails pendentes', date: '2026-08-06', completed: true, archived: false },
+        { id: 't10', boardId: 'pessoal', name: 'Academia', date: '2026-08-06', completed: false, archived: false },
+        { id: 't11', boardId: 'trabalho', name: 'Call com design', date: '2026-08-06', completed: false, archived: false },
+        { id: 't12', boardId: 'trabalho', name: 'Preparar apresentação semanal', date: '2026-08-07', completed: false, archived: false },
+        { id: 't13', boardId: 'pessoal', name: 'Buscar encomenda', date: '2026-08-07', completed: false, archived: false },
+        { id: 't14', boardId: 'pessoal', name: 'Comprar presente de aniversário', date: null, completed: false, archived: false },
+      ],
+      events: [
+        { id: 'e1', boardId: 'trabalho', date: '2026-08-06', time: '14:00', name: 'Call com design' },
+        { id: 'e2', boardId: 'pessoal', date: '2026-08-06', time: '18:30', name: 'Dentista' },
+        { id: 'e3', boardId: 'trabalho', date: '2026-08-03', time: '09:00', name: 'Kickoff do projeto' },
+      ],
+      dayLogs: {
+        '2026-08-03': { capacity: 6, mitIds: ['t1', 't4'], mitWhen: { t1: 'manha' }, note: 'A reunião de kickoff levou mais tempo que o previsto — cortou o resto da manhã.', nextDayMitIds: ['t5'], closedAt: '2026-08-03T18:32:00' },
+        '2026-08-06': { capacity: 6, mitIds: ['t6', 't7'], mitWhen: { t6: 'manha', t7: 'tarde' }, note: '', nextDayMitIds: [], closedAt: null },
+      },
+      defaultCapacity: 6,
+      hiddenBoardIds: [],
+      openDate: null,
+      expanded: true,
+      mode: 'plan',
+      settingsOpen: false,
+      captureText: '',
+      captureBoardId: 'trabalho',
+      trayOpen: false,
+      closeChoices: {},
+      noteDraft: '',
+      idSeq: 20,
+    };
+  }
+
+  getDayLog(dateKey) {
+    return this.state.dayLogs[dateKey] || { capacity: this.state.defaultCapacity, mitIds: [], mitWhen: {}, note: '', nextDayMitIds: [], closedAt: null };
+  }
+  patchDayLog(dateKey, patch) {
+    const cur = this.getDayLog(dateKey);
+    this.setState(s => ({ dayLogs: { ...s.dayLogs, [dateKey]: { ...cur, ...patch } } }));
+  }
+  visibleBoardIds() { return this.state.boards.filter(b => !this.state.hiddenBoardIds.includes(b.id)).map(b => b.id); }
+  boardById(id) { return this.state.boards.find(b => b.id === id); }
+  addDaysToKey(dateKey, n) {
+    const d = new Date(dateKey + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  fmtLong(dateKey) {
+    const dias = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+    const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const d = new Date(dateKey + 'T00:00:00');
+    const dia = dias[d.getDay()];
+    return dia.charAt(0).toUpperCase() + dia.slice(1) + ', ' + String(d.getDate()).padStart(2, '0') + ' de ' + meses[d.getMonth()];
+  }
+  fmtShort(dateKey) {
+    const d = new Date(dateKey + 'T00:00:00');
+    return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  weekdayShort(dateKey) {
+    const w = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    return w[new Date(dateKey + 'T00:00:00').getDay()];
+  }
+
+  setView(v) { this.setState({ view: v }); }
+  openPanel(dateKey) { this.setState({ openDate: dateKey, expanded: true, mode: 'plan', settingsOpen: false, trayOpen: false }); }
+  closePanel() { this.setState({ openDate: null, closeChoices: {}, noteDraft: '' }); }
+  toggleExpand() { this.setState(s => ({ expanded: !s.expanded })); }
+  toggleSettings() { this.setState(s => ({ settingsOpen: !s.settingsOpen })); }
+  toggleTray() { this.setState(s => ({ trayOpen: !s.trayOpen })); }
+  toggleBoardVisible(id) {
+    this.setState(s => ({ hiddenBoardIds: s.hiddenBoardIds.includes(id) ? s.hiddenBoardIds.filter(x => x !== id) : [...s.hiddenBoardIds, id] }));
+  }
+  onDefaultCapacityChange(e) { this.setState({ defaultCapacity: Number(e.target.value) || 1 }); }
+
+  toggleTaskDone(taskId) {
+    this.setState(s => ({ tasks: s.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t) }));
+  }
+  toggleMit(dateKey, taskId) {
+    const log = this.getDayLog(dateKey);
+    const has = log.mitIds.includes(taskId);
+    if (!has && log.mitIds.length >= 3) return;
+    const mitIds = has ? log.mitIds.filter(x => x !== taskId) : [...log.mitIds, taskId];
+    const mitWhen = { ...log.mitWhen };
+    if (has) delete mitWhen[taskId];
+    this.patchDayLog(dateKey, { mitIds, mitWhen });
+  }
+  setWhen(dateKey, taskId, when) {
+    const log = this.getDayLog(dateKey);
+    const mitWhen = { ...log.mitWhen };
+    if (mitWhen[taskId] === when) delete mitWhen[taskId]; else mitWhen[taskId] = when;
+    this.patchDayLog(dateKey, { mitWhen });
+  }
+  toggleTomorrowMit(dateKey, taskId) {
+    const log = this.getDayLog(dateKey);
+    const has = log.nextDayMitIds.includes(taskId);
+    if (!has && log.nextDayMitIds.length >= 3) return;
+    const nextDayMitIds = has ? log.nextDayMitIds.filter(x => x !== taskId) : [...log.nextDayMitIds, taskId];
+    this.patchDayLog(dateKey, { nextDayMitIds });
+  }
+  onCapacityChange(e) { if (this.state.openDate) this.patchDayLog(this.state.openDate, { capacity: Number(e.target.value) || 1 }); }
+  pullToDate(taskId, dateKey) { this.setState(s => ({ tasks: s.tasks.map(t => t.id === taskId ? { ...t, date: dateKey } : t) })); }
+
+  onCaptureChange(e) { this.setState({ captureText: e.target.value }); }
+  onCaptureBoardChange(e) { this.setState({ captureBoardId: e.target.value }); }
+  onCaptureKeyDown(e) { if (e.key === 'Enter') this.onCaptureSubmit(); }
+  onCaptureSubmit() {
+    const text = this.state.captureText.trim();
+    if (!text || !this.state.openDate) return;
+    const id = 't' + (++this.state.idSeq);
+    const task = { id, boardId: this.state.captureBoardId, name: text, date: this.state.openDate, completed: false, archived: false };
+    this.setState(s => ({ tasks: [...s.tasks, task], captureText: '' }));
+  }
+
+  openCloseMode() {
+    const dateKey = this.state.openDate;
+    const pendingIds = this.state.tasks.filter(t => t.date === dateKey && !t.completed && !t.archived && this.visibleBoardIds().includes(t.boardId)).map(t => t.id);
+    const nextKey = this.addDaysToKey(dateKey, 1);
+    const closeChoices = {};
+    pendingIds.forEach(id => { closeChoices[id] = { choice: 'amanha', reason: null, customDate: nextKey }; });
+    this.setState({ mode: 'close', closeChoices, noteDraft: this.getDayLog(dateKey).note || '' });
+  }
+  backToPlan() { this.setState({ mode: 'plan' }); }
+  setChoice(taskId, choice) {
+    this.setState(s => ({ closeChoices: { ...s.closeChoices, [taskId]: { ...s.closeChoices[taskId], choice } } }));
+  }
+  setReason(taskId, reason) {
+    this.setState(s => {
+      const cur = s.closeChoices[taskId];
+      return { closeChoices: { ...s.closeChoices, [taskId]: { ...cur, reason: cur.reason === reason ? null : reason } } };
+    });
+  }
+  setCustomDate(taskId, value) {
+    this.setState(s => ({ closeChoices: { ...s.closeChoices, [taskId]: { ...s.closeChoices[taskId], customDate: value } } }));
+  }
+  onNoteChange(e) { this.setState({ noteDraft: e.target.value }); }
+  onPromptStuck() { this.setState(s => ({ noteDraft: (s.noteDraft ? s.noteDraft + '\n' : '') + 'O que travou: ' })); }
+  onPromptWell() { this.setState(s => ({ noteDraft: (s.noteDraft ? s.noteDraft + '\n' : '') + 'O que foi bem: ' })); }
+
+  reopenDay() { if (this.state.openDate) this.patchDayLog(this.state.openDate, { closedAt: null }); this.setState({ mode: 'plan' }); }
+
+  finalizeClose() {
+    const dateKey = this.state.openDate;
+    const nextKey = this.addDaysToKey(dateKey, 1);
+    const choices = this.state.closeChoices;
+    this.setState(s => ({
+      tasks: s.tasks.map(t => {
+        const c = choices[t.id];
+        if (!c) return t;
+        if (c.choice === 'amanha') return { ...t, date: nextKey, deferralReason: c.reason };
+        if (c.choice === 'outra') return { ...t, date: c.customDate, deferralReason: c.reason };
+        if (c.choice === 'arquivar') return { ...t, archived: true, deferralReason: c.reason };
+        return { ...t, deferralReason: c.reason };
+      }),
+    }));
+    const nextMit = this.getDayLog(dateKey).nextDayMitIds || [];
+    this.patchDayLog(dateKey, { note: this.state.noteDraft, closedAt: new Date().toISOString() });
+    const nextLog = this.getDayLog(nextKey);
+    this.patchDayLog(nextKey, { mitIds: nextMit.length ? nextMit : nextLog.mitIds });
+    this.setState({ openDate: null, closeChoices: {}, noteDraft: '' });
+  }
+
+  buildPanel() {
+    const dateKey = this.state.openDate;
+    if (!dateKey) return null;
+    const log = this.getDayLog(dateKey);
+    const visIds = this.visibleBoardIds();
+    const dayTasks = this.state.tasks.filter(t => t.date === dateKey && !t.archived && visIds.includes(t.boardId));
+    const totalCount = dayTasks.length;
+    const doneCount = dayTasks.filter(t => t.completed).length;
+    const loadState = totalCount > log.capacity ? 'over' : totalCount === log.capacity ? 'warn' : 'ok';
+    const loadColors = { ok: ['var(--brand-soft)', 'var(--brand)'], warn: ['#FBF6E9', '#C99A2E'], over: ['var(--danger-soft)', 'var(--danger)'] };
+    const [loadBg, loadFg] = loadColors[loadState];
+    const loadLabel = totalCount + ' de ' + log.capacity + ' tarefas' + (loadState === 'over' ? ' — acima do teto' : '');
+
+    const whenLabels = { manha: 'Manhã', tarde: 'Tarde', noite: 'Noite' };
+    const mitList = log.mitIds.map(id => {
+      const t = this.state.tasks.find(x => x.id === id);
+      if (!t) return null;
+      const when = log.mitWhen[id];
+      return {
+        id, name: t.name, strike: t.completed ? 'line-through' : 'none',
+        hasWhen: !!when, whenLabel: when ? whenLabels[when] : '',
+        onRemove: () => this.toggleMit(dateKey, id),
+        whenOptions: ['manha', 'tarde', 'noite'].map(w => ({
+          key: w, label: whenLabels[w][0],
+          onClick: () => this.setWhen(dateKey, id, w),
+          style: `border:none;border-radius:6px;width:20px;height:20px;font:700 9.5px var(--font-sans);cursor:pointer;background:${when === w ? 'var(--brand)' : 'var(--surface)'};color:${when === w ? '#fff' : 'var(--text-secondary)'};`,
+        })),
+      };
+    }).filter(Boolean);
+
+    const restTasks = dayTasks.filter(t => !log.mitIds.includes(t.id));
+    const restList = restTasks.map(t => {
+      const board = this.boardById(t.boardId);
+      const starDisabled = log.mitIds.length >= 3;
+      return {
+        id: t.id, name: t.name, completed: t.completed, color: board.color,
+        strike: t.completed ? 'line-through' : 'none',
+        onToggle: () => this.toggleTaskDone(t.id),
+        starDisabled,
+        starStyle: `border:none;background:transparent;cursor:${starDisabled ? 'default' : 'pointer'};font-size:13px;opacity:${starDisabled ? 0.3 : 1};`,
+        onStar: () => this.toggleMit(dateKey, t.id),
+      };
+    });
+
+    const agenda = this.state.events.filter(e => e.date === dateKey && visIds.includes(e.boardId)).map(e => ({ id: e.id, name: e.name, time: e.time, color: this.boardById(e.boardId).color }));
+    const nextEvent = agenda[0] || null;
+
+    const cutoff = this.addDaysToKey(dateKey, -14);
+    const trayList = this.state.tasks.filter(t => !t.archived && !t.completed && visIds.includes(t.boardId) && ((t.date === null) || (t.date < dateKey && t.date >= cutoff))).map(t => ({
+      id: t.id, name: t.name, color: this.boardById(t.boardId).color,
+      dateLabel: t.date ? this.fmtShort(t.date) : 'Sem data',
+      onPull: () => this.pullToDate(t.id, dateKey),
+    }));
+
+    const nextKey = this.addDaysToKey(dateKey, 1);
+    const closeList = Object.keys(this.state.closeChoices).map(id => {
+      const t = this.state.tasks.find(x => x.id === id);
+      if (!t) return null;
+      const c = this.state.closeChoices[id];
+      const opts = [['amanha', 'Amanhã'], ['outra', 'Outra data'], ['arquivar', 'Arquivar'], ['ignorar', 'Ignorar']];
+      const reasonOpts = [['time', 'faltou tempo'], ['blocked', 'bloqueado por terceiro'], ['reprioritized', 'mudei de prioridade']];
+      return {
+        id, name: t.name, color: this.boardById(t.boardId).color,
+        showDateInput: c.choice === 'outra', customDate: c.customDate,
+        onDateChange: (e) => this.setCustomDate(id, e.target.value),
+        choiceButtons: opts.map(([key, label]) => ({
+          key, label, onClick: () => this.setChoice(id, key),
+          style: `border:none;border-radius:8px;padding:7px 12px;font:700 11px var(--font-sans);cursor:pointer;background:${c.choice === key ? 'var(--dark-action)' : 'var(--surface-neutral-button)'};color:${c.choice === key ? '#fff' : 'var(--text-primary)'};`,
+        })),
+        reasonChips: reasonOpts.map(([key, label]) => ({
+          key, label, onClick: () => this.setReason(id, key),
+          style: `border:1px solid var(--border-default);border-radius:20px;padding:5px 10px;font:600 10.5px var(--font-sans);cursor:pointer;background:${c.reason === key ? 'var(--brand-soft)' : 'var(--surface)'};color:${c.reason === key ? 'var(--brand)' : 'var(--text-secondary)'};`,
+        })),
+      };
+    }).filter(Boolean);
+
+    const tomorrowLog = this.getDayLog(nextKey);
+    const tomorrowTasks = this.state.tasks.filter(t => t.date === nextKey && !t.archived && visIds.includes(t.boardId));
+    const tomorrowList = tomorrowTasks.map(t => {
+      const isMit = tomorrowLog.nextDayMitIds ? this.getDayLog(dateKey).nextDayMitIds.includes(t.id) : false;
+      const disabled = !isMit && this.getDayLog(dateKey).nextDayMitIds.length >= 3;
+      return {
+        id: t.id, name: t.name, color: this.boardById(t.boardId).color, disabled,
+        starStyle: `border:none;background:transparent;cursor:${disabled ? 'default' : 'pointer'};font-size:13px;opacity:${isMit ? 1 : disabled ? 0.25 : 0.4};`,
+        onToggle: () => this.toggleTomorrowMit(dateKey, t.id),
+      };
+    });
+
+    return {
+      fullLabel: this.fmtLong(dateKey),
+      modeLabel: log.closedAt ? 'Dia fechado' : this.state.mode === 'close' ? 'Fechando o dia' : 'Planejando o dia',
+      weatherLine: '24°C · parcialmente nublado',
+      isPlan: this.state.mode === 'plan', isClose: this.state.mode === 'close',
+      showReopenBanner: !!log.closedAt && this.state.mode === 'plan',
+      closedAtLabel: log.closedAt ? new Date(log.closedAt).toLocaleDateString('pt-BR') : '',
+      capacity: log.capacity, loadLabel,
+      loadPillStyle: `font:700 10.5px var(--font-sans);padding:4px 10px;border-radius:20px;background:${loadBg};color:${loadFg};`,
+      mitEmpty: mitList.length === 0, mitList,
+      agendaEmpty: agenda.length === 0, agenda,
+      nextEvent, noNextEvent: !nextEvent,
+      restEmpty: restList.length === 0, restList,
+      trayCount: trayList.length, trayEmpty: trayList.length === 0, trayList, trayArrow: this.state.trayOpen ? '▲' : '▼',
+      resultLine: doneCount + ' de ' + totalCount + ' tarefas concluídas · ' + log.mitIds.filter(id => { const t = this.state.tasks.find(x => x.id === id); return t && t.completed; }).length + ' de 3 prioridades',
+      pendingEmpty: closeList.length === 0, closeList,
+      tomorrowEmpty: tomorrowList.length === 0, tomorrowList,
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const weekDates = ['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07'];
+    const visIds = this.visibleBoardIds();
+    const tabActiveStyle = 'border:none;background:var(--surface);color:var(--text-primary);font:700 12px var(--font-sans);padding:7px 14px;border-radius:8px;cursor:pointer;box-shadow:var(--shadow-card);';
+    const tabInactiveStyle = 'border:none;background:transparent;color:var(--text-tertiary);font:700 12px var(--font-sans);padding:7px 14px;border-radius:8px;cursor:pointer;';
+
+    const columns = weekDates.map(dateKey => {
+      const log = this.getDayLog(dateKey);
+      const rows = s.tasks.filter(t => t.date === dateKey && !t.archived && visIds.includes(t.boardId)).map(t => ({
+        id: t.id, name: t.name,
+        dotStyle: `width:7px;height:7px;border-radius:50%;background:${this.boardById(t.boardId).color};flex-shrink:0;`,
+        nameStyle: `flex:1;font:600 12px var(--font-sans);color:var(--text-primary);text-decoration:${t.completed ? 'line-through' : 'none'};`,
+        rowStyle: 'display:flex;align-items:center;gap:7px;',
+      }));
+      return {
+        dateKey, weekday: this.weekdayShort(dateKey), short: this.fmtShort(dateKey), closed: !!log.closedAt,
+        rows, empty: rows.length === 0,
+        onOpen: () => this.openPanel(dateKey),
+        wrapStyle: `width:200px;flex-shrink:0;background:var(--surface);border-radius:16px;box-shadow:var(--shadow-card);overflow:hidden;${log.closedAt ? 'opacity:.6;' : ''}`,
+        headerStyle: `display:flex;align-items:center;justify-content:space-between;padding:12px 12px 10px;border-bottom:1px solid var(--border-subtle);cursor:pointer;${dateKey === s.today ? 'background:var(--brand-soft);' : ''}`,
+      };
+    });
+
+    const monthDate = new Date(2026, 7, 1);
+    const firstDow = monthDate.getDay();
+    const daysInMonth = new Date(2026, 8, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < firstDow; i++) cells.push({ hasDay: false, cellStyle: 'min-height:64px;' });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateKey = '2026-08-' + String(d).padStart(2, '0');
+      const log = this.getDayLog(dateKey);
+      const dayTasks = s.tasks.filter(t => t.date === dateKey && !t.archived && visIds.includes(t.boardId));
+      const dotBoardIds = [...new Set(dayTasks.map(t => t.boardId))].slice(0, 3);
+      cells.push({
+        hasDay: true, dayNumber: d, closed: !!log.closedAt,
+        dots: dotBoardIds.map(id => ({ color: this.boardById(id).color })),
+        onOpen: () => this.openPanel(dateKey),
+        numStyle: `font:700 12px var(--font-sans);color:${dateKey === s.today ? 'var(--brand)' : 'var(--text-primary)'};`,
+        cellStyle: `min-height:64px;border-radius:10px;padding:8px;cursor:pointer;background:${log.closedAt ? 'var(--brand-soft)' : dateKey === s.today ? 'var(--surface-sunken)' : 'var(--surface)'};box-shadow:var(--shadow-card);`,
+      });
+    }
+    while (cells.length % 7 !== 0) cells.push({ hasDay: false, cellStyle: 'min-height:64px;' });
+
+    return {
+      isBoardView: s.view === 'board', isCalendarView: s.view === 'calendar',
+      setViewBoard: () => this.setView('board'), setViewCalendar: () => this.setView('calendar'),
+      boardTabStyle: s.view === 'board' ? tabActiveStyle : tabInactiveStyle,
+      calendarTabStyle: s.view === 'calendar' ? tabActiveStyle : tabInactiveStyle,
+      columns,
+      monthLabel: 'Agosto 2026',
+      weekdayHeaders: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'],
+      calendarCells: cells,
+      showDocked: !!s.openDate && !s.expanded,
+      showExpanded: !!s.openDate && s.expanded,
+      panel: this.buildPanel() || {},
+      toggleExpand: () => this.toggleExpand(),
+      closePanel: () => this.closePanel(),
+      toggleSettings: () => this.toggleSettings(),
+      settingsOpen: s.settingsOpen,
+      stopClick: (e) => e.stopPropagation(),
+      boardToggles: s.boards.map(b => ({ name: b.name, color: b.color, checked: !s.hiddenBoardIds.includes(b.id), onToggle: () => this.toggleBoardVisible(b.id) })),
+      defaultCapacity: s.defaultCapacity,
+      onDefaultCapacityChange: (e) => this.onDefaultCapacityChange(e),
+      captureText: s.captureText, onCaptureChange: (e) => this.onCaptureChange(e),
+      onCaptureKeyDown: (e) => this.onCaptureKeyDown(e), onCaptureSubmit: () => this.onCaptureSubmit(),
+      captureBoardId: s.captureBoardId, onCaptureBoardChange: (e) => this.onCaptureBoardChange(e),
+      boardOptions: s.boards.map(b => ({ id: b.id, name: b.name })),
+      onCapacityChange: (e) => this.onCapacityChange(e),
+      toggleTray: () => this.toggleTray(), trayOpen: s.trayOpen,
+      openCloseMode: () => this.openCloseMode(), backToPlan: () => this.backToPlan(), finalizeClose: () => this.finalizeClose(),
+      reopenDay: () => this.reopenDay(),
+      noteDraft: s.noteDraft, onNoteChange: (e) => this.onNoteChange(e),
+      onPromptStuck: () => this.onPromptStuck(), onPromptWell: () => this.onPromptWell(),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

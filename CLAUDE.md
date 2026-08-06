@@ -97,6 +97,6 @@ Veja a pasta `docs/features/` para documentação detalhada de cada feature plan
 
 ### Status atual
 - `atualizacao-de-design` — redesign visual completo do app (não implementado)
-- `visao-do-dia` — popup de planejamento/fechamento do dia (não implementado)
+- `visao-do-dia` — popup de planejamento/fechamento do dia (v2 implementada — painel com modos Planejar/Executar/Fechar, lista unificada de boards, `day_logs` no Supabase — ver `docs/features/visao-do-dia/spec-v2.md`)
 - `exportar-atividades` — exportar tarefas da semana para report (não implementado)
 - `gastos-por-envelope` — envelopes de contexto sobre a view de Finanças (spec + protótipo prontos, não implementado)

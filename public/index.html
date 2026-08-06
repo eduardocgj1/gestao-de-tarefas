@@ -52,27 +52,6 @@
         <span class="sidebar-finance-label">Finanças</span>
       </button>
     </nav>
-    <div class="sidebar-pomodoro-wrap">
-      <div class="pomodoro" id="pomodoroWidget">
-        <div class="pomo-header" id="pomoHeaderToggle">
-          <span id="pomoDot" class="dot"></span>
-          <span id="pomoModeLabel" class="pomo-header-label">Foco</span>
-          <span id="pomoTime" class="pomo-header-time" title="Clique para editar o tempo restante" tabindex="0"></span>
-        </div>
-        <div class="pomo-expanded">
-          <div class="pomo-tabs">
-            <button type="button" class="pomo-tab" data-mode="focus">Foco</button>
-            <button type="button" class="pomo-tab" data-mode="short">Pausa curta</button>
-            <button type="button" class="pomo-tab" data-mode="long">Pausa longa</button>
-          </div>
-          <div class="pomo-controls-row">
-            <button type="button" id="pomoToggle" class="pomo-play-btn" title="Iniciar/pausar">▶</button>
-            <button type="button" id="pomoReset" class="pomo-reset-btn" title="Reiniciar">↺</button>
-            <div id="pomoDots" class="pomo-cycle-dots"></div>
-          </div>
-        </div>
-      </div>
-    </div>
   </aside>
 
   <div class="main-content">
@@ -148,12 +127,13 @@
         </div>
         <div class="day-popup-topbar-spacer"></div>
         <div class="day-popup-topbar-actions">
+          <button type="button" id="dayPopupSettingsBtn" class="icon-btn hidden" title="Configurações">⚙</button>
           <button type="button" id="dayPopupExpandBtn" class="icon-btn" title="Abrir como pop-up">⤢</button>
           <button type="button" id="closeDayPopup" class="icon-btn" title="Fechar">×</button>
         </div>
+        <div id="dayPopupSettingsPopover" class="day-popup-settings-popover hidden"></div>
       </div>
       <div id="dayPopupWeather" class="day-popup-weather"></div>
-      <div id="dayPopupBoardChecklist" class="day-popup-board-checklist"></div>
       <div id="dayPopupBody" class="day-popup-body"></div>
       <div id="dayPopupFooter" class="day-popup-footer"></div>
     </div>
@@ -269,10 +249,6 @@
         </div>
       </div>
     </div>
-
-    <label>Duração prevista (minutos)
-      <input type="number" id="f-duration" min="0" step="5">
-    </label>
 
     <label class="checkbox-row">
       <input type="checkbox" id="f-delegated"> Delegado
@@ -395,19 +371,6 @@
         <input type="text" id="newFieldName" placeholder="Novo campo personalizado" required>
         <button type="submit">Adicionar campo</button>
       </form>
-    </div>
-
-    <div class="settings-section">
-      <h3>Pomodoro</h3>
-      <label>Foco (minutos)
-        <input type="number" id="pomoSetFocus" min="1">
-      </label>
-      <label>Pausa curta (minutos)
-        <input type="number" id="pomoSetShort" min="1">
-      </label>
-      <label>Pausa longa (minutos)
-        <input type="number" id="pomoSetLong" min="1">
-      </label>
     </div>
 
     <div class="settings-section">
